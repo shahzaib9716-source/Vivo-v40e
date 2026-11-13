@@ -139,6 +139,66 @@ const initialTasks: RewardTask[] = [
   { id: 't4', title: 'Help with dinner', points: 10, done: false },
 ];
 
+export interface Schedule {
+  id: string;
+  name: string;
+  icon: string; // Feather icon name
+  color: string;
+  start: string; // e.g. "9:00 PM"
+  end: string;
+  days: boolean[]; // Mon..Sun
+  on: boolean;
+}
+
+export interface ChatMessage {
+  id: string;
+  childId: string;
+  from: 'parent' | 'child';
+  text: string;
+  time: string;
+}
+
+export interface SiteRule {
+  id: string;
+  host: string;
+  list: 'blocked' | 'allowed';
+}
+
+const ALL = [true, true, true, true, true, true, true];
+const WEEKDAYS = [true, true, true, true, true, false, false];
+
+const initialSchedules: Schedule[] = [
+  { id: 's1', name: 'Bedtime', icon: 'moon', color: '#5B51E0', start: '9:00 PM', end: '7:00 AM', days: ALL, on: true },
+  { id: 's2', name: 'School hours', icon: 'book', color: '#2E8BFF', start: '8:30 AM', end: '3:00 PM', days: WEEKDAYS, on: true },
+  { id: 's3', name: 'Dinner & downtime', icon: 'coffee', color: '#FF7A59', start: '6:00 PM', end: '7:00 PM', days: ALL, on: false },
+  { id: 's4', name: 'Homework focus', icon: 'edit-3', color: '#12B5A6', start: '4:00 PM', end: '5:30 PM', days: WEEKDAYS, on: true },
+];
+
+const initialMessages: ChatMessage[] = [
+  { id: 'm1', childId: 'c1', from: 'parent', text: 'Have a great day at school! 💜', time: '8:10 AM' },
+  { id: 'm2', childId: 'c1', from: 'child', text: 'Thanks! Can I go to Alex\'s after school?', time: '12:32 PM' },
+  { id: 'm3', childId: 'c1', from: 'parent', text: 'Yes — be home by 6 for dinner.', time: '12:40 PM' },
+  { id: 'm4', childId: 'c2', from: 'parent', text: 'Homework first, then games 🙂', time: '3:45 PM' },
+];
+
+const initialSites: SiteRule[] = [
+  { id: 'w1', host: 'chatroulette.example', list: 'blocked' },
+  { id: 'w2', host: 'freebets.example', list: 'blocked' },
+  { id: 'w3', host: 'shockvideos.example', list: 'blocked' },
+  { id: 'w4', host: 'schoolportal.example', list: 'allowed' },
+  { id: 'w5', host: 'kidsencyclopedia.example', list: 'allowed' },
+  { id: 'w6', host: 'mathpractice.example', list: 'allowed' },
+];
+
+export function nowLabel() {
+  const d = new Date();
+  let h = d.getHours();
+  const m = d.getMinutes().toString().padStart(2, '0');
+  const ap = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  return `${h}:${m} ${ap}`;
+}
+
 export type Role = 'parent' | 'child' | null;
 
 interface Store {
@@ -165,6 +225,25 @@ interface Store {
   requestExtraTime: (minutes: number) => void;
   markAlertsRead: () => void;
   togglePlaceAlert: (placeId: string, which: 'arrive' | 'leave') => void;
+  addPlace: (p: Omit<Place, 'id'>) => void;
+  removePlace: (id: string) => void;
+  schedules: Schedule[];
+  toggleSchedule: (id: string) => void;
+  addSchedule: (s: Omit<Schedule, 'id'>) => void;
+  removeSchedule: (id: string) => void;
+  messages: ChatMessage[];
+  sendMessage: (childId: string, from: 'parent' | 'child', text: string) => void;
+  sites: SiteRule[];
+  addSite: (host: string, list: 'blocked' | 'allowed') => void;
+  removeSite: (id: string) => void;
+  renameChild: (id: string, name: string) => void;
+  requestUnlock: (appId: string) => void;
+  checkIn: () => void;
+  sosActive: boolean;
+  triggerSOS: () => void;
+  clearSOS: () => void;
+  hasOnboarded: boolean;
+  completeOnboarding: () => void;
 }
 
 const Ctx = createContext<Store | null>(null);
@@ -177,6 +256,11 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
   const [alerts, setAlerts] = useState<Alert[]>(initialAlerts);
   const [places, setPlaces] = useState<Place[]>(initialPlaces);
   const [tasks, setTasks] = useState<RewardTask[]>(initialTasks);
+  const [schedules, setSchedules] = useState<Schedule[]>(initialSchedules);
+  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
+  const [sites, setSites] = useState<SiteRule[]>(initialSites);
+  const [sosActive, setSosActive] = useState(false);
+  const [hasOnboarded, setHasOnboarded] = useState(false);
 
   const updateChild = useCallback((id: string, fn: (c: Child) => Child) => {
     setKids((prev) => prev.map((c) => (c.id === id ? fn(c) : c)));
@@ -229,6 +313,66 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
     setPlaces((prev) => prev.map((p) => (p.id === placeId ? { ...p, [which]: !p[which] } : p)));
   }, []);
 
+  const pushAlert = useCallback((a: Omit<Alert, 'id' | 'ago' | 'unread'>) => {
+    setAlerts((prev) => [{ ...a, id: 'n' + Date.now(), ago: 'now', unread: true }, ...prev]);
+  }, []);
+
+  const addPlace = useCallback((p: Omit<Place, 'id'>) => {
+    setPlaces((prev) => [...prev, { ...p, id: 'p' + Date.now() }]);
+  }, []);
+  const removePlace = useCallback((id: string) => setPlaces((prev) => prev.filter((p) => p.id !== id)), []);
+
+  const toggleSchedule = useCallback((id: string) => {
+    setSchedules((prev) => prev.map((x) => (x.id === id ? { ...x, on: !x.on } : x)));
+  }, []);
+  const addSchedule = useCallback((sc: Omit<Schedule, 'id'>) => {
+    setSchedules((prev) => [...prev, { ...sc, id: 's' + Date.now() }]);
+  }, []);
+  const removeSchedule = useCallback((id: string) => setSchedules((prev) => prev.filter((x) => x.id !== id)), []);
+
+  const sendMessage = useCallback((childId: string, from: 'parent' | 'child', text: string) => {
+    const clean = text.trim();
+    if (!clean) return;
+    setMessages((prev) => [...prev, { id: 'm' + Date.now(), childId, from, text: clean, time: nowLabel() }]);
+  }, []);
+
+  const addSite = useCallback((host: string, list: 'blocked' | 'allowed') => {
+    const clean = host.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+    if (!clean) return;
+    setSites((prev) => (prev.some((x) => x.host === clean && x.list === list) ? prev : [...prev, { id: 'w' + Date.now(), host: clean, list }]));
+  }, []);
+  const removeSite = useCallback((id: string) => setSites((prev) => prev.filter((x) => x.id !== id)), []);
+
+  const renameChild = useCallback((id: string, name: string) => {
+    const clean = name.trim();
+    if (!clean) return;
+    updateChild(id, (c) => ({ ...c, name: clean }));
+  }, [updateChild]);
+
+  const requestUnlock = useCallback((appId: string) => {
+    const app = kids[0].apps.find((a) => a.id === appId);
+    if (!app) return;
+    setRequests((prev) => [
+      { id: 'r' + Date.now(), childId: 'c1', kind: 'unlock_app', label: `Unlock ${app.name}`, detail: 'You asked to unlock an app', appId, ago: 'just now', status: 'pending' },
+      ...prev,
+    ]);
+  }, [kids]);
+
+  const checkIn = useCallback(() => {
+    const me = kids[0];
+    updateChild(me.id, (c) => ({ ...c, updatedAgo: 'just now' }));
+    pushAlert({ icon: 'map-pin', color: '#2E8BFF', title: `${me.name.split(' ')[0]} checked in`, body: `At ${me.place} · ${nowLabel()}` });
+  }, [kids, updateChild, pushAlert]);
+
+  const triggerSOS = useCallback(() => {
+    const me = kids[0];
+    setSosActive(true);
+    pushAlert({ icon: 'alert-circle', color: '#FB4A4A', title: `SOS from ${me.name.split(' ')[0]}`, body: `Live location shared · near ${me.place}` });
+  }, [kids, pushAlert]);
+  const clearSOS = useCallback(() => setSosActive(false), []);
+
+  const completeOnboarding = useCallback(() => setHasOnboarded(true), []);
+
   const activeChild = kids.find((c) => c.id === activeChildId) ?? kids[0];
   const childSelf = kids[0];
   const points = tasks.filter((t) => t.done).reduce((s, t) => s + t.points, 0);
@@ -239,10 +383,16 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
       requests, alerts, places, tasks, points,
       adjustLimit, grantBonus, toggleApp, setAppLimit, pauseDevice, resumeDevice,
       resolveRequest, toggleTask, requestExtraTime, markAlertsRead, togglePlaceAlert,
+      addPlace, removePlace, schedules, toggleSchedule, addSchedule, removeSchedule,
+      messages, sendMessage, sites, addSite, removeSite, renameChild, requestUnlock,
+      checkIn, sosActive, triggerSOS, clearSOS, hasOnboarded, completeOnboarding,
     }),
     [role, kids, activeChildId, activeChild, childSelf, requests, alerts, places, tasks, points,
       adjustLimit, grantBonus, toggleApp, setAppLimit, pauseDevice, resumeDevice, resolveRequest,
-      toggleTask, requestExtraTime, markAlertsRead, togglePlaceAlert],
+      toggleTask, requestExtraTime, markAlertsRead, togglePlaceAlert,
+      addPlace, removePlace, schedules, toggleSchedule, addSchedule, removeSchedule,
+      messages, sendMessage, sites, addSite, removeSite, renameChild, requestUnlock,
+      checkIn, sosActive, triggerSOS, clearSOS, hasOnboarded, completeOnboarding],
   );
 
   return <Ctx.Provider value={value}>{node}</Ctx.Provider>;
