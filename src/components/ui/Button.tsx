@@ -18,7 +18,15 @@ interface Props {
   loading?: boolean;
   full?: boolean;
   style?: ViewStyle;
+  /** Spoken name, when it should say more than the visible label. Defaults to the label. */
+  accessibilityLabel?: string;
+  accessibilityHint?: string;
 }
+
+const HEIGHTS: Record<Size, number> = { sm: 38, md: 48, lg: 56 };
+const FONT_SIZES: Record<Size, number> = { sm: 14, md: 16, lg: 17 };
+// The small button is 38pt tall; extend its press target to 44pt.
+const SMALL_HIT_SLOP = { top: 3, bottom: 3 };
 
 export function Button({
   label,
@@ -31,10 +39,11 @@ export function Button({
   loading,
   full,
   style,
+  accessibilityLabel,
+  accessibilityHint,
 }: Props) {
   const { colors } = useTheme();
-  const heights = { sm: 38, md: 48, lg: 56 };
-  const fontSizes = { sm: 14, md: 16, lg: 17 };
+  const inactive = !!disabled || !!loading;
 
   const bg: Record<Variant, string> = {
     primary: colors.primary,
@@ -51,11 +60,18 @@ export function Button({
 
   return (
     <Pressable
-      onPress={disabled || loading ? undefined : onPress}
+      onPress={inactive ? undefined : onPress}
+      disabled={inactive}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityHint={accessibilityHint}
+      accessibilityState={{ disabled: !!disabled, busy: !!loading }}
+      aria-busy={loading ? true : undefined}
+      hitSlop={size === 'sm' ? SMALL_HIT_SLOP : undefined}
       style={({ pressed }) => [
         styles.base,
         {
-          height: heights[size],
+          height: HEIGHTS[size],
           backgroundColor: bg[variant],
           borderRadius: radius.md,
           opacity: disabled ? 0.45 : 1,
@@ -64,17 +80,19 @@ export function Button({
           alignSelf: full ? 'stretch' : 'auto',
         },
         pressed && { transform: [{ scale: 0.98 }], opacity: 0.9 },
+        // A ghost button has no fill of its own, so give the press something to show.
+        pressed && variant === 'ghost' && { backgroundColor: colors.primarySoft },
         style,
       ]}>
       {loading ? (
         <ActivityIndicator color={fg[variant]} />
       ) : (
         <View style={styles.content}>
-          {icon && <Feather name={icon} size={fontSizes[size] + 2} color={fg[variant]} />}
-          <Text style={{ fontSize: fontSizes[size], fontWeight: '700' }} color={fg[variant]}>
+          {icon && <Feather name={icon} size={FONT_SIZES[size] + 2} color={fg[variant]} />}
+          <Text style={{ fontSize: FONT_SIZES[size], fontWeight: '700' }} color={fg[variant]}>
             {label}
           </Text>
-          {iconRight && <Feather name={iconRight} size={fontSizes[size] + 2} color={fg[variant]} />}
+          {iconRight && <Feather name={iconRight} size={FONT_SIZES[size] + 2} color={fg[variant]} />}
         </View>
       )}
     </Pressable>

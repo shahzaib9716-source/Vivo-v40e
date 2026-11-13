@@ -1,4 +1,5 @@
-import { createContext, useCallback, useContext, useMemo, useState, ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, ReactNode } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export type AppCategory = 'social' | 'games' | 'video' | 'education' | 'music' | 'web' | 'messaging' | 'creativity';
 
@@ -122,7 +123,7 @@ const initialRequests: FamilyRequest[] = [
 
 const initialAlerts: Alert[] = [
   { id: 'n1', icon: 'map-pin', color: '#2E8BFF', title: 'Mia arrived at School', body: 'Geofence · 8:42 AM', ago: '1h', unread: true },
-  { id: 'n2', icon: 'clock', color: '#5B51E0', title: 'Leo reached his daily limit', body: 'Device paused automatically', ago: '2h', unread: true },
+  { id: 'n2', icon: 'clock', color: '#5B51E0', title: 'Mia has 10 minutes left on Photogram', body: 'App limit · 45m a day', ago: '2h', unread: true },
   { id: 'n3', icon: 'shield', color: '#16B981', title: 'Weekly report is ready', body: 'Screen time down 12% this week', ago: '1d', unread: false },
 ];
 
@@ -199,6 +200,8 @@ export function nowLabel() {
   return `${h}:${m} ${ap}`;
 }
 
+const ONBOARDED_KEY = 'haven.onboarded';
+
 export type Role = 'parent' | 'child' | null;
 
 interface Store {
@@ -243,7 +246,10 @@ interface Store {
   triggerSOS: () => void;
   clearSOS: () => void;
   hasOnboarded: boolean;
+  /** False until the saved "has seen the introduction" flag has been read. */
+  ready: boolean;
   completeOnboarding: () => void;
+  resetOnboarding: () => void;
 }
 
 const Ctx = createContext<Store | null>(null);
@@ -261,6 +267,23 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
   const [sites, setSites] = useState<SiteRule[]>(initialSites);
   const [sosActive, setSosActive] = useState(false);
   const [hasOnboarded, setHasOnboarded] = useState(false);
+  const [ready, setReady] = useState(false);
+
+  // The introduction is shown once per install. Everything else is demo state kept in memory.
+  useEffect(() => {
+    let alive = true;
+    AsyncStorage.getItem(ONBOARDED_KEY)
+      .then((v) => {
+        if (alive && v === '1') setHasOnboarded(true);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (alive) setReady(true);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const updateChild = useCallback((id: string, fn: (c: Child) => Child) => {
     setKids((prev) => prev.map((c) => (c.id === id ? fn(c) : c)));
@@ -285,16 +308,25 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
   const pauseDevice = useCallback((id: string) => updateChild(id, (c) => ({ ...c, bedtime: true })), [updateChild]);
   const resumeDevice = useCallback((id: string) => updateChild(id, (c) => ({ ...c, bedtime: false })), [updateChild]);
 
+  const resolvedIds = useRef(new Set<string>());
   const resolveRequest = useCallback((id: string, approve: boolean) => {
+    const req = requests.find((r) => r.id === id);
+    // Only a pending request can be resolved, and only once: the ref also stops presses that
+    // arrive before React has re-rendered with the new status.
+    if (!req || req.status !== 'pending' || resolvedIds.current.has(id)) return;
+    resolvedIds.current.add(id);
     setRequests((prev) =>
       prev.map((r) => (r.id === id ? { ...r, status: approve ? 'approved' : 'denied' } : r)),
     );
-    const req = requests.find((r) => r.id === id);
-    if (req && approve) {
+    if (approve) {
       if (req.kind === 'extra_time' && req.minutes) grantBonus(req.childId, req.minutes);
-      if (req.kind === 'unlock_app' && req.appId) toggleApp(req.childId, req.appId);
+      // Approving always unblocks; it must never re-block an app the parent already allowed.
+      if (req.kind === 'unlock_app' && req.appId) {
+        const appId = req.appId;
+        updateChild(req.childId, (c) => ({ ...c, apps: c.apps.map((a) => (a.id === appId ? { ...a, blocked: false } : a)) }));
+      }
     }
-  }, [requests, grantBonus, toggleApp]);
+  }, [requests, grantBonus, updateChild]);
 
   const toggleTask = useCallback((id: string) => {
     setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
@@ -371,7 +403,14 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
   }, [kids, pushAlert]);
   const clearSOS = useCallback(() => setSosActive(false), []);
 
-  const completeOnboarding = useCallback(() => setHasOnboarded(true), []);
+  const completeOnboarding = useCallback(() => {
+    setHasOnboarded(true);
+    AsyncStorage.setItem(ONBOARDED_KEY, '1').catch(() => {});
+  }, []);
+  const resetOnboarding = useCallback(() => {
+    setHasOnboarded(false);
+    AsyncStorage.removeItem(ONBOARDED_KEY).catch(() => {});
+  }, []);
 
   const activeChild = kids.find((c) => c.id === activeChildId) ?? kids[0];
   const childSelf = kids[0];
@@ -385,14 +424,14 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
       resolveRequest, toggleTask, requestExtraTime, markAlertsRead, togglePlaceAlert,
       addPlace, removePlace, schedules, toggleSchedule, addSchedule, removeSchedule,
       messages, sendMessage, sites, addSite, removeSite, renameChild, requestUnlock,
-      checkIn, sosActive, triggerSOS, clearSOS, hasOnboarded, completeOnboarding,
+      checkIn, sosActive, triggerSOS, clearSOS, hasOnboarded, ready, completeOnboarding, resetOnboarding,
     }),
     [role, kids, activeChildId, activeChild, childSelf, requests, alerts, places, tasks, points,
       adjustLimit, grantBonus, toggleApp, setAppLimit, pauseDevice, resumeDevice, resolveRequest,
       toggleTask, requestExtraTime, markAlertsRead, togglePlaceAlert,
       addPlace, removePlace, schedules, toggleSchedule, addSchedule, removeSchedule,
       messages, sendMessage, sites, addSite, removeSite, renameChild, requestUnlock,
-      checkIn, sosActive, triggerSOS, clearSOS, hasOnboarded, completeOnboarding],
+      checkIn, sosActive, triggerSOS, clearSOS, hasOnboarded, ready, completeOnboarding, resetOnboarding],
   );
 
   return <Ctx.Provider value={value}>{node}</Ctx.Provider>;

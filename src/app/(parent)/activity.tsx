@@ -1,24 +1,33 @@
 import { router } from 'expo-router';
 import { View } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 
 import { BarChart, Card, Row, Screen, SectionLabel, Text } from '@/components/ui';
+import { TODAY_INDEX, WEEKDAY_LETTERS, WEEKDAY_NAMES, sum, weekChange } from '@/components/reportData';
 import { useStore, fmtDuration } from '@/state/store';
 import { categoryColors, spacing, useTheme } from '@/theme';
-
-const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
 export default function Activity() {
   const { colors } = useTheme();
   const { activeChild } = useStore();
-  const data = activeChild.weekly.map((v, i) => ({ label: DAYS[i], value: v, highlight: i === 4 }));
-  const avg = Math.round(activeChild.weekly.reduce((a, b) => a + b, 0) / 7);
+  const firstName = activeChild.name.split(' ')[0];
+  const data = activeChild.weekly.map((v, i) => ({ label: WEEKDAY_LETTERS[i] ?? '', value: v, highlight: i === TODAY_INDEX }));
+  const avg = Math.round(sum(activeChild.weekly) / Math.max(1, activeChild.weekly.length));
+  // Same derived comparison as the full report, so the two screens always agree.
+  const change = weekChange(activeChild.weekly);
+  const changeColor = change.direction === 'down' ? colors.success : change.direction === 'up' ? colors.danger : colors.textMuted;
+  const chartSpoken = `Screen time this week. ${activeChild.weekly
+    .map((v, i) => `${WEEKDAY_NAMES[i] ?? `Day ${i + 1}`}: ${fmtDuration(v)}`)
+    .join(', ')}.`;
 
   return (
     <Screen>
       <View style={{ paddingTop: spacing.sm, paddingBottom: spacing.lg }}>
-        <Text variant="h1">Activity</Text>
+        <Text variant="h1" accessibilityRole="header">
+          Activity
+        </Text>
         <Text variant="body" tone="muted" style={{ marginTop: 2 }}>
-          {activeChild.name.split(' ')[0]}'s week
+          {firstName}'s week
         </Text>
       </View>
 
@@ -34,19 +43,27 @@ export default function Activity() {
             <Text variant="small" tone="muted">
               This week
             </Text>
-            <Text variant="smallStrong" color={colors.success}>
-              ↓ 12% vs last
+            <Text variant="smallStrong" color={changeColor} accessibilityLabel={`${change.spoken} versus last week`}>
+              {change.short} vs last
             </Text>
           </View>
         </View>
-        <BarChart data={data} unit="min" />
+        <View accessible accessibilityRole="image" accessibilityLabel={chartSpoken}>
+          <BarChart data={data} unit="min" />
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4, marginTop: spacing.md }}>
+          <Text variant="smallStrong" color={colors.primary}>
+            Full report
+          </Text>
+          <Feather name="chevron-right" size={16} color={colors.primary} />
+        </View>
       </Card>
 
       <SectionLabel>Reports</SectionLabel>
       <Card padded={false} style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.xl }}>
         <Row title="Screen Time Report" subtitle="Daily and weekly breakdown" icon="bar-chart-2" iconColor={categoryColors.reports} onPress={() => (router.push as any)('/reports')} />
         <Row title="App Usage" subtitle="Most used apps and categories" icon="grid" iconColor={categoryColors.apps} onPress={() => (router.push as any)('/app-limits')} />
-        <Row title="Web Activity" subtitle="Top sites and categories" icon="globe" iconColor={categoryColors.web} onPress={() => (router.push as any)('/feature/browsing')} />
+        <Row title="Web Activity" subtitle="Top sites and categories" icon="globe" iconColor={categoryColors.web} badge="Preview" badgeColor={colors.warning} onPress={() => (router.push as any)('/feature/browsing')} />
       </Card>
 
       <SectionLabel>Communication</SectionLabel>

@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
-import { View, StyleSheet } from 'react-native';
+import { Pressable, View, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 
+import { InlineNote } from '@/components/InlineNote';
 import { Button, Card, Header, Screen, Text } from '@/components/ui';
 import { radius, shadow, spacing, useTheme } from '@/theme';
 
@@ -23,6 +24,13 @@ const FEATURES = [
 export default function Subscription() {
   const { colors } = useTheme();
   const [plan, setPlan] = useState('year');
+  // Which plan the trial button was last pressed for. Nothing is bought: this only drives the note.
+  const [demoPlan, setDemoPlan] = useState<string | null>(null);
+  const chosen = PLANS.find((p) => p.id === plan) ?? PLANS[0];
+  const pickPlan = (id: string) => {
+    setPlan(id);
+    setDemoPlan(null);
+  };
 
   return (
     <Screen>
@@ -38,11 +46,22 @@ export default function Subscription() {
         </Text>
       </LinearGradient>
 
-      <View style={{ flexDirection: 'row', gap: spacing.sm, marginVertical: spacing.xl }}>
+      <View accessibilityRole="radiogroup" accessibilityLabel="Plan" style={{ flexDirection: 'row', gap: spacing.sm, marginVertical: spacing.xl }}>
         {PLANS.map((p) => {
           const on = plan === p.id;
           return (
-            <Card key={p.id} onPress={() => setPlan(p.id)} style={[{ flex: 1 }, on && { borderColor: colors.primary, borderWidth: 2 }]}>
+            <Pressable
+              key={p.id}
+              onPress={() => pickPlan(p.id)}
+              accessibilityRole="radio"
+              accessibilityLabel={`${p.name}, ${p.price} ${p.per.replace('/', 'per ')}${p.note ? `, ${p.note}` : ''}`}
+              accessibilityState={{ checked: on }}
+              aria-checked={on}
+              style={({ pressed }) => [
+                styles.plan,
+                { backgroundColor: colors.surface, borderColor: on ? colors.primary : colors.border },
+                pressed && { opacity: 0.85, transform: [{ scale: 0.99 }] },
+              ]}>
               {p.note ? (
                 <View style={[styles.save, { backgroundColor: colors.success }]}>
                   <Text variant="tiny" color="#FFFFFF">
@@ -60,7 +79,7 @@ export default function Subscription() {
               <View style={[styles.radio, { borderColor: on ? colors.primary : colors.border }]}>
                 {on && <View style={[styles.radioDot, { backgroundColor: colors.primary }]} />}
               </View>
-            </Card>
+            </Pressable>
           );
         })}
       </View>
@@ -78,7 +97,20 @@ export default function Subscription() {
         ))}
       </Card>
 
-      <Button label={`Start free trial — ${PLANS.find((p) => p.id === plan)?.price}`} full icon="star" onPress={() => {}} />
+      <Button
+        label={`Start free trial — ${chosen.price}`}
+        accessibilityLabel={`Start free trial, then ${chosen.price} ${chosen.per.replace('/', 'per ')}`}
+        full
+        icon="star"
+        onPress={() => setDemoPlan(chosen.id)}
+      />
+      {demoPlan === chosen.id && (
+        <InlineNote
+          title="Demo: no purchase made"
+          detail={`The ${chosen.name.toLowerCase()} trial was not started and nothing was charged.`}
+          style={{ marginTop: spacing.md }}
+        />
+      )}
       <Text variant="tiny" tone="faint" center style={{ marginTop: spacing.md }}>
         7-day free trial, cancel anytime. Demo — no real charge.
       </Text>
@@ -88,6 +120,8 @@ export default function Subscription() {
 
 const styles = StyleSheet.create({
   hero: { alignItems: 'center', padding: spacing.xl, borderRadius: radius.card, ...shadow(2) },
+  // Same look as Card, as a radio button: 2pt border so selecting a plan never shifts the layout.
+  plan: { flex: 1, padding: spacing.lg, borderRadius: radius.card, borderWidth: 2, ...shadow(1) },
   save: { position: 'absolute', top: 10, right: 10, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
   radio: { width: 22, height: 22, borderRadius: 999, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginTop: spacing.md },
   radioDot: { width: 11, height: 11, borderRadius: 999 },

@@ -1,6 +1,7 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useColorScheme } from 'react-native';
+import { useEffect } from 'react';
+import { Platform, useColorScheme } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -9,6 +10,11 @@ import { palette } from '@/theme';
 
 export default function RootLayout() {
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
+
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') document.title = 'Haven';
+  }, []);
+
   const navTheme =
     scheme === 'dark'
       ? { ...DarkTheme, colors: { ...DarkTheme.colors, background: palette.dark.bg, card: palette.dark.surface } }
@@ -26,6 +32,7 @@ export default function RootLayout() {
                 animation: 'slide_from_right',
               }}>
               <Stack.Screen name="index" options={{ animation: 'fade' }} />
+              <Stack.Screen name="onboarding" options={{ animation: 'fade', gestureEnabled: false }} />
               <Stack.Screen name="sos" options={{ animation: 'fade_from_bottom', presentation: 'modal' }} />
             </Stack>
             <StatusBar style="auto" />

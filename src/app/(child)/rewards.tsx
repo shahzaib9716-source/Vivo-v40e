@@ -6,11 +6,14 @@ import { Card, ProgressBar, Screen, SectionLabel, Text } from '@/components/ui';
 import { useStore } from '@/state/store';
 import { radius, shadow, spacing, useTheme } from '@/theme';
 
-const GOAL = 150;
+/** Point costs in the parent's reward catalog (src/app/rewards-parent.tsx). */
+const REWARD_COSTS = [30, 50, 70];
 
 export default function ChildRewards() {
   const { colors } = useTheme();
   const { tasks, toggleTask, points } = useStore();
+  const nextCost = REWARD_COSTS.find((c) => c > points);
+  const goal = nextCost ?? REWARD_COSTS[REWARD_COSTS.length - 1];
 
   return (
     <Screen>
@@ -18,7 +21,7 @@ export default function ChildRewards() {
         <Text variant="h1">Your rewards</Text>
       </View>
 
-      <LinearGradient colors={['#F5A623', '#FF7A59']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
+      <LinearGradient colors={['#B45309', '#C2410C']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <View>
             <Text variant="small" color="rgba(255,255,255,0.9)">
@@ -31,9 +34,9 @@ export default function ChildRewards() {
           <Feather name="award" size={52} color="rgba(255,255,255,0.4)" />
         </View>
         <View style={{ marginTop: spacing.md }}>
-          <ProgressBar progress={points / GOAL} color="#FFFFFF" track="rgba(255,255,255,0.3)" height={10} />
+          <ProgressBar progress={Math.min(1, points / goal)} color="#FFFFFF" track="rgba(255,255,255,0.3)" height={10} />
           <Text variant="small" color="rgba(255,255,255,0.9)" style={{ marginTop: 6 }}>
-            {Math.max(0, GOAL - points)} pts to your next reward
+            {nextCost ? `${nextCost - points} pts to your next reward` : 'All rewards unlocked. Ask a parent to grant one!'}
           </Text>
         </View>
       </LinearGradient>

@@ -1,8 +1,11 @@
+import { useState } from 'react';
 import { View, StyleSheet } from 'react-native';
-import { Feather } from '@expo/vector-icons';
 
+import { InlineNote } from '@/components/InlineNote';
 import { Button, Card, Header, Screen, Text } from '@/components/ui';
 import { radius, spacing, useTheme } from '@/theme';
+
+const PAIRING_CODE = '4KQ-7PX';
 
 // Deterministic decorative grid (not a scannable code) for the demo.
 const SIZE = 11;
@@ -16,6 +19,7 @@ function patternCell(r: number, c: number) {
 
 export default function Pairing() {
   const { colors } = useTheme();
+  const [linkCopied, setLinkCopied] = useState(false);
   const cells = [];
   for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) cells.push({ r, c, on: patternCell(r, c) });
 
@@ -24,7 +28,8 @@ export default function Pairing() {
       <Header back title="Pair a device" subtitle="Link your child's phone or tablet" />
 
       <Card style={{ alignItems: 'center', paddingVertical: spacing.xl, marginBottom: spacing.xl }}>
-        <View style={[styles.qr, { backgroundColor: '#FFFFFF' }]}>
+        {/* Decorative pattern on a white tile, like a printed code, in both colour modes. */}
+        <View aria-hidden style={[styles.qr, { backgroundColor: '#FFFFFF' }]}>
           <View style={styles.grid}>
             {cells.map((cell, i) => (
               <View
@@ -42,11 +47,17 @@ export default function Pairing() {
         <Text variant="small" tone="muted" style={{ marginTop: spacing.lg }}>
           Scan with the child's device, or enter the code
         </Text>
-        <View style={[styles.code, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
-          <Text variant="h2" style={{ letterSpacing: 6 }}>
-            4KQ-7PX
+        <View
+          accessible
+          accessibilityLabel={`Pairing code: ${PAIRING_CODE.replace('-', '').split('').join(' ')}`}
+          style={[styles.code, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+          <Text variant="h2" selectable style={{ letterSpacing: 6 }}>
+            {PAIRING_CODE}
           </Text>
         </View>
+        <Text variant="tiny" tone="faint" center style={{ marginTop: spacing.sm }}>
+          Demo code — the pattern above is decoration and cannot be scanned.
+        </Text>
       </Card>
 
       <Text variant="h3" style={{ marginBottom: spacing.md }}>
@@ -59,7 +70,20 @@ export default function Pairing() {
         <Step n={4} text="Confirm together what Haven will share" last />
       </Card>
 
-      <Button label="Share invite link" icon="share-2" variant="secondary" onPress={() => {}} />
+      <Button
+        label={linkCopied ? 'Copy invite link again' : 'Share invite link'}
+        icon={linkCopied ? 'copy' : 'share-2'}
+        variant="secondary"
+        onPress={() => setLinkCopied(true)}
+      />
+      {linkCopied && (
+        <InlineNote
+          tone="success"
+          title="Link copied"
+          detail="Demo only: no real invite link was created or sent."
+          style={{ marginTop: spacing.md }}
+        />
+      )}
     </Screen>
   );
 }

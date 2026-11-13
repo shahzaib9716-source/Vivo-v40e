@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 
+import { InlineNote } from '@/components/InlineNote';
 import { Button, Card, Header, IconBadge, Screen, SectionLabel, Text } from '@/components/ui';
-import { radius, spacing, useTheme } from '@/theme';
+import { spacing, useTheme } from '@/theme';
 
 interface Routine {
   id: string;
@@ -24,10 +25,21 @@ const ROUTINES: Routine[] = [
 export default function Routines() {
   const { colors } = useTheme();
   const [active, setActive] = useState<string | null>('homework');
+  const [createNote, setCreateNote] = useState(false);
+  const activeRoutine = ROUTINES.find((r) => r.id === active);
 
   return (
     <Screen>
       <Header back title="Routines & Focus" subtitle="One tap to change the rules" />
+
+      <View
+        accessibilityLiveRegion="polite"
+        style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.lg }}>
+        <Feather name={activeRoutine ? activeRoutine.icon : 'circle'} size={16} color={activeRoutine ? activeRoutine.color : colors.textFaint} />
+        <Text variant="small" tone="muted" style={{ flex: 1 }}>
+          {activeRoutine ? `${activeRoutine.name} is on. Allowed: ${activeRoutine.allows}.` : 'No routine is on. Normal rules apply.'}
+        </Text>
+      </View>
 
       <SectionLabel>Focus modes</SectionLabel>
       <View style={{ gap: spacing.sm }}>
@@ -52,6 +64,7 @@ export default function Routines() {
               </View>
               <Button
                 label={on ? 'Active now' : 'Activate'}
+                accessibilityLabel={on ? `${r.name} is active. Turn off` : `Activate ${r.name}`}
                 size="sm"
                 variant={on ? 'secondary' : 'primary'}
                 icon={on ? 'check' : 'play'}
@@ -63,9 +76,19 @@ export default function Routines() {
         })}
       </View>
 
-      <Button label="Create a routine" icon="plus" variant="ghost" style={{ marginTop: spacing.lg }} onPress={() => {}} />
+      <Button label="Create a routine" icon="plus" variant="ghost" style={{ marginTop: spacing.lg }} onPress={() => setCreateNote(true)} />
+      {createNote && (
+        <InlineNote
+          tone="neutral"
+          title="Demo: custom routines aren't available"
+          detail="This build has the four focus modes above. Nothing was created."
+          style={{ marginTop: spacing.sm }}
+        />
+      )}
+
+      <Text variant="tiny" tone="faint" center style={{ marginTop: spacing.lg }}>
+        Demo: routines switch on this screen only and do not change a device.
+      </Text>
     </Screen>
   );
 }
-
-const styles = StyleSheet.create({});

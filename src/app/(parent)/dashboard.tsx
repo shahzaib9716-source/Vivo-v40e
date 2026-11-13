@@ -1,21 +1,84 @@
+import { useCallback, useRef, useState } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Pressable, ScrollView, View, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar, Button, Card, IconBadge, ProgressRing, Text } from '@/components/ui';
 import { useStore, fmtDuration } from '@/state/store';
 import { categoryColors, radius, shadow, spacing, useTheme } from '@/theme';
 
+/** How many requests show before "Show all". */
+const REQUEST_PREVIEW = 2;
+
+/** Deeper reds than the theme's danger colour, so white text on the banner stays readable. */
+const SOS_GRADIENT = ['#E5383B', '#B91C1C'] as const;
+const SOS_INK = '#B91C1C';
+
+function greeting() {
+  const h = new Date().getHours();
+  return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+}
+
 export default function Dashboard() {
   const { colors } = useTheme();
-  const { children, activeChild, activeChildId, setActiveChildId, requests, alerts, pauseDevice, resumeDevice, grantBonus, resolveRequest } = useStore();
+  const {
+    children,
+    activeChild,
+    activeChildId,
+    setActiveChildId,
+    childSelf,
+    requests,
+    alerts,
+    messages,
+    pauseDevice,
+    resumeDevice,
+    grantBonus,
+    resolveRequest,
+    sosActive,
+    clearSOS,
+  } = useStore();
+  const [showAllRequests, setShowAllRequests] = useState(false);
+
   const pending = requests.filter((r) => r.status === 'pending');
+  const visibleRequests = showAllRequests ? pending : pending.slice(0, REQUEST_PREVIEW);
   const unread = alerts.filter((a) => a.unread).length;
   const left = Math.max(0, activeChild.limitMin - activeChild.usedMin);
   const used = Math.min(1, activeChild.usedMin / activeChild.limitMin);
   const blocked = activeChild.apps.filter((a) => a.blocked).length;
+  const firstName = activeChild.name.split(' ')[0];
+
+  const thread = messages.filter((m) => m.childId === activeChildId);
+  const lastMessage = thread.length > 0 ? thread[thread.length - 1] : null;
+
+  // An SOS always comes from the child using the child app. Alerts are newest first.
+  const sosName = childSelf.name.split(' ')[0];
+  const sosAlert = alerts.find((a) => /^sos\b/i.test(a.title));
+  const sosDetail = sosAlert?.body ?? `Live location shared · near ${childSelf.place}`;
+
+  const viewSosLocation = () => {
+    setActiveChildId(childSelf.id);
+    (router.push as any)('/(parent)/location');
+  };
+
+  // After a request is resolved its card leaves and the next one slides into the same spot, so a
+  // quick second tap would land on a different request. Ignore presses for half a second.
+  const lastResolve = useRef(0);
+  const resolve = (id: string, approve: boolean) => {
+    const now = Date.now();
+    if (now - lastResolve.current < 500) return;
+    lastResolve.current = now;
+    resolveRequest(id, approve);
+  };
+
+  const [hello, setHello] = useState(greeting);
+  useFocusEffect(
+    useCallback(() => {
+      setHello(greeting());
+    }, []),
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -25,22 +88,74 @@ export default function Dashboard() {
           <View style={styles.topbar}>
             <View>
               <Text variant="small" tone="muted">
-                Good afternoon
+                {hello}
               </Text>
               <Text variant="h1">Your family</Text>
             </View>
-            <Pressable onPress={() => (router.push as any)('/notifications')} style={[styles.bell, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Pressable
+              onPress={() => (router.push as any)('/notifications')}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
+              style={({ pressed }) => [styles.bell, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]}>
               <Feather name="bell" size={20} color={colors.text} />
               {unread > 0 && <View style={[styles.dot, { backgroundColor: colors.danger }]} />}
             </Pressable>
           </View>
+
+          {/* SOS */}
+          {sosActive && (
+            <Animated.View entering={FadeInDown.duration(220)} accessibilityRole="alert" style={styles.sosWrap}>
+              <LinearGradient colors={SOS_GRADIENT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.sos}>
+                <View style={styles.sosHead}>
+                  <View style={styles.sosIcon}>
+                    <Feather name="alert-circle" size={24} color="#FFFFFF" />
+                  </View>
+                  <View style={styles.flex}>
+                    <Text variant="h3" color="#FFFFFF">
+                      SOS from {sosName}
+                    </Text>
+                    <Text variant="small" color="rgba(255,255,255,0.92)">
+                      {sosDetail}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.sosActions}>
+                  <Pressable
+                    onPress={viewSosLocation}
+                    accessibilityRole="button"
+                    style={({ pressed }) => [styles.sosBtn, styles.sosBtnSolid, pressed && styles.pressed]}>
+                    <Feather name="map-pin" size={16} color={SOS_INK} />
+                    <Text variant="smallStrong" color={SOS_INK}>
+                      View location
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={clearSOS}
+                    accessibilityRole="button"
+                    style={({ pressed }) => [styles.sosBtn, styles.sosBtnGhost, pressed && styles.pressed]}>
+                    <Feather name="check" size={16} color="#FFFFFF" />
+                    <Text variant="smallStrong" color="#FFFFFF">
+                      Mark as safe
+                    </Text>
+                  </Pressable>
+                </View>
+              </LinearGradient>
+            </Animated.View>
+          )}
 
           {/* Child selector */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.kids}>
             {children.map((c) => {
               const active = c.id === activeChildId;
               return (
-                <Pressable key={c.id} onPress={() => setActiveChildId(c.id)} style={styles.kid}>
+                <Pressable
+                  key={c.id}
+                  onPress={() => setActiveChildId(c.id)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                  accessibilityLabel={c.name}
+                  style={({ pressed }) => [styles.kid, pressed && styles.pressed]}>
                   <View style={[styles.kidAvatar, active && { borderColor: colors.primary }]}>
                     <Avatar name={c.name} size={56} />
                     {c.online && <View style={[styles.online, { borderColor: colors.bg }]} />}
@@ -51,7 +166,11 @@ export default function Dashboard() {
                 </Pressable>
               );
             })}
-            <Pressable onPress={() => (router.push as any)('/pairing')} style={styles.kid}>
+            <Pressable
+              onPress={() => (router.push as any)('/pairing')}
+              accessibilityRole="button"
+              accessibilityLabel="Add a child"
+              style={({ pressed }) => [styles.kid, pressed && styles.pressed]}>
               <View style={[styles.addKid, { borderColor: colors.border }]}>
                 <Feather name="plus" size={22} color={colors.textMuted} />
               </View>
@@ -67,7 +186,7 @@ export default function Dashboard() {
               <View style={styles.heroTop}>
                 <View style={{ flex: 1 }}>
                   <Text variant="h2" color="#FFFFFF">
-                    {activeChild.name.split(' ')[0]}
+                    {firstName}
                   </Text>
                   <View style={styles.heroMeta}>
                     <Feather name="smartphone" size={13} color="rgba(255,255,255,0.8)" />
@@ -110,11 +229,50 @@ export default function Dashboard() {
             <MiniStat value={`${pending.length}`} caption="Requests" color={colors.warning} icon="inbox" />
           </View>
 
+          {/* Messages shortcut */}
+          <View style={styles.messages}>
+            <Card
+              onPress={() => (router.push as any)(`/messages?childId=${activeChildId}`)}
+              style={styles.messageCard}>
+              <IconBadge name="message-circle" color={colors.primary} size={44} />
+              <View style={styles.flex}>
+                <Text variant="title" numberOfLines={1}>
+                  Messages with {firstName}
+                </Text>
+                <Text variant="small" tone="muted" numberOfLines={1}>
+                  {lastMessage ? `${lastMessage.from === 'parent' ? 'You' : firstName}: ${lastMessage.text}` : `Say hello to ${firstName}`}
+                </Text>
+              </View>
+              {lastMessage && (
+                <Text variant="tiny" tone="faint">
+                  {lastMessage.time}
+                </Text>
+              )}
+              <Feather name="chevron-right" size={20} color={colors.textFaint} />
+            </Card>
+          </View>
+
           {/* Pending requests */}
-          {pending.length > 0 && (
-            <View style={styles.section}>
-              <SectionTitle title="Needs your approval" actionLabel="All" onAction={() => (router.push as any)('/(child)/requests')} />
-              {pending.slice(0, 2).map((r) => {
+          <View style={styles.section}>
+            <SectionTitle
+              title="Needs your approval"
+              actionLabel={pending.length > REQUEST_PREVIEW ? (showAllRequests ? 'Show less' : `Show all ${pending.length}`) : undefined}
+              onAction={() => setShowAllRequests((all) => !all)}
+            />
+            {pending.length === 0 ? (
+              <View style={[styles.caughtUp, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <View style={[styles.caughtUpIcon, { backgroundColor: colors.successSoft }]}>
+                  <Feather name="check" size={18} color={colors.success} />
+                </View>
+                <View style={styles.flex}>
+                  <Text variant="smallStrong">All caught up</Text>
+                  <Text variant="small" tone="muted">
+                    New requests from your children show up here.
+                  </Text>
+                </View>
+              </View>
+            ) : (
+              visibleRequests.map((r) => {
                 const kid = children.find((c) => c.id === r.childId);
                 return (
                   <Card key={r.id} style={{ marginBottom: spacing.sm }}>
@@ -128,14 +286,14 @@ export default function Dashboard() {
                       </View>
                     </View>
                     <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md }}>
-                      <Button label="Approve" size="sm" onPress={() => resolveRequest(r.id, true)} style={{ flex: 1 }} />
-                      <Button label="Decline" size="sm" variant="secondary" onPress={() => resolveRequest(r.id, false)} style={{ flex: 1 }} />
+                      <Button label="Approve" size="sm" onPress={() => resolve(r.id, true)} style={{ flex: 1 }} />
+                      <Button label="Decline" size="sm" variant="secondary" onPress={() => resolve(r.id, false)} style={{ flex: 1 }} />
                     </View>
                   </Card>
                 );
-              })}
-            </View>
-          )}
+              })
+            )}
+          </View>
 
           {/* Quick controls */}
           <View style={styles.section}>
@@ -166,7 +324,7 @@ function HeroChip({ icon, label }: { icon: keyof typeof Feather.glyphMap; label:
 
 function HeroBtn({ icon, label, onPress }: { icon: keyof typeof Feather.glyphMap; label: string; onPress: () => void }) {
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.heroBtn, pressed && { opacity: 0.8 }]}>
+    <Pressable onPress={onPress} accessibilityRole="button" style={({ pressed }) => [styles.heroBtn, pressed && { opacity: 0.8 }]}>
       <Feather name={icon} size={16} color="#FFFFFF" />
       <Text variant="smallStrong" color="#FFFFFF">
         {label}
@@ -193,7 +351,10 @@ function MiniStat({ value, caption, color, icon }: { value: string; caption: str
 function QuickTile({ icon, label, color, onPress }: { icon: keyof typeof Feather.glyphMap; label: string; color: string; onPress: () => void }) {
   const { colors } = useTheme();
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.quick, { backgroundColor: colors.surface, borderColor: colors.border, ...shadow(1) }, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      style={({ pressed }) => [styles.quick, { backgroundColor: colors.surface, borderColor: colors.border, ...shadow(1) }, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}>
       <IconBadge name={icon} color={color} size={44} />
       <Text variant="smallStrong" style={{ marginTop: spacing.sm }}>
         {label}
@@ -208,7 +369,7 @@ function SectionTitle({ title, actionLabel, onAction }: { title: string; actionL
     <View style={styles.sectionTitle}>
       <Text variant="h3">{title}</Text>
       {actionLabel && (
-        <Pressable onPress={onAction} hitSlop={8}>
+        <Pressable onPress={onAction} hitSlop={8} accessibilityRole="button" style={({ pressed }) => pressed && styles.pressed}>
           <Text variant="smallStrong" color={colors.primary}>
             {actionLabel}
           </Text>
@@ -219,9 +380,19 @@ function SectionTitle({ title, actionLabel, onAction }: { title: string; actionL
 }
 
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
+  pressed: { opacity: 0.7 },
   topbar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.xl, paddingTop: spacing.sm, paddingBottom: spacing.md },
   bell: { width: 44, height: 44, borderRadius: 999, alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth },
   dot: { position: 'absolute', top: 11, right: 12, width: 9, height: 9, borderRadius: 999 },
+  sosWrap: { paddingHorizontal: spacing.xl, paddingBottom: spacing.lg },
+  sos: { borderRadius: radius.card, padding: spacing.lg, gap: spacing.md, ...shadow(2) },
+  sosHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  sosIcon: { width: 44, height: 44, borderRadius: 999, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.2)' },
+  sosActions: { flexDirection: 'row', gap: spacing.sm },
+  sosBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 44, borderRadius: radius.md },
+  sosBtnSolid: { backgroundColor: '#FFFFFF' },
+  sosBtnGhost: { backgroundColor: 'rgba(255,255,255,0.2)' },
   kids: { paddingHorizontal: spacing.xl, gap: spacing.lg, paddingBottom: spacing.lg },
   kid: { alignItems: 'center', gap: 6 },
   kidAvatar: { padding: 2, borderRadius: 999, borderWidth: 2, borderColor: 'transparent' },
@@ -236,8 +407,12 @@ const styles = StyleSheet.create({
   heroBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.18)', paddingVertical: 12, borderRadius: radius.md },
   statRow: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.xl, marginTop: spacing.lg },
   miniStat: { flex: 1, alignItems: 'center', paddingVertical: spacing.md, borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, gap: 1 },
+  messages: { paddingHorizontal: spacing.xl, marginTop: spacing.sm },
+  messageCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   section: { paddingHorizontal: spacing.xl, marginTop: spacing.xl },
   sectionTitle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md },
+  caughtUp: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.lg, borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth },
+  caughtUpIcon: { width: 36, height: 36, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   quick: { width: '48%', flexGrow: 1, padding: spacing.lg, borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth },
 });
