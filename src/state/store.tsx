@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export type AppCategory = 'social' | 'games' | 'video' | 'education' | 'music' | 'web' | 'messaging' | 'creativity';
@@ -308,10 +308,13 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
   const pauseDevice = useCallback((id: string) => updateChild(id, (c) => ({ ...c, bedtime: true })), [updateChild]);
   const resumeDevice = useCallback((id: string) => updateChild(id, (c) => ({ ...c, bedtime: false })), [updateChild]);
 
+  const resolvedIds = useRef(new Set<string>());
   const resolveRequest = useCallback((id: string, approve: boolean) => {
     const req = requests.find((r) => r.id === id);
-    // Only a pending request can be resolved, so a repeated tap cannot grant twice.
-    if (!req || req.status !== 'pending') return;
+    // Only a pending request can be resolved, and only once: the ref also stops presses that
+    // arrive before React has re-rendered with the new status.
+    if (!req || req.status !== 'pending' || resolvedIds.current.has(id)) return;
+    resolvedIds.current.add(id);
     setRequests((prev) =>
       prev.map((r) => (r.id === id ? { ...r, status: approve ? 'approved' : 'denied' } : r)),
     );

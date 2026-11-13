@@ -23,14 +23,18 @@ export function Card({ children, onPress, style, padded = true, elevated = true,
     ...(elevated ? shadow(1) : null),
   };
 
+  // Flattened so the caller's padding replaces the default. On web an inline style object would
+  // otherwise beat padding that comes from a StyleSheet class.
+  const merged = StyleSheet.flatten([base, style]);
+
   if (onPress) {
     return (
       <Pressable
         onPress={onPress}
-        style={({ pressed }) => [base, style, pressed && { opacity: 0.85, transform: [{ scale: 0.99 }] }]}>
+        style={({ pressed }) => [merged, pressed && { opacity: 0.85, transform: [{ scale: 0.99 }] }]}>
         {children}
       </Pressable>
     );
   }
-  return <View style={[base, style]}>{children}</View>;
+  return <View style={merged}>{children}</View>;
 }

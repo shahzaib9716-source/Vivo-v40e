@@ -21,7 +21,7 @@ export default function ChildRewards() {
         <Text variant="h1">Your rewards</Text>
       </View>
 
-      <LinearGradient colors={['#F5A623', '#FF7A59']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
+      <LinearGradient colors={['#B45309', '#C2410C']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <View>
             <Text variant="small" color="rgba(255,255,255,0.9)">

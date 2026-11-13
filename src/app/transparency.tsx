@@ -1,3 +1,4 @@
+import { useLocalSearchParams } from 'expo-router';
 import { View, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 
@@ -23,7 +24,8 @@ const NOT_SHARED = [
 export default function Transparency() {
   const { colors } = useTheme();
   const { role } = useStore();
-  const parent = role === 'parent';
+  const { as } = useLocalSearchParams<{ as?: string }>();
+  const parent = as === 'parent' || role === 'parent';
   return (
     <Screen>
       <Header back title="What's shared" subtitle="Haven is built on transparency" />

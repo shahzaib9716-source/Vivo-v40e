@@ -32,7 +32,7 @@ export default function Family() {
       </View>
 
       {/* Premium card */}
-      <LinearGradient colors={['#FF7A59', '#FF5E8A', '#8B5CF6']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.premium}>
+      <LinearGradient colors={['#C2410C', '#BE185D', '#6D28D9']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.premium}>
         <View style={styles.premiumText}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <Feather name="star" size={16} color="#FFFFFF" />
@@ -53,7 +53,7 @@ export default function Family() {
           accessibilityRole="button"
           accessibilityLabel="View Haven Premium plans"
           style={({ pressed }) => [styles.premiumBtn, pressed && styles.premiumBtnPressed]}>
-          <Text variant="smallStrong" color="#FF5E8A">
+          <Text variant="smallStrong" color="#BE185D">
             View plans
           </Text>
         </Pressable>
@@ -85,7 +85,7 @@ export default function Family() {
       <Card padded={false} style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.xl }}>
         <Row title="Devices & Pairing" subtitle="Manage linked devices" icon="smartphone" iconColor={colors.info} onPress={() => (router.push as any)('/pairing')} />
         <Row title="Settings" subtitle="App, privacy and account" icon="settings" iconColor={colors.textMuted} onPress={() => (router.push as any)('/settings')} />
-        <Row title="Subscription" subtitle="Haven Premium" icon="credit-card" iconColor={categoryColors.rewards} onPress={() => (router.push as any)('/subscription')} />
+        <Row title="Subscription" subtitle="Free plan · see Premium" icon="credit-card" iconColor={categoryColors.rewards} onPress={() => (router.push as any)('/subscription')} />
         <Row title="Help & Support" subtitle="Guides and contact" icon="help-circle" iconColor={colors.success} onPress={() => (router.push as any)('/settings')} />
       </Card>
 

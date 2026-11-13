@@ -11,12 +11,12 @@ import { useStore } from '@/state/store';
 import { radius, shadow, spacing, useTheme } from '@/theme';
 
 export default function Welcome() {
-  const { colors } = useTheme();
+  const { colors, mode } = useTheme();
   const { setRole, hasOnboarded, ready } = useStore();
 
   // Hold on the brand colour until the saved flag is read, so a returning user never sees the intro flash.
   if (!ready) {
-    return <View style={{ flex: 1, backgroundColor: '#5B51E0' }} />;
+    return <View style={{ flex: 1, backgroundColor: mode === 'dark' ? '#1B183F' : '#5B51E0' }} />;
   }
 
   // First run: show the introduction before the role chooser.

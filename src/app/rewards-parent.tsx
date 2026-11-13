@@ -60,7 +60,7 @@ export default function RewardsParent() {
       <Header back title="Rewards & Tasks" />
 
       <LinearGradient
-        colors={['#F5A623', '#FF7A59']}
+        colors={['#B45309', '#C2410C']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.hero}

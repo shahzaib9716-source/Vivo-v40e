@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Pressable, ScrollView, View, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -63,6 +63,23 @@ export default function Dashboard() {
     (router.push as any)('/(parent)/location');
   };
 
+  // After a request is resolved its card leaves and the next one slides into the same spot, so a
+  // quick second tap would land on a different request. Ignore presses for half a second.
+  const lastResolve = useRef(0);
+  const resolve = (id: string, approve: boolean) => {
+    const now = Date.now();
+    if (now - lastResolve.current < 500) return;
+    lastResolve.current = now;
+    resolveRequest(id, approve);
+  };
+
+  const [hello, setHello] = useState(greeting);
+  useFocusEffect(
+    useCallback(() => {
+      setHello(greeting());
+    }, []),
+  );
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <SafeAreaView edges={['top']} style={{ flex: 1 }}>
@@ -71,7 +88,7 @@ export default function Dashboard() {
           <View style={styles.topbar}>
             <View>
               <Text variant="small" tone="muted">
-                {greeting()}
+                {hello}
               </Text>
               <Text variant="h1">Your family</Text>
             </View>
@@ -269,8 +286,8 @@ export default function Dashboard() {
                       </View>
                     </View>
                     <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md }}>
-                      <Button label="Approve" size="sm" onPress={() => resolveRequest(r.id, true)} style={{ flex: 1 }} />
-                      <Button label="Decline" size="sm" variant="secondary" onPress={() => resolveRequest(r.id, false)} style={{ flex: 1 }} />
+                      <Button label="Approve" size="sm" onPress={() => resolve(r.id, true)} style={{ flex: 1 }} />
+                      <Button label="Decline" size="sm" variant="secondary" onPress={() => resolve(r.id, false)} style={{ flex: 1 }} />
                     </View>
                   </Card>
                 );

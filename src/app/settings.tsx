@@ -23,10 +23,16 @@ export default function Settings() {
   const { colors } = useTheme();
   const { setRole, resetOnboarding } = useStore();
 
+  /** Pops back to the tabs first, so the replace swaps out the whole parent app, not just this screen. */
+  const leaveTo = (href: string) => {
+    if (router.canDismiss()) router.dismissAll();
+    (router.replace as any)(href);
+  };
+
   const replayIntro = () => {
     resetOnboarding();
     setRole(null);
-    (router.replace as any)('/onboarding');
+    leaveTo('/onboarding');
   };
   const [push, setPush] = useState(true);
   const [emailDigest, setEmailDigest] = useState(false);
@@ -35,7 +41,7 @@ export default function Settings() {
 
   const signOut = () => {
     setRole(null);
-    (router.replace as any)('/');
+    leaveTo('/');
   };
 
   const note = (rows: DemoRow[]) =>
@@ -77,7 +83,7 @@ export default function Settings() {
       <SectionLabel>Privacy & security</SectionLabel>
       <Card padded={false} style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.xl }}>
         <Row title="Require Face ID to open" icon="lock" iconColor={colors.primary} chevron={false} right={<Toggle value={biometric} onChange={setBiometric} />} />
-        <Row title="Privacy & transparency" subtitle="What your child sees about sharing" icon="eye" iconColor={colors.success} onPress={() => (router.push as any)('/transparency')} />
+        <Row title="Privacy & transparency" subtitle="What your child sees about sharing" icon="eye" iconColor={colors.success} onPress={() => (router.push as any)('/transparency?as=parent')} />
         <Row title="Data & export" subtitle="Download or delete your data" icon="database" iconColor={colors.textMuted} onPress={() => setDemo('data')} />
       </Card>
       {note(['data'])}
