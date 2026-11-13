@@ -1,26 +1,104 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
+import { Pressable, View, StyleSheet } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
+import { Logo, Text } from '@/components/ui';
+import { useStore } from '@/state/store';
+import { radius, shadow, spacing, useTheme } from '@/theme';
 
-export default function HomeScreen() {
-  const theme = useTheme();
+export default function Welcome() {
+  const { colors } = useTheme();
+  const { setRole } = useStore();
+
+  const go = (role: 'parent' | 'child') => {
+    setRole(role);
+    (router.replace as any)(role === 'parent' ? '/(parent)/dashboard' : '/(child)/home');
+  };
+
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
-      <View style={styles.container}>
-        <Text style={[styles.title, { color: theme.text }]}>Vivo-v40e</Text>
-        <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
-          Project is set up. Screens coming next.
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <LinearGradient colors={['#5B51E0', '#7A4FE0', '#8B5CF6']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
+        <SafeAreaView edges={['top']}>
+          <View style={styles.heroInner}>
+            <Logo size={72} color="rgba(255,255,255,0.18)" />
+            <Text variant="display" color="#FFFFFF" style={{ marginTop: spacing.lg }}>
+              Haven
+            </Text>
+            <Text variant="body" color="rgba(255,255,255,0.85)" center style={{ marginTop: 6, maxWidth: 280 }}>
+              One calm place to keep your family safe, balanced, and connected.
+            </Text>
+          </View>
+        </SafeAreaView>
+        <View style={[styles.blob, { top: -40, right: -30 }]} />
+        <View style={[styles.blob, { bottom: 10, left: -50, width: 160, height: 160 }]} />
+      </LinearGradient>
+
+      <SafeAreaView edges={['bottom']} style={styles.bottom}>
+        <Text variant="h3" style={{ marginBottom: spacing.xs }}>
+          Who's setting up?
+        </Text>
+        <Text variant="small" tone="muted" style={{ marginBottom: spacing.lg }}>
+          Choose a mode. You can switch anytime from settings.
+        </Text>
+
+        <RoleCard
+          title="I'm a parent"
+          subtitle="Manage limits, see activity and locations across your family."
+          icon="users"
+          color={colors.primary}
+          onPress={() => go('parent')}
+        />
+        <RoleCard
+          title="This is my child's device"
+          subtitle="Set up Haven on your child's phone or tablet."
+          icon="smartphone"
+          color={colors.accent}
+          onPress={() => go('child')}
+        />
+
+        <View style={styles.footer}>
+          <Feather name="lock" size={13} color={colors.textFaint} />
+          <Text variant="tiny" tone="faint" style={{ flex: 1 }}>
+            Haven is built around transparency — children can always see what's shared and limited.
+          </Text>
+        </View>
+      </SafeAreaView>
+    </View>
+  );
+}
+
+function RoleCard({ title, subtitle, icon, color, onPress }: { title: string; subtitle: string; icon: keyof typeof Feather.glyphMap; color: string; onPress: () => void }) {
+  const { colors } = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.roleCard,
+        { backgroundColor: colors.surface, borderColor: colors.border, ...shadow(1) },
+        pressed && { transform: [{ scale: 0.99 }], opacity: 0.95 },
+      ]}>
+      <View style={[styles.roleIcon, { backgroundColor: color + '1F' }]}>
+        <Feather name={icon} size={24} color={color} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text variant="h3">{title}</Text>
+        <Text variant="small" tone="muted" style={{ marginTop: 2 }}>
+          {subtitle}
         </Text>
       </View>
-    </SafeAreaView>
+      <Feather name="arrow-right" size={20} color={colors.textFaint} />
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1 },
-  container: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.lg, gap: Spacing.sm },
-  title: { fontSize: 32, fontWeight: '700', letterSpacing: -0.5 },
-  subtitle: { fontSize: 16, textAlign: 'center' },
+  hero: { height: '46%', justifyContent: 'center', overflow: 'hidden' },
+  heroInner: { alignItems: 'center', paddingHorizontal: spacing.xl, paddingTop: spacing.xl },
+  blob: { position: 'absolute', width: 200, height: 200, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.08)' },
+  bottom: { flex: 1, paddingHorizontal: spacing.xl, paddingTop: spacing.xl, gap: spacing.md },
+  roleCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.lg, borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth },
+  roleIcon: { width: 52, height: 52, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
+  footer: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: 'auto', paddingVertical: spacing.lg },
 });
