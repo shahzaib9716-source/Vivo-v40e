@@ -120,7 +120,7 @@ export default function ChildProfile() {
             <Row title="Screen Time" subtitle={`Limit ${fmtDuration(activeChild.limitMin)}/day`} icon="clock" iconColor={categoryColors.screenTime} onPress={() => (router.push as any)('/screen-time')} />
             <Row title="App Limits" subtitle={`${activeChild.apps.length} apps`} icon="grid" iconColor={categoryColors.apps} onPress={() => (router.push as any)('/app-limits')} />
             <Row title="Schedules" subtitle="Bedtime & school" icon="calendar" iconColor={categoryColors.schedules} onPress={() => (router.push as any)('/schedules')} />
-            <Row title="Location" subtitle={activeChild.place} icon="map-pin" iconColor={categoryColors.location} onPress={() => (router.push as any)('/(parent)/location')} />
+            <Row title="Location" subtitle={activeChild.place} icon="map-pin" iconColor={categoryColors.location} onPress={() => (router.dismissTo as any)('/(parent)/location')} />
           </Card>
 
           <SectionLabel>Device</SectionLabel>

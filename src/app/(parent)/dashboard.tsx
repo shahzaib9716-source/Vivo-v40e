@@ -17,6 +17,11 @@ const REQUEST_PREVIEW = 2;
 const SOS_GRADIENT = ['#E5383B', '#B91C1C'] as const;
 const SOS_INK = '#B91C1C';
 
+function greeting() {
+  const h = new Date().getHours();
+  return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+}
+
 export default function Dashboard() {
   const { colors } = useTheme();
   const {
@@ -66,7 +71,7 @@ export default function Dashboard() {
           <View style={styles.topbar}>
             <View>
               <Text variant="small" tone="muted">
-                Good afternoon
+                {greeting()}
               </Text>
               <Text variant="h1">Your family</Text>
             </View>

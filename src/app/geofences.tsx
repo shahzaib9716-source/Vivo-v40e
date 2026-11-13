@@ -81,14 +81,14 @@ export default function Geofences() {
                       <Text variant="small" tone="muted" style={styles.flex}>
                         Alert on arrival
                       </Text>
-                      <Toggle value={p.arrive} onChange={() => togglePlaceAlert(p.id, 'arrive')} />
+                      <Toggle value={p.arrive} onChange={() => togglePlaceAlert(p.id, 'arrive')} accessibilityLabel={`Alert on arrival at ${p.name}`} />
                     </View>
                     <View style={styles.alertRow}>
                       <Feather name="log-out" size={15} color={colors.textMuted} />
                       <Text variant="small" tone="muted" style={styles.flex}>
                         Alert on departure
                       </Text>
-                      <Toggle value={p.leave} onChange={() => togglePlaceAlert(p.id, 'leave')} />
+                      <Toggle value={p.leave} onChange={() => togglePlaceAlert(p.id, 'leave')} accessibilityLabel={`Alert on departure from ${p.name}`} />
                     </View>
                   </View>
 

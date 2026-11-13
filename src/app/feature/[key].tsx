@@ -256,7 +256,8 @@ export default function FeatureScreen() {
             </View>
           </View>
           <Card padded={false} style={{ paddingHorizontal: spacing.lg }}>
-            <Animated.View aria-hidden={!enabled} style={[{ pointerEvents: enabled ? 'auto' : 'none' }, sampleFade]}>
+            {enabled ? (
+            <Animated.View style={sampleFade}>
               {sample.map((item, i) => (
                 <View key={i} style={styles.item}>
                   <IconBadge name={item.icon} color={def.color} size={38} />
@@ -276,12 +277,13 @@ export default function FeatureScreen() {
                 </View>
               ))}
             </Animated.View>
-            {!enabled && (
-              <View style={styles.offOverlay}>
-                <View style={[styles.offPrompt, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                  <Feather name="eye-off" size={16} color={colors.textMuted} />
-                  <Text variant="smallStrong">Turn on to see activity</Text>
-                </View>
+            ) : (
+              <View style={styles.offState}>
+                <Feather name="eye-off" size={20} color={colors.textMuted} />
+                <Text variant="smallStrong">Turn on to see activity</Text>
+                <Text variant="small" tone="muted" center>
+                  Sample rows appear here when this is on.
+                </Text>
               </View>
             )}
           </Card>
@@ -431,6 +433,7 @@ const styles = StyleSheet.create({
   miniBtn: { width: 40, height: 40, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
   badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.pill },
   sampleHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm },
+  offState: { alignItems: 'center', gap: 6, paddingVertical: spacing.xxl },
   offOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
   offPrompt: {
     flexDirection: 'row',

@@ -406,6 +406,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     // Web draws its own focus ring; the border colour already shows focus.
     outlineWidth: 0,
+    ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null),
   },
 
   tile: {

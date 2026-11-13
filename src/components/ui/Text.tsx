@@ -20,15 +20,19 @@ export function Text({ variant = 'body', tone = 'default', color, center, style,
     faint: colors.textFaint,
     primary: colors.primary,
     accent: colors.accent,
-    success: colors.success,
-    danger: colors.danger,
-    warning: colors.warning,
+    success: colors.successText,
+    danger: colors.dangerText,
+    warning: colors.warningText,
     onPrimary: colors.onPrimary,
     inherit: colors.text,
   };
+  // The status colours are tuned for fills and icons. As small text on a light surface they are
+  // too pale, so text asked for in one of them is drawn in its darker text variant.
+  const readable =
+    color === colors.success ? colors.successText : color === colors.warning ? colors.warningText : color === colors.danger ? colors.dangerText : color;
   return (
     <RNText
-      style={[typeScale[variant], { color: color ?? toneColor[tone] }, center && { textAlign: 'center' }, style]}
+      style={[typeScale[variant], { color: readable ?? toneColor[tone] }, center && { textAlign: 'center' }, style]}
       {...rest}
     />
   );

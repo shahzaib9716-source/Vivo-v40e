@@ -17,7 +17,7 @@ export function Card({ children, onPress, style, padded = true, elevated = true,
   const base: ViewStyle = {
     backgroundColor: tone === 'surface' ? colors.surface : colors.surfaceAlt,
     borderRadius: radius.card,
-    padding: padded ? spacing.lg : 0,
+    ...(padded ? { padding: spacing.lg } : null),
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     ...(elevated ? shadow(1) : null),

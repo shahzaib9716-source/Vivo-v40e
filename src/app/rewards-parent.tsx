@@ -98,6 +98,14 @@ export default function RewardsParent() {
       </Card>
 
       <SectionLabel>Reward catalog</SectionLabel>
+      {granted != null && (
+        <InlineNote
+          tone={granted.applied ? 'success' : 'neutral'}
+          title={granted.title}
+          detail={granted.detail}
+          style={{ marginBottom: spacing.md }}
+        />
+      )}
       <View style={{ gap: spacing.sm }}>
         {REWARDS.map((r) => {
           const can = points >= r.cost;
@@ -122,15 +130,6 @@ export default function RewardsParent() {
           );
         })}
       </View>
-
-      {granted != null && (
-        <InlineNote
-          tone={granted.applied ? 'success' : 'neutral'}
-          title={granted.title}
-          detail={granted.detail}
-          style={{ marginTop: spacing.md }}
-        />
-      )}
 
       <Text variant="tiny" tone="faint" center style={{ marginTop: spacing.lg }}>
         Demo: granting a reward does not spend points.

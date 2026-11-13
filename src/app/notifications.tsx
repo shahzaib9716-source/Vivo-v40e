@@ -80,7 +80,7 @@ export default function Notifications() {
   const viewLocation = () => {
     // An SOS always comes from the child using the child app.
     setActiveChildId(childSelf.id);
-    (router.push as any)('/(parent)/location');
+    (router.dismissTo as any)('/(parent)/location');
   };
 
   return (

@@ -67,7 +67,7 @@ export default function Location() {
 
           <View style={{ paddingHorizontal: spacing.xl }}>
             <View style={[styles.mapWrap, { borderColor: colors.border }]}>
-              <MockMap height={260} pinColor={colors.primary} pinLabel={activeChild.place} rounded={false} />
+              <MockMap height={260} pinColor={colors.primary} rounded={false} />
             </View>
 
             <Card style={{ marginTop: -28, marginHorizontal: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>

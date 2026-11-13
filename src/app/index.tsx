@@ -2,7 +2,7 @@ import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Redirect, router } from 'expo-router';
 import { ReactNode, useEffect } from 'react';
-import { Pressable, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
+import { Pressable, ScrollView, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -12,7 +12,12 @@ import { radius, shadow, spacing, useTheme } from '@/theme';
 
 export default function Welcome() {
   const { colors } = useTheme();
-  const { setRole, hasOnboarded } = useStore();
+  const { setRole, hasOnboarded, ready } = useStore();
+
+  // Hold on the brand colour until the saved flag is read, so a returning user never sees the intro flash.
+  if (!ready) {
+    return <View style={{ flex: 1, backgroundColor: '#5B51E0' }} />;
+  }
 
   // First run: show the introduction before the role chooser.
   if (!hasOnboarded) {
@@ -49,7 +54,7 @@ export default function Welcome() {
       </LinearGradient>
 
       <SafeAreaView edges={['bottom']} style={styles.bottomSafe}>
-        <View style={styles.bottom}>
+        <ScrollView contentContainerStyle={styles.bottom} bounces={false} showsVerticalScrollIndicator={false}>
           <Entrance delay={150} style={styles.intro}>
             <Text variant="h3" style={{ marginBottom: spacing.xs }}>
               Who's setting up?
@@ -86,7 +91,7 @@ export default function Welcome() {
               </Text>
             </View>
           </Entrance>
-        </View>
+        </ScrollView>
       </SafeAreaView>
     </View>
   );
@@ -150,12 +155,12 @@ function RoleCard({ title, subtitle, icon, color, onPress }: { title: string; su
 }
 
 const styles = StyleSheet.create({
-  hero: { height: '46%', justifyContent: 'center', overflow: 'hidden' },
+  hero: { height: '42%', minHeight: 230, justifyContent: 'center', overflow: 'hidden' },
   heroInner: { alignItems: 'center', paddingHorizontal: spacing.xl, paddingTop: spacing.xl },
   blob: { position: 'absolute', width: 200, height: 200, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.08)' },
   bottomSafe: { flex: 1 },
   // Constrained and centred so the chooser stays readable on a wide web window.
-  bottom: { flex: 1, width: '100%', maxWidth: 560, alignSelf: 'center', paddingHorizontal: spacing.xl, paddingTop: spacing.xl, gap: spacing.md },
+  bottom: { flexGrow: 1, width: '100%', maxWidth: 560, alignSelf: 'center', paddingHorizontal: spacing.xl, paddingTop: spacing.xl, gap: spacing.md },
   intro: { gap: spacing.md },
   roleCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.lg, borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth },
   roleIcon: { width: 52, height: 52, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
