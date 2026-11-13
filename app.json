@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Vivo-v40e",
+    "name": "Haven",
     "slug": "vivo-v40e",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -8,11 +8,17 @@
     "scheme": "vivov40e",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "bundleIdentifier": "com.haven.familysafety",
+      "icon": {
+        "light": "./assets/images/icon.png",
+        "dark": "./assets/images/ios-icon-dark.png",
+        "tinted": "./assets/images/ios-icon-tinted.png"
+      }
     },
     "android": {
+      "package": "com.haven.familysafety",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#5B51E0",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -28,9 +34,13 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#5B51E0",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "imageWidth": 150,
+          "dark": {
+            "backgroundColor": "#1B183F",
+            "image": "./assets/images/splash-icon.png"
+          }
         }
       ]
     ],

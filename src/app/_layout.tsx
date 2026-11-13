@@ -26,6 +26,7 @@ export default function RootLayout() {
                 animation: 'slide_from_right',
               }}>
               <Stack.Screen name="index" options={{ animation: 'fade' }} />
+              <Stack.Screen name="onboarding" options={{ animation: 'fade', gestureEnabled: false }} />
               <Stack.Screen name="sos" options={{ animation: 'fade_from_bottom', presentation: 'modal' }} />
             </Stack>
             <StatusBar style="auto" />
