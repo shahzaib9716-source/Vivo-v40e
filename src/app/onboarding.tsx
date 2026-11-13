@@ -243,7 +243,7 @@ export default function Onboarding() {
             style={styles.pager}>
             {SLIDES.map((s, i) => (
               // Explicit page size: each page fills the pager on native and web alike.
-              <View key={s.key} style={{ width: pageW, height: pagerH > 0 ? pagerH : undefined }}>
+              <View key={s.key} style={[styles.page, { width: pageW, height: pagerH > 0 ? pagerH : undefined }]}>
                 <Slide slide={s} index={i} progress={progress} pageW={pageW} />
               </View>
             ))}
@@ -345,7 +345,7 @@ function Slide({ slide, index, progress, pageW }: { slide: SlideDef; index: numb
   const [box, setBox] = useState<{ w: number; h: number } | null>(null);
 
   const fitW = ((box?.w ?? pageW) - spacing.xxxl) / STAGE_W;
-  const fitH = box ? box.h / STAGE_H : MAX_SCALE;
+  const fitH = box ? (box.h - spacing.xl) / STAGE_H : MAX_SCALE;
   const scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, fitW, fitH));
 
   const onArtLayout = (e: LayoutChangeEvent) => {
@@ -439,7 +439,7 @@ function Drift({
   children: ReactNode;
 }) {
   const aStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: (index - progress.get()) * depth }],
+    transform: [{ translateX: Math.max(-1, Math.min(1, index - progress.get())) * depth }],
   }));
   return <Animated.View style={[style, aStyle]}>{children}</Animated.View>;
 }
@@ -694,18 +694,16 @@ function TransparencyArt({ index, progress, accent }: ArtProps) {
           </View>
           <ShareRow icon="clock" label="Screen time" shared />
           <ShareRow icon="map-pin" label="Location" shared />
-          <ShareRow icon="message-circle" label="Message content" shared={false} />
+          <ShareRow icon="message-circle" label="Messages" shared={false} />
         </View>
       </Drift>
 
       <Drift {...drift} depth={40} style={[styles.abs, { right: 12, top: 20 }]}>
-        <LinearGradient
-          colors={[accent, categoryColors.apps]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[styles.shieldBadge, { borderColor: colors.bg }]}>
-          <MaterialCommunityIcons name="shield-check" size={24} color="#FFFFFF" />
-        </LinearGradient>
+        <View style={[styles.shieldRing, { backgroundColor: colors.bg }]}>
+          <LinearGradient colors={[accent, categoryColors.apps]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.shieldBadge}>
+            <MaterialCommunityIcons name="shield-check" size={24} color="#FFFFFF" />
+          </LinearGradient>
+        </View>
       </Drift>
 
       <Drift {...drift} depth={58} style={[styles.abs, { right: 0, top: 236 }]}>
@@ -722,24 +720,18 @@ function TransparencyArt({ index, progress, accent }: ArtProps) {
 /* 4. Set up in a minute                                               */
 /* ------------------------------------------------------------------ */
 
-const GRID = 7;
+/** Hand-drawn decorative pattern for the pairing tile. It is not a scannable code. */
+const PATTERN = ['1110111', '1010101', '1110111', '0101100', '1110101', '1010110', '1110011'];
 const CELL = 8;
 const GAP = 2;
-const GRID_PX = GRID * CELL + (GRID - 1) * GAP;
-
-/** Deterministic decorative pattern. It is not a scannable code. */
-function cellOn(r: number, c: number) {
-  const corner = (r < 3 && c < 3) || (r < 3 && c > 3) || (r > 3 && c < 3);
-  if (corner) return !(r % 4 === 1 && c % 4 === 1);
-  return (r * 5 + c * 3 + r * c) % 3 === 0;
-}
+const GRID_PX = PATTERN.length * CELL + (PATTERN.length - 1) * GAP;
 
 const GRID_CELLS: { r: number; c: number }[] = [];
-for (let r = 0; r < GRID; r++) {
-  for (let c = 0; c < GRID; c++) {
-    if (cellOn(r, c)) GRID_CELLS.push({ r, c });
+PATTERN.forEach((row, r) => {
+  for (let c = 0; c < row.length; c++) {
+    if (row[c] === '1') GRID_CELLS.push({ r, c });
   }
-}
+});
 
 function SetupArt({ index, progress, accent }: ArtProps) {
   const { colors } = useTheme();
@@ -796,13 +788,11 @@ function SetupArt({ index, progress, accent }: ArtProps) {
       </Drift>
 
       <Drift {...drift} depth={32} style={[styles.abs, { left: 138, top: 4 }]}>
-        <LinearGradient
-          colors={[colors.primary, accent]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[styles.linkBadge, { borderColor: colors.bg }]}>
-          <Feather name="link" size={18} color="#FFFFFF" />
-        </LinearGradient>
+        <View style={[styles.linkRing, { backgroundColor: colors.bg }]}>
+          <LinearGradient colors={[colors.primary, accent]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.linkBadge}>
+            <Feather name="link" size={18} color="#FFFFFF" />
+          </LinearGradient>
+        </View>
       </Drift>
 
       <Drift {...drift} depth={60} style={[styles.abs, { right: 0, top: 246 }]}>
@@ -830,6 +820,8 @@ const styles = StyleSheet.create({
   skip: { minHeight: 40, paddingHorizontal: spacing.sm, justifyContent: 'center' },
 
   pager: { flex: 1 },
+  // Clipped so drifting illustration layers never widen the scrollable area.
+  page: { overflow: 'hidden' },
   slide: { flex: 1 },
   artArea: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   copy: { minHeight: 192, paddingHorizontal: spacing.xxl, paddingTop: spacing.sm, alignItems: 'center' },
@@ -936,15 +928,8 @@ const styles = StyleSheet.create({
   shareRow: { height: 44, flexDirection: 'row', alignItems: 'center', gap: 10, borderTopWidth: StyleSheet.hairlineWidth },
   shareIcon: { width: 28, height: 28, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
   privateTag: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: radius.pill },
-  shieldBadge: {
-    width: 50,
-    height: 50,
-    borderRadius: 17,
-    borderWidth: 3,
-    alignItems: 'center',
-    justifyContent: 'center',
-    transform: [{ rotate: '8deg' }],
-  },
+  shieldRing: { width: 50, height: 50, borderRadius: 17, padding: 3, transform: [{ rotate: '8deg' }] },
+  shieldBadge: { flex: 1, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
 
   phone: { borderWidth: 1.5, alignItems: 'center', paddingTop: 9 },
   phoneParent: { width: 124, height: 204, borderRadius: 26 },
@@ -955,5 +940,6 @@ const styles = StyleSheet.create({
   codeText: { fontSize: 12, fontWeight: '800', letterSpacing: 1.4 },
   bar: { height: 6, borderRadius: 3 },
   linkedCircle: { width: 54, height: 54, borderRadius: 27, marginTop: 18, alignItems: 'center', justifyContent: 'center' },
-  linkBadge: { width: 44, height: 44, borderRadius: 22, borderWidth: 3, alignItems: 'center', justifyContent: 'center' },
+  linkRing: { width: 44, height: 44, borderRadius: 22, padding: 3 },
+  linkBadge: { flex: 1, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
 });

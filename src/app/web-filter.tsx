@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { router } from 'expo-router';
 
 import { Card, Header, IconBadge, Row, Screen, SectionLabel, Text, Toggle } from '@/components/ui';
+import { useStore } from '@/state/store';
 import { spacing, useTheme } from '@/theme';
 
 interface Cat {
@@ -23,12 +25,18 @@ const INITIAL: Cat[] = [
   { id: 'news', label: 'News', icon: 'file-text', color: '#6366F1', blocked: false },
 ];
 
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+const siteCount = (n: number) => (n === 0 ? 'No sites yet' : plural(n, 'site', 'sites'));
+
 export default function WebFilter() {
   const { colors } = useTheme();
+  const { sites } = useStore();
   const [cats, setCats] = useState(INITIAL);
   const [safeSearch, setSafeSearch] = useState(true);
   const [safeMode, setSafeMode] = useState(true);
   const blockedCount = cats.filter((c) => c.blocked).length;
+  const blockedSites = sites.filter((s) => s.list === 'blocked').length;
+  const allowedSites = sites.filter((s) => s.list === 'allowed').length;
 
   const toggle = (id: string) => setCats((p) => p.map((c) => (c.id === id ? { ...c, blocked: !c.blocked } : c)));
 
@@ -41,7 +49,7 @@ export default function WebFilter() {
         <View style={{ flex: 1 }}>
           <Text variant="title">Protection is on</Text>
           <Text variant="small" tone="muted">
-            {blockedCount} categories blocked
+            {plural(blockedCount, 'category', 'categories')} and {plural(blockedSites, 'site', 'sites')} blocked
           </Text>
         </View>
         <View style={[styles.pill, { backgroundColor: colors.successSoft }]}>
@@ -73,8 +81,20 @@ export default function WebFilter() {
 
       <SectionLabel>Specific sites</SectionLabel>
       <Card padded={false} style={{ paddingHorizontal: spacing.lg }}>
-        <Row title="Blocked sites" subtitle="3 sites" icon="x-circle" iconColor={colors.danger} onPress={() => {}} />
-        <Row title="Always allowed" subtitle="5 sites" icon="check-circle" iconColor={colors.success} onPress={() => {}} />
+        <Row
+          title="Blocked sites"
+          subtitle={siteCount(blockedSites)}
+          icon="x-circle"
+          iconColor={colors.danger}
+          onPress={() => (router.push as any)('/site-list?list=blocked')}
+        />
+        <Row
+          title="Always allowed"
+          subtitle={siteCount(allowedSites)}
+          icon="check-circle"
+          iconColor={colors.success}
+          onPress={() => (router.push as any)('/site-list?list=allowed')}
+        />
       </Card>
     </Screen>
   );
