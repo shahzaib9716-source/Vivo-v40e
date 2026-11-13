@@ -1,10 +1,13 @@
 import { useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
-import { View, StyleSheet } from 'react-native';
+import { Pressable, View, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated';
 
+import { InlineNote } from '@/components/InlineNote';
 import { Button, Card, Header, IconBadge, PlaceholderNotice, Row, Screen, SectionLabel, Text, Toggle } from '@/components/ui';
-import { spacing, useTheme } from '@/theme';
+import { nowLabel } from '@/state/store';
+import { radius, shadow, spacing, useTheme } from '@/theme';
 
 type Kind = 'monitor' | 'approval' | 'rating';
 
@@ -68,7 +71,6 @@ const FEATURES: Record<string, FeatureDef> = {
     sample: [
       { title: 'Photogram', subtitle: 'Social', icon: 'camera', meta: '35m' },
       { title: 'Chatter', subtitle: 'Messaging', icon: 'message-square', meta: '40m' },
-      { title: 'Tunnel', subtitle: 'Social', icon: 'activity', meta: '18m' },
     ],
   },
   browsing: {
@@ -125,7 +127,7 @@ const FEATURES: Record<string, FeatureDef> = {
     sampleLabel: 'Waiting for approval',
     sample: [
       { title: 'Voxel Arena', subtitle: 'Games · rated 12+', icon: 'box' },
-      { title: 'Snapline', subtitle: 'Social · rated 13+', icon: 'box' },
+      { title: 'PuzzleQuest 2', subtitle: 'Games · rated 7+', icon: 'box' },
     ],
   },
   purchases: {
@@ -152,13 +154,35 @@ const FEATURES: Record<string, FeatureDef> = {
 
 const RATINGS = ['3+', '7+', '12+', '16+', '18+'];
 
+/** One approve / deny decision made on this screen. Kept in memory only, for this visit. */
+interface Decision {
+  index: number;
+  status: 'approved' | 'denied';
+  time: string;
+}
+
 export default function FeatureScreen() {
   const { key } = useLocalSearchParams<{ key: string }>();
   const def = FEATURES[key ?? ''] ?? FEATURES.calls;
   const { colors } = useTheme();
   const [enabled, setEnabled] = useState(def.kind !== 'monitor');
   const [rating, setRating] = useState('12+');
-  const [resolved, setResolved] = useState<Record<number, 'approved' | 'denied'>>({});
+  // Newest first.
+  const [decisions, setDecisions] = useState<Decision[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+
+  const sample = def.sample ?? [];
+  const isMonitor = def.kind === 'monitor';
+  const isApproval = def.kind === 'approval';
+  const pending = sample.map((item, index) => ({ item, index })).filter(({ index }) => !decisions.some((d) => d.index === index));
+  const latest = decisions[0];
+
+  const decide = (index: number, status: Decision['status']) =>
+    setDecisions((prev) => [{ index, status, time: nowLabel() }, ...prev.filter((d) => d.index !== index)]);
+  const undo = (index: number) => setDecisions((prev) => prev.filter((d) => d.index !== index));
+
+  // The sample list fades between dimmed (off) and full strength (on).
+  const sampleFade = useAnimatedStyle(() => ({ opacity: withTiming(enabled ? 1 : DIMMED_OPACITY, { duration: 180 }) }));
 
   const toneColor = (t?: string) =>
     t === 'danger' ? colors.danger : t === 'success' ? colors.success : t === 'muted' ? colors.textFaint : colors.text;
@@ -175,17 +199,24 @@ export default function FeatureScreen() {
             {def.subtitle}
           </Text>
         </View>
+        {isMonitor && (
+          <View style={[styles.badge, { backgroundColor: colors.warningSoft }]}>
+            <Text variant="tiny" color={colors.warning}>
+              Preview
+            </Text>
+          </View>
+        )}
       </Card>
 
-      {def.kind === 'monitor' && <PlaceholderNotice note="Preview screen — sample data shown for layout. Live monitoring is not connected in this build." />}
+      {isMonitor && <PlaceholderNotice note="Preview screen — sample data shown for layout. Live monitoring is not connected in this build." />}
 
       {def.toggleLabel && (
         <Card style={{ marginBottom: spacing.xl }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md }}>
             <Text variant="title" style={{ flex: 1 }}>
               {def.toggleLabel}
             </Text>
-            <Toggle value={enabled} onChange={setEnabled} />
+            <Toggle value={enabled} onChange={setEnabled} accessibilityLabel={def.toggleLabel} />
           </View>
         </Card>
       )}
@@ -201,66 +232,217 @@ export default function FeatureScreen() {
                 icon={rating === r ? 'check-circle' : 'circle'}
                 iconColor={rating === r ? colors.success : colors.textFaint}
                 chevron={false}
+                accessibilityRole="radio"
+                checked={rating === r}
                 onPress={() => setRating(r)}
               />
             ))}
           </Card>
+          <Text variant="tiny" tone="faint" style={styles.footnote}>
+            Content rated above {rating} would need your approval. Demo: this choice is kept on this screen only.
+          </Text>
         </>
       )}
 
-      {def.sample && (
+      {/* Monitoring categories: sample rows only. Off = dimmed with a prompt, on = the sample list. */}
+      {isMonitor && sample.length > 0 && (
         <>
-          <SectionLabel>{def.sampleLabel ?? 'Details'}</SectionLabel>
+          <View style={styles.sampleHead}>
+            <SectionLabel style={{ marginBottom: 0 }}>{def.sampleLabel ?? 'Details'}</SectionLabel>
+            <View style={[styles.badge, { backgroundColor: colors.surfaceSunken }]}>
+              <Text variant="tiny" tone="muted">
+                Sample data
+              </Text>
+            </View>
+          </View>
           <Card padded={false} style={{ paddingHorizontal: spacing.lg }}>
-            {def.sample.map((item, i) => (
-              <View key={i} style={styles.item}>
-                <IconBadge name={item.icon} color={def.color} size={38} />
-                <View style={{ flex: 1 }}>
-                  <Text variant="title">{item.title}</Text>
-                  <Text variant="small" tone="muted">
-                    {item.subtitle}
-                  </Text>
-                </View>
-                {def.kind === 'approval' ? (
-                  resolved[i] ? (
-                    <Text variant="smallStrong" color={resolved[i] === 'approved' ? colors.success : colors.danger}>
-                      {resolved[i] === 'approved' ? 'Approved' : 'Denied'}
+            <Animated.View aria-hidden={!enabled} style={[{ pointerEvents: enabled ? 'auto' : 'none' }, sampleFade]}>
+              {sample.map((item, i) => (
+                <View key={i} style={styles.item}>
+                  <IconBadge name={item.icon} color={def.color} size={38} />
+                  <View style={{ flex: 1 }}>
+                    <Text variant="title" numberOfLines={1}>
+                      {item.title}
                     </Text>
-                  ) : (
-                    <View style={{ flexDirection: 'row', gap: 6 }}>
-                      <MiniBtn icon="check" color={colors.success} onPress={() => setResolved((p) => ({ ...p, [i]: 'approved' }))} />
-                      <MiniBtn icon="x" color={colors.danger} onPress={() => setResolved((p) => ({ ...p, [i]: 'denied' }))} />
-                    </View>
-                  )
-                ) : (
-                  item.meta != null && (
+                    <Text variant="small" tone="muted">
+                      {item.subtitle}
+                    </Text>
+                  </View>
+                  {item.meta != null && (
                     <Text variant="smallStrong" color={toneColor(item.tone)}>
                       {item.meta}
                     </Text>
-                  )
-                )}
+                  )}
+                </View>
+              ))}
+            </Animated.View>
+            {!enabled && (
+              <View style={styles.offOverlay}>
+                <View style={[styles.offPrompt, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  <Feather name="eye-off" size={16} color={colors.textMuted} />
+                  <Text variant="smallStrong">Turn on to see activity</Text>
+                </View>
               </View>
-            ))}
+            )}
           </Card>
+          <Text variant="tiny" tone="faint" style={styles.footnote}>
+            {enabled
+              ? 'These rows are made-up examples. Nothing is read from a real device.'
+              : 'Turning this on only reveals the sample rows. Nothing is read from a real device.'}
+          </Text>
         </>
       )}
 
-      {def.kind === 'approval' && (
-        <Button label="Approval history" variant="secondary" icon="clock" style={{ marginTop: spacing.xl }} onPress={() => {}} />
+      {isApproval && (
+        <>
+          <SectionLabel>{def.sampleLabel ?? 'Details'}</SectionLabel>
+          <Card padded={false} style={{ paddingHorizontal: spacing.lg }}>
+            {!enabled ? (
+              <EmptyLine icon="slash" text="Approval is off. Turn it on to review requests before they go through." />
+            ) : pending.length === 0 ? (
+              <EmptyLine icon="check-circle" text="Nothing is waiting. New requests show up here." />
+            ) : (
+              pending.map(({ item, index }) => (
+                <View key={index} style={styles.item}>
+                  <IconBadge name={item.icon} color={def.color} size={38} />
+                  <View style={{ flex: 1 }}>
+                    <Text variant="title" numberOfLines={1}>
+                      {item.title}
+                    </Text>
+                    <Text variant="small" tone="muted">
+                      {item.subtitle}
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+                    <MiniBtn icon="check" color={colors.success} label={`Approve ${item.title}`} onPress={() => decide(index, 'approved')} />
+                    <MiniBtn icon="x" color={colors.danger} label={`Deny ${item.title}`} onPress={() => decide(index, 'denied')} />
+                  </View>
+                </View>
+              ))
+            )}
+          </Card>
+
+          {latest != null && (
+            <InlineNote
+              tone={latest.status === 'approved' ? 'success' : 'neutral'}
+              icon={latest.status === 'approved' ? 'check-circle' : 'x-circle'}
+              title={`${sample[latest.index].title} ${latest.status}`}
+              detail="Demo only. Nothing was installed, bought or blocked."
+              style={{ marginTop: spacing.md }}
+            />
+          )}
+
+          <Button
+            label={decisions.length > 0 ? `Approval history (${decisions.length})` : 'Approval history'}
+            accessibilityLabel={`${showHistory ? 'Hide' : 'Show'} approval history, ${decisions.length} resolved`}
+            variant="secondary"
+            icon="clock"
+            iconRight={showHistory ? 'chevron-up' : 'chevron-down'}
+            style={{ marginTop: spacing.xl }}
+            onPress={() => setShowHistory((v) => !v)}
+          />
+
+          {showHistory && (
+            <View style={{ marginTop: spacing.md }}>
+              <SectionLabel>Resolved in this session</SectionLabel>
+              <Card padded={false} style={{ paddingHorizontal: spacing.lg }}>
+                {decisions.length === 0 ? (
+                  <EmptyLine icon="clock" text="Nothing approved or denied yet. Decisions you make here are listed until you leave this screen." />
+                ) : (
+                  decisions.map((d) => {
+                    const approved = d.status === 'approved';
+                    const item = sample[d.index];
+                    return (
+                      <View key={d.index} style={styles.item}>
+                        <IconBadge name={approved ? 'check' : 'x'} color={approved ? colors.success : colors.danger} size={38} />
+                        <View style={{ flex: 1 }}>
+                          <Text variant="title" numberOfLines={1}>
+                            {item.title}
+                          </Text>
+                          <Text variant="small" tone="muted">
+                            {approved ? 'Approved' : 'Denied'} · {d.time}
+                          </Text>
+                        </View>
+                        <Pressable
+                          onPress={() => undo(d.index)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Undo decision for ${item.title}`}
+                          hitSlop={UNDO_HIT_SLOP}
+                          style={({ pressed }) => [styles.undo, pressed && { opacity: 0.6 }]}>
+                          <Text variant="smallStrong" color={colors.primary}>
+                            Undo
+                          </Text>
+                        </Pressable>
+                      </View>
+                    );
+                  })
+                )}
+              </Card>
+            </View>
+          )}
+        </>
       )}
     </Screen>
   );
 }
 
-function MiniBtn({ icon, color, onPress }: { icon: keyof typeof Feather.glyphMap; color: string; onPress: () => void }) {
+function EmptyLine({ icon, text }: { icon: keyof typeof Feather.glyphMap; text: string }) {
+  const { colors } = useTheme();
   return (
-    <View onTouchEnd={onPress} style={[styles.miniBtn, { backgroundColor: color + '22' }]}>
-      <Feather name={icon} size={18} color={color} />
+    <View style={styles.empty}>
+      <Feather name={icon} size={18} color={colors.textFaint} />
+      <Text variant="small" tone="muted" style={{ flex: 1 }}>
+        {text}
+      </Text>
     </View>
   );
 }
 
+function MiniBtn({
+  icon,
+  color,
+  label,
+  onPress,
+}: {
+  icon: keyof typeof Feather.glyphMap;
+  color: string;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      hitSlop={MINI_HIT_SLOP}
+      style={({ pressed }) => [styles.miniBtn, { backgroundColor: color + (pressed ? '44' : '22') }, pressed && { transform: [{ scale: 0.94 }] }]}>
+      <Feather name={icon} size={18} color={color} />
+    </Pressable>
+  );
+}
+
+const DIMMED_OPACITY = 0.28;
+// 40pt buttons with 2pt of slop each side reach a 44pt target without overlapping their neighbour.
+const MINI_HIT_SLOP = 2;
+const UNDO_HIT_SLOP = { top: 12, bottom: 12, left: 8, right: 8 };
+
 const styles = StyleSheet.create({
   item: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm },
-  miniBtn: { width: 36, height: 36, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
+  miniBtn: { width: 40, height: 40, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
+  badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.pill },
+  sampleHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm },
+  offOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
+  offPrompt: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: radius.pill,
+    borderWidth: StyleSheet.hairlineWidth,
+    ...shadow(2),
+  },
+  footnote: { marginTop: spacing.sm, marginHorizontal: spacing.xs },
+  empty: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.lg },
+  undo: { paddingHorizontal: spacing.xs, paddingVertical: spacing.xs },
 });

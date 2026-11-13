@@ -1,22 +1,42 @@
+import { useState } from 'react';
 import { router } from 'expo-router';
-import { ScrollView, View, StyleSheet } from 'react-native';
+import { Pressable, ScrollView, View, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { InlineNote } from '@/components/InlineNote';
 import { Avatar, Card, IconBadge, MockMap, Row, SectionLabel, Text } from '@/components/ui';
-import { useStore } from '@/state/store';
+import { nowLabel, useStore } from '@/state/store';
 import { categoryColors, radius, spacing, useTheme } from '@/theme';
+
+// Child chips are about 34pt tall; extend the press target to 44pt.
+const CHIP_HIT_SLOP = { top: 5, bottom: 5 };
+const LINK_HIT_SLOP = { top: 14, bottom: 14, left: 12, right: 12 };
+
+/** The last demo action, kept with the child it was for so it never shows under another child. */
+interface DemoAction {
+  kind: 'directions' | 'ping';
+  childId: string;
+  time: string;
+}
 
 export default function Location() {
   const { colors } = useTheme();
   const { children, activeChild, activeChildId, setActiveChildId, places } = useStore();
+  const [action, setAction] = useState<DemoAction | null>(null);
+
+  const firstName = activeChild.name.split(' ')[0];
+  const shownAction = action?.childId === activeChildId ? action : null;
+  const run = (kind: DemoAction['kind']) => setAction({ kind, childId: activeChildId, time: nowLabel() });
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <SafeAreaView edges={['top']} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={{ paddingBottom: spacing.huge }} showsVerticalScrollIndicator={false}>
-          <View style={{ paddingHorizontal: spacing.xl, paddingTop: spacing.sm, paddingBottom: spacing.lg }}>
-            <Text variant="h1">Location</Text>
+          <View style={{ paddingHorizontal: spacing.xl, paddingTop: spacing.sm, paddingBottom: spacing.md }}>
+            <Text variant="h1" accessibilityRole="header">
+              Location
+            </Text>
           </View>
 
           {/* Child chips */}
@@ -24,12 +44,23 @@ export default function Location() {
             {children.map((c) => {
               const active = c.id === activeChildId;
               return (
-                <View key={c.id} onTouchEnd={() => setActiveChildId(c.id)} style={[styles.chip, { backgroundColor: active ? colors.primary : colors.surface, borderColor: active ? colors.primary : colors.border }]}>
+                <Pressable
+                  key={c.id}
+                  onPress={() => setActiveChildId(c.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Show ${c.name.split(' ')[0]}'s location`}
+                  accessibilityState={{ selected: active }}
+                  hitSlop={CHIP_HIT_SLOP}
+                  style={({ pressed }) => [
+                    styles.chip,
+                    { backgroundColor: active ? colors.primary : colors.surface, borderColor: active ? colors.primary : colors.border },
+                    pressed && { opacity: 0.7 },
+                  ]}>
                   <Avatar name={c.name} size={22} />
-                  <Text variant="smallStrong" color={active ? '#FFFFFF' : colors.textMuted}>
+                  <Text variant="smallStrong" color={active ? colors.onPrimary : colors.textMuted}>
                     {c.name.split(' ')[0]}
                   </Text>
-                </View>
+                </Pressable>
               );
             })}
           </ScrollView>
@@ -42,13 +73,15 @@ export default function Location() {
             <Card style={{ marginTop: -28, marginHorizontal: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
               <Avatar name={activeChild.name} size={46} />
               <View style={{ flex: 1 }}>
-                <Text variant="title">{activeChild.name.split(' ')[0]} is at {activeChild.place}</Text>
+                <Text variant="title">
+                  {firstName} is at {activeChild.place}
+                </Text>
                 <Text variant="small" tone="muted">
                   Updated {activeChild.updatedAgo}
                 </Text>
               </View>
-              <View style={{ alignItems: 'center' }}>
-                <Feather name="battery-charging" size={18} color={activeChild.battery < 30 ? colors.danger : colors.success} />
+              <View accessible accessibilityLabel={`Battery ${activeChild.battery} percent`} style={{ alignItems: 'center' }}>
+                <Feather name="battery" size={18} color={activeChild.battery < 30 ? colors.danger : colors.success} />
                 <Text variant="tiny" tone="muted">
                   {activeChild.battery}%
                 </Text>
@@ -58,18 +91,41 @@ export default function Location() {
 
           <View style={{ paddingHorizontal: spacing.xl, marginTop: spacing.xl }}>
             <View style={styles.actions}>
-              <ActionTile icon="navigation" label="Directions" color={categoryColors.location} />
-              <ActionTile icon="bell" label="Ping device" color={colors.accent} />
+              <ActionTile icon="navigation" label="Directions" color={categoryColors.location} onPress={() => run('directions')} />
+              <ActionTile icon="bell" label="Ping device" color={colors.accent} onPress={() => run('ping')} />
               <ActionTile icon="clock" label="History" color={colors.info} onPress={() => (router.push as any)('/location-history')} />
             </View>
+            {shownAction?.kind === 'ping' && (
+              <InlineNote
+                tone="success"
+                title={`Ping sent to ${activeChild.deviceName}`}
+                detail={`${shownAction.time} · Demo only, no real device was contacted.`}
+                style={styles.note}
+              />
+            )}
+            {shownAction?.kind === 'directions' && (
+              <InlineNote
+                icon="navigation"
+                title={`Directions to ${activeChild.place}`}
+                detail="Demo only. On a real device this opens your maps app; nothing was opened."
+                style={styles.note}
+              />
+            )}
           </View>
 
           <View style={{ paddingHorizontal: spacing.xl, marginTop: spacing.xl }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md }}>
               <SectionLabel style={{ marginBottom: 0 }}>Places & geofences</SectionLabel>
-              <Text variant="smallStrong" color={colors.primary} onPress={() => (router.push as any)('/geofences')}>
-                Manage
-              </Text>
+              <Pressable
+                onPress={() => (router.push as any)('/geofences')}
+                accessibilityRole="link"
+                accessibilityLabel="Manage places and geofences"
+                hitSlop={LINK_HIT_SLOP}
+                style={({ pressed }) => pressed && { opacity: 0.6 }}>
+                <Text variant="smallStrong" color={colors.primary}>
+                  Manage
+                </Text>
+              </Pressable>
             </View>
             <Card padded={false} style={{ paddingHorizontal: spacing.lg }}>
               {places.map((p) => (
@@ -83,6 +139,15 @@ export default function Location() {
                   onPress={() => (router.push as any)('/geofences')}
                 />
               ))}
+              {places.length === 0 && (
+                <Row
+                  title="No places yet"
+                  subtitle="Add home, school and other places"
+                  icon="map-pin"
+                  iconColor={categoryColors.geofence}
+                  onPress={() => (router.push as any)('/geofences')}
+                />
+              )}
             </Card>
           </View>
         </ScrollView>
@@ -91,22 +156,32 @@ export default function Location() {
   );
 }
 
-function ActionTile({ icon, label, color, onPress }: { icon: keyof typeof Feather.glyphMap; label: string; color: string; onPress?: () => void }) {
+function ActionTile({ icon, label, color, onPress }: { icon: keyof typeof Feather.glyphMap; label: string; color: string; onPress: () => void }) {
   const { colors } = useTheme();
   return (
-    <View onTouchEnd={onPress} style={[styles.actionTile, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={({ pressed }) => [
+        styles.actionTile,
+        { backgroundColor: pressed ? colors.surfaceAlt : colors.surface, borderColor: colors.border },
+        pressed && { transform: [{ scale: 0.98 }] },
+      ]}>
       <IconBadge name={icon} color={color} size={40} />
       <Text variant="smallStrong" style={{ marginTop: 6 }}>
         {label}
       </Text>
-    </View>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  chips: { paddingHorizontal: spacing.xl, gap: spacing.sm, paddingBottom: spacing.lg },
+  // Vertical padding leaves room for the chips' extended press target inside the scroller.
+  chips: { paddingHorizontal: spacing.xl, gap: spacing.sm, paddingTop: 5, paddingBottom: spacing.lg },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingVertical: 6, paddingHorizontal: 10, borderRadius: radius.pill, borderWidth: StyleSheet.hairlineWidth },
   mapWrap: { borderRadius: radius.lg, overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth },
   actions: { flexDirection: 'row', gap: spacing.sm },
   actionTile: { flex: 1, alignItems: 'center', paddingVertical: spacing.md, borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth },
+  note: { marginTop: spacing.md },
 });

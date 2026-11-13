@@ -1,10 +1,11 @@
 import { ReactNode } from 'react';
-import { Pressable, View, StyleSheet } from 'react-native';
+import { AccessibilityRole, Pressable, View, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 
 import { radius, spacing, useTheme } from '@/theme';
 import { IconBadge } from './IconBadge';
 import { Text } from './Text';
+import { ToggleLabelContext } from './Toggle';
 
 interface Props {
   title: string;
@@ -18,6 +19,13 @@ interface Props {
   badge?: string;
   badgeColor?: string;
   danger?: boolean;
+  /** Spoken name for a pressable row. Defaults to the title, subtitle and badge read together. */
+  accessibilityLabel?: string;
+  accessibilityHint?: string;
+  /** Role of a pressable row. Defaults to "button"; use "radio" for pick-one lists. */
+  accessibilityRole?: AccessibilityRole;
+  /** Checked state for "radio" / "checkbox" rows. */
+  checked?: boolean;
 }
 
 export function Row({
@@ -32,6 +40,10 @@ export function Row({
   badge,
   badgeColor,
   danger,
+  accessibilityLabel,
+  accessibilityHint,
+  accessibilityRole = 'button',
+  checked,
 }: Props) {
   const { colors } = useTheme();
   const tint = iconColor ?? colors.primary;
@@ -56,21 +68,30 @@ export function Row({
           </Text>
         </View>
       )}
-      {right}
+      {/* A Toggle in the right slot takes the row title as its accessible name. */}
+      {right != null && <ToggleLabelContext.Provider value={title}>{right}</ToggleLabelContext.Provider>}
       {chevron && onPress && <Feather name="chevron-right" size={20} color={colors.textFaint} />}
     </View>
   );
 
   if (!onPress) return <View style={styles.wrap}>{content}</View>;
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.wrap, pressed && { opacity: 0.6 }]}>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole={accessibilityRole}
+      accessibilityLabel={accessibilityLabel ?? [title, subtitle, badge].filter(Boolean).join(', ')}
+      accessibilityHint={accessibilityHint}
+      accessibilityState={checked != null ? { checked } : undefined}
+      aria-checked={checked}
+      style={({ pressed }) => [styles.wrap, pressed && { opacity: 0.6 }]}>
       {content}
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { paddingVertical: spacing.sm },
+  // Rows with an icon are 56pt tall. The minimum keeps icon-less rows at a 44pt press target.
+  wrap: { paddingVertical: spacing.sm, minHeight: 44, justifyContent: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   text: { flex: 1 },
   badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.pill },

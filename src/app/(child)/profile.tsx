@@ -1,14 +1,33 @@
+import { useState } from 'react';
 import { router } from 'expo-router';
-import { View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 
 import { Avatar, Card, Row, Screen, SectionLabel, Text } from '@/components/ui';
 import { useStore, fmtDuration } from '@/state/store';
-import { spacing, useTheme } from '@/theme';
+import { radius, spacing, useTheme } from '@/theme';
+
+const HELP = [
+  {
+    q: 'How do I get more time?',
+    a: 'Open Requests and pick how many minutes you need. Your family sees it and decides.',
+  },
+  {
+    q: 'Why is an app blocked?',
+    a: 'Your family blocked it for now. You can ask them to unlock it from Requests.',
+  },
+  {
+    q: 'What can my family see?',
+    a: 'Only what is listed under "What\'s shared with my family". Nothing runs in secret.',
+  },
+] as const;
 
 export default function ChildProfileTab() {
   const { colors } = useTheme();
-  const { childSelf, setRole } = useStore();
+  const { childSelf, setRole, sosActive } = useStore();
+  const [helpOpen, setHelpOpen] = useState(false);
+
+  const left = Math.max(0, childSelf.limitMin - childSelf.usedMin);
 
   const switchMode = () => {
     setRole(null);
@@ -17,19 +36,27 @@ export default function ChildProfileTab() {
 
   return (
     <Screen>
-      <View style={{ alignItems: 'center', paddingTop: spacing.lg, marginBottom: spacing.xl }}>
+      <View style={styles.top}>
         <Avatar name={childSelf.name} size={92} ring />
-        <Text variant="h1" style={{ marginTop: spacing.md }}>
+        <Text variant="h1" style={styles.name}>
           {childSelf.name.split(' ')[0]}
         </Text>
         <Text variant="small" tone="muted">
           {childSelf.deviceName}
         </Text>
+        {childSelf.bedtime && (
+          <View style={[styles.paused, { backgroundColor: colors.primarySoft }]}>
+            <Feather name="pause" size={13} color={colors.primary} />
+            <Text variant="smallStrong" color={colors.primary}>
+              Device paused
+            </Text>
+          </View>
+        )}
       </View>
 
       <SectionLabel>Today</SectionLabel>
-      <Card style={{ flexDirection: 'row', marginBottom: spacing.xl }}>
-        <View style={{ flex: 1, alignItems: 'center' }}>
+      <Card style={styles.today}>
+        <View style={styles.stat}>
           <Text variant="h2" color={colors.primary}>
             {fmtDuration(childSelf.usedMin)}
           </Text>
@@ -37,10 +64,10 @@ export default function ChildProfileTab() {
             Used
           </Text>
         </View>
-        <View style={{ width: 1, backgroundColor: colors.border }} />
-        <View style={{ flex: 1, alignItems: 'center' }}>
+        <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+        <View style={styles.stat}>
           <Text variant="h2" color={colors.success}>
-            {fmtDuration(Math.max(0, childSelf.limitMin - childSelf.usedMin))}
+            {fmtDuration(left)}
           </Text>
           <Text variant="small" tone="muted">
             Left
@@ -48,14 +75,59 @@ export default function ChildProfileTab() {
         </View>
       </Card>
 
-      <SectionLabel>About Haven</SectionLabel>
-      <Card padded={false} style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.xl }}>
-        <Row title="What's shared with my family" subtitle="See everything Haven shares" icon="eye" iconColor={colors.success} onPress={() => (router.push as any)('/transparency')} />
-        <Row title="Emergency SOS" subtitle="Reach your family fast" icon="alert-circle" iconColor={colors.danger} onPress={() => (router.push as any)('/sos')} />
-        <Row title="Help" icon="help-circle" iconColor={colors.info} onPress={() => {}} />
+      <SectionLabel>My family</SectionLabel>
+      <Card padded={false} style={styles.group}>
+        <Row
+          title="Message my family"
+          subtitle="Chat with Mom & Dad"
+          icon="message-circle"
+          iconColor={colors.primary}
+          onPress={() => (router.push as any)('/messages')}
+        />
+        <Row
+          title="Emergency SOS"
+          subtitle={sosActive ? 'SOS is on. Open it to say you are safe.' : 'Reach your family fast'}
+          icon="alert-circle"
+          iconColor={colors.danger}
+          badge={sosActive ? 'ON' : undefined}
+          badgeColor={colors.danger}
+          onPress={() => (router.push as any)('/sos')}
+        />
       </Card>
 
-      <Card onPress={switchMode} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm }}>
+      <SectionLabel>About Haven</SectionLabel>
+      <Card padded={false} style={styles.group}>
+        <Row
+          title="What's shared with my family"
+          subtitle="See everything Haven shares"
+          icon="eye"
+          iconColor={colors.success}
+          onPress={() => (router.push as any)('/transparency')}
+        />
+        <Row
+          title="Help"
+          subtitle="Quick answers"
+          icon="help-circle"
+          iconColor={colors.info}
+          chevron={false}
+          right={<Feather name={helpOpen ? 'chevron-up' : 'chevron-down'} size={20} color={colors.textFaint} />}
+          onPress={() => setHelpOpen((open) => !open)}
+        />
+        {helpOpen && (
+          <View style={[styles.help, { borderTopColor: colors.hairline }]}>
+            {HELP.map((item) => (
+              <View key={item.q}>
+                <Text variant="smallStrong">{item.q}</Text>
+                <Text variant="small" tone="muted" style={styles.helpAnswer}>
+                  {item.a}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+      </Card>
+
+      <Card onPress={switchMode} style={styles.switch}>
         <Feather name="repeat" size={16} color={colors.primary} />
         <Text variant="smallStrong" color={colors.primary}>
           Switch mode
@@ -64,3 +136,33 @@ export default function ChildProfileTab() {
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  top: { alignItems: 'center', paddingTop: spacing.lg, marginBottom: spacing.xl },
+  name: { marginTop: spacing.md },
+  paused: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 7,
+    borderRadius: radius.pill,
+  },
+
+  today: { flexDirection: 'row', marginBottom: spacing.xl },
+  stat: { flex: 1, alignItems: 'center' },
+  statDivider: { width: 1 },
+
+  group: { paddingHorizontal: spacing.lg, paddingVertical: spacing.xs, marginBottom: spacing.xl },
+  help: {
+    gap: spacing.md,
+    marginTop: spacing.xs,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  helpAnswer: { marginTop: 2 },
+
+  switch: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
+});

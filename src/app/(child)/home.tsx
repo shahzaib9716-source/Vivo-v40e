@@ -1,10 +1,11 @@
-import { ReactNode, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { Pressable, ScrollView, View, StyleSheet } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { LinkCard } from '@/components/child/LinkCard';
 import { Toast, useToast } from '@/components/child/Toast';
 import { ProgressRing, Text } from '@/components/ui';
 import { useStore, fmtDuration, nowLabel, type ManagedApp } from '@/state/store';
@@ -348,27 +349,6 @@ function HeroButton({ label, onPress }: { label: string; onPress: () => void }) 
   );
 }
 
-/** A tappable card that ends in a chevron. */
-function LinkCard({ onPress, label, style, children }: { onPress: () => void; label: string; style?: object; children: ReactNode }) {
-  const { colors } = useTheme();
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      style={({ pressed }) => [
-        styles.linkCard,
-        shadow(1),
-        { backgroundColor: colors.surface, borderColor: colors.border },
-        style,
-        pressed && styles.cardPressed,
-      ]}>
-      {children}
-      <Feather name="chevron-right" size={20} color={colors.textFaint} />
-    </Pressable>
-  );
-}
-
 function AppTile({ app, state }: { app: ManagedApp; state: 'open' | 'paused' | 'spent' }) {
   const { colors } = useTheme();
   const appLeft = app.limitMin == null ? null : Math.max(0, app.limitMin - app.usedMin);
@@ -478,15 +458,6 @@ const styles = StyleSheet.create({
   qaPressed: { transform: [{ scale: 0.97 }], opacity: 0.9 },
   qaIcon: { width: 46, height: 46, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
 
-  linkCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    padding: spacing.lg,
-    borderRadius: radius.card,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  cardPressed: { opacity: 0.85, transform: [{ scale: 0.99 }] },
   family: { width: 44, height: 44, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   tile: { width: 44, height: 44, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },

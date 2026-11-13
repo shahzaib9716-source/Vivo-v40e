@@ -1,6 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { View, StyleSheet } from 'react-native';
+import { Pressable, View, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 
 import { Avatar, Card, Row, Screen, SectionLabel, Text } from '@/components/ui';
@@ -9,11 +9,20 @@ import { categoryColors, radius, shadow, spacing, useTheme } from '@/theme';
 
 export default function Family() {
   const { colors } = useTheme();
-  const { children, setRole } = useStore();
+  const { children, activeChild, setActiveChildId, setRole } = useStore();
+
+  // "/messages" opens the conversation with the child the parent is currently viewing.
+  const chatName = activeChild.name.split(' ')[0];
 
   const switchMode = () => {
     setRole(null);
     (router.replace as any)('/');
+  };
+
+  const openProfile = (childId: string) => {
+    // The profile screen shows the active child, so pick the one that was tapped first.
+    setActiveChildId(childId);
+    (router.push as any)('/child-profile');
   };
 
   return (
@@ -24,7 +33,7 @@ export default function Family() {
 
       {/* Premium card */}
       <LinearGradient colors={['#FF7A59', '#FF5E8A', '#8B5CF6']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.premium}>
-        <View style={{ flex: 1 }}>
+        <View style={styles.premiumText}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <Feather name="star" size={16} color="#FFFFFF" />
             <Text variant="smallStrong" color="#FFFFFF">
@@ -38,11 +47,16 @@ export default function Family() {
             Unlimited children, full reports & alerts
           </Text>
         </View>
-        <View style={styles.premiumBtn} onTouchEnd={() => (router.push as any)('/subscription')}>
+        <Pressable
+          onPress={() => (router.push as any)('/subscription')}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="View Haven Premium plans"
+          style={({ pressed }) => [styles.premiumBtn, pressed && styles.premiumBtnPressed]}>
           <Text variant="smallStrong" color="#FF5E8A">
             View plans
           </Text>
-        </View>
+        </Pressable>
       </LinearGradient>
 
       <SectionLabel>Children</SectionLabel>
@@ -52,7 +66,7 @@ export default function Family() {
             key={c.id}
             title={c.name}
             subtitle={`${c.deviceName} · Age ${c.age}`}
-            onPress={() => (router.push as any)('/child-profile')}
+            onPress={() => openProfile(c.id)}
             right={<Avatar name={c.name} size={36} />}
             chevron
           />
@@ -62,6 +76,7 @@ export default function Family() {
 
       <SectionLabel>Engagement</SectionLabel>
       <Card padded={false} style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.xl }}>
+        <Row title="Messages" subtitle={`Chat with ${chatName}`} icon="message-circle" iconColor={colors.primary} onPress={() => (router.push as any)('/messages')} />
         <Row title="Rewards & Tasks" subtitle="Set chores and bonus time" icon="gift" iconColor={categoryColors.rewards} onPress={() => (router.push as any)('/rewards-parent')} />
         <Row title="Notifications" subtitle="Alerts and activity feed" icon="bell" iconColor={colors.accent} onPress={() => (router.push as any)('/notifications')} />
       </Card>
@@ -85,6 +100,9 @@ export default function Family() {
 }
 
 const styles = StyleSheet.create({
-  premium: { flexDirection: 'row', alignItems: 'center', padding: spacing.lg, borderRadius: radius.card, marginBottom: spacing.xl, ...shadow(2) },
-  premiumBtn: { backgroundColor: '#FFFFFF', paddingHorizontal: spacing.lg, paddingVertical: 10, borderRadius: radius.pill },
+  premium: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.lg, borderRadius: radius.card, marginBottom: spacing.xl, ...shadow(2) },
+  premiumText: { flex: 1 },
+  // Tall enough to tap comfortably; the white pill sits on the gradient in both colour modes.
+  premiumBtn: { backgroundColor: '#FFFFFF', minHeight: 40, paddingHorizontal: spacing.lg, justifyContent: 'center', borderRadius: radius.pill },
+  premiumBtnPressed: { opacity: 0.85, transform: [{ scale: 0.97 }] },
 });

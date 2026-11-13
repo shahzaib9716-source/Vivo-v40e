@@ -1,17 +1,25 @@
-import { View, StyleSheet } from 'react-native';
+import { useState } from 'react';
+import { Pressable, View, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 
-import { Button, Card, Chip, Header, ProgressRing, Row, Screen, SectionLabel, Text } from '@/components/ui';
+import { InlineNote } from '@/components/InlineNote';
+import { Button, Card, Chip, Header, ProgressRing, Screen, SectionLabel, Text } from '@/components/ui';
 import { useStore, fmtDuration } from '@/state/store';
 import { categoryColors, radius, spacing, useTheme } from '@/theme';
 
 const PRESETS = [60, 120, 180, 240];
+const STEP = 15;
+
+type Action = 'bonus' | 'paused' | 'resumed';
 
 export default function ScreenTime() {
   const { colors } = useTheme();
   const { activeChild, activeChildId, adjustLimit, grantBonus, pauseDevice, resumeDevice } = useStore();
+  const [lastAction, setLastAction] = useState<Action | null>(null);
+
+  const firstName = activeChild.name.split(' ')[0];
   const left = Math.max(0, activeChild.limitMin - activeChild.usedMin);
-  const progress = Math.min(1, activeChild.usedMin / activeChild.limitMin);
+  const progress = activeChild.limitMin > 0 ? Math.min(1, activeChild.usedMin / activeChild.limitMin) : 1;
 
   const byCategory = Object.entries(
     activeChild.apps.reduce<Record<string, number>>((acc, a) => {
@@ -21,10 +29,17 @@ export default function ScreenTime() {
   )
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5);
+  const topMinutes = Math.max(1, byCategory[0]?.[1] ?? 0);
+
+  const notes: Record<Action, { title: string; detail: string }> = {
+    bonus: { title: '30 minutes added', detail: `Today's limit is now ${fmtDuration(activeChild.limitMin)}.` },
+    paused: { title: 'Device paused', detail: `${firstName}'s device stays paused until you resume it.` },
+    resumed: { title: 'Device resumed', detail: `${firstName} has ${fmtDuration(left)} left today.` },
+  };
 
   return (
     <Screen>
-      <Header back title="Screen Time" subtitle={activeChild.name.split(' ')[0]} />
+      <Header back title="Screen Time" subtitle={firstName} />
 
       <Card style={{ alignItems: 'center', paddingVertical: spacing.xl }}>
         <ProgressRing progress={progress} size={168} stroke={16} label={fmtDuration(left)} sublabel="remaining today" />
@@ -37,18 +52,29 @@ export default function ScreenTime() {
         <SectionLabel>Daily limit</SectionLabel>
         <Card>
           <View style={styles.stepper}>
-            <StepBtn icon="minus" onPress={() => adjustLimit(activeChildId, -15)} />
-            <View style={{ alignItems: 'center' }}>
+            <StepBtn
+              icon="minus"
+              label={`Lower the daily limit by ${STEP} minutes`}
+              disabled={activeChild.limitMin <= STEP}
+              onPress={() => adjustLimit(activeChildId, -STEP)}
+            />
+            <View accessible accessibilityLiveRegion="polite" accessibilityLabel={`Daily limit ${fmtDuration(activeChild.limitMin)}`} style={{ alignItems: 'center' }}>
               <Text variant="display">{fmtDuration(activeChild.limitMin)}</Text>
               <Text variant="small" tone="muted">
                 per day
               </Text>
             </View>
-            <StepBtn icon="plus" onPress={() => adjustLimit(activeChildId, 15)} />
+            <StepBtn icon="plus" label={`Raise the daily limit by ${STEP} minutes`} onPress={() => adjustLimit(activeChildId, STEP)} />
           </View>
           <View style={styles.presets}>
             {PRESETS.map((p) => (
-              <Chip key={p} label={fmtDuration(p)} active={activeChild.limitMin === p} onPress={() => adjustLimit(activeChildId, p - activeChild.limitMin)} />
+              <Chip
+                key={p}
+                label={fmtDuration(p)}
+                accessibilityLabel={`Set the daily limit to ${fmtDuration(p)}`}
+                active={activeChild.limitMin === p}
+                onPress={() => adjustLimit(activeChildId, p - activeChild.limitMin)}
+              />
             ))}
           </View>
         </Card>
@@ -58,7 +84,7 @@ export default function ScreenTime() {
         <SectionLabel>Where the time goes</SectionLabel>
         <Card padded={false} style={{ paddingHorizontal: spacing.lg }}>
           {byCategory.map(([cat, mins]) => (
-            <View key={cat} style={styles.catRow}>
+            <View key={cat} accessible accessibilityLabel={`${cat}: ${fmtDuration(mins)}`} style={styles.catRow}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
                 <Text variant="smallStrong" style={{ textTransform: 'capitalize' }}>
                   {cat}
@@ -68,7 +94,7 @@ export default function ScreenTime() {
                 </Text>
               </View>
               <View style={{ height: 8, borderRadius: 999, backgroundColor: colors.surfaceSunken, overflow: 'hidden' }}>
-                <View style={{ height: '100%', width: `${(mins / byCategory[0][1]) * 100}%`, backgroundColor: categoryColors.screenTime, borderRadius: 999 }} />
+                <View style={{ height: '100%', width: `${(mins / topMinutes) * 100}%`, backgroundColor: categoryColors.screenTime, borderRadius: 999 }} />
               </View>
             </View>
           ))}
@@ -76,23 +102,74 @@ export default function ScreenTime() {
       </View>
 
       <View style={{ marginTop: spacing.xl, gap: spacing.sm }}>
-        <Button label="Add 30 minutes today" icon="plus-circle" variant="secondary" onPress={() => grantBonus(activeChildId, 30)} />
+        <Button
+          label="Add 30 minutes today"
+          icon="plus-circle"
+          variant="secondary"
+          onPress={() => {
+            grantBonus(activeChildId, 30);
+            setLastAction('bonus');
+          }}
+        />
         {activeChild.bedtime ? (
-          <Button label="Resume device" icon="play" onPress={() => resumeDevice(activeChildId)} />
+          <Button
+            label="Resume device"
+            icon="play"
+            onPress={() => {
+              resumeDevice(activeChildId);
+              setLastAction('resumed');
+            }}
+          />
         ) : (
-          <Button label="Pause device now" icon="pause" variant="danger" onPress={() => pauseDevice(activeChildId)} />
+          <Button
+            label="Pause device now"
+            icon="pause"
+            variant="danger"
+            onPress={() => {
+              pauseDevice(activeChildId);
+              setLastAction('paused');
+            }}
+          />
+        )}
+        {lastAction != null && (
+          <InlineNote
+            tone={lastAction === 'paused' ? 'info' : 'success'}
+            icon={lastAction === 'paused' ? 'pause-circle' : undefined}
+            title={notes[lastAction].title}
+            detail={notes[lastAction].detail}
+          />
         )}
       </View>
     </Screen>
   );
 }
 
-function StepBtn({ icon, onPress }: { icon: keyof typeof Feather.glyphMap; onPress: () => void }) {
+function StepBtn({
+  icon,
+  label,
+  disabled,
+  onPress,
+}: {
+  icon: keyof typeof Feather.glyphMap;
+  label: string;
+  disabled?: boolean;
+  onPress: () => void;
+}) {
   const { colors } = useTheme();
   return (
-    <View onTouchEnd={onPress} style={[styles.stepBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: !!disabled }}
+      style={({ pressed }) => [
+        styles.stepBtn,
+        { backgroundColor: pressed ? colors.surfaceSunken : colors.surfaceAlt, borderColor: colors.border, opacity: disabled ? 0.4 : 1 },
+        pressed && { transform: [{ scale: 0.96 }] },
+      ]}>
       <Feather name={icon} size={22} color={colors.text} />
-    </View>
+    </Pressable>
   );
 }
 

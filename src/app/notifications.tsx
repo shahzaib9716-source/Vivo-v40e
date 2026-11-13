@@ -54,7 +54,8 @@ export default function Notifications() {
   const [filter, setFilter] = useState<Filter>('all');
 
   // Opening the screen marks everything as read, which clears the bell on the dashboard. The dots
-  // stay for this visit, so it is still clear which alerts are new.
+  // stay for this visit, so it is still clear which alerts are new. Alerts that arrive while the
+  // screen is open (a check-in, an SOS) go through the same steps.
   const [fresh, setFresh] = useState<ReadonlySet<string>>(() => new Set(alerts.filter((a) => a.unread).map((a) => a.id)));
   const unreadKey = alerts
     .filter((a) => a.unread)
@@ -65,8 +66,7 @@ export default function Notifications() {
     if (!unreadKey) return;
     const ids = unreadKey.split('|');
     setFresh((prev) => (ids.every((id) => prev.has(id)) ? prev : new Set([...prev, ...ids])));
-    const timer = setTimeout(markAlertsRead, 600);
-    return () => clearTimeout(timer);
+    markAlertsRead();
   }, [unreadKey, markAlertsRead]);
 
   // Alerts are stored newest first. While an SOS is open, the latest one is the live emergency: it

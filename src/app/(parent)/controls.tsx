@@ -12,7 +12,9 @@ export default function Controls() {
   return (
     <Screen>
       <View style={{ paddingTop: spacing.sm, paddingBottom: spacing.lg }}>
-        <Text variant="h1">Controls</Text>
+        <Text variant="h1" accessibilityRole="header">
+          Controls
+        </Text>
         <Text variant="body" tone="muted" style={{ marginTop: 2 }}>
           Rules and limits for {activeChild.name.split(' ')[0]}
         </Text>

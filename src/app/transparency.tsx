@@ -14,6 +14,7 @@ const SHARED = [
 const NOT_SHARED = [
   { label: 'The content of your messages', detail: 'Haven does not read your texts or chats' },
   { label: 'Your photos', detail: 'Your camera roll stays private' },
+  { label: 'Calls, browsing and what you watch', detail: 'Those parent screens are previews with sample data only' },
   { label: 'Hidden tracking', detail: 'Nothing runs secretly — this screen shows it all' },
 ] as const;
 
@@ -25,7 +26,8 @@ export default function Transparency() {
 
       <Card style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.xl, backgroundColor: colors.successSoft, borderColor: colors.success + '44' }}>
         <Feather name="shield" size={24} color={colors.success} />
-        <Text variant="small" color={colors.success} style={{ flex: 1 }}>
+        {/* Body ink rather than green-on-green, so the promise is easy to read in both modes. */}
+        <Text variant="small" style={{ flex: 1 }}>
           You can always open this screen to see exactly what your family can and can't see.
         </Text>
       </Card>
@@ -33,7 +35,7 @@ export default function Transparency() {
       <SectionLabel>Your family can see</SectionLabel>
       <Card padded={false} style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.xl }}>
         {SHARED.map((s) => (
-          <View key={s.label} style={styles.row}>
+          <View key={s.label} accessible accessibilityLabel={`Shared: ${s.label}. ${s.detail}`} style={styles.row}>
             <View style={[styles.icon, { backgroundColor: colors.primarySoft }]}>
               <Feather name={s.icon} size={18} color={colors.primary} />
             </View>
@@ -51,7 +53,7 @@ export default function Transparency() {
       <SectionLabel>Your family cannot see</SectionLabel>
       <Card padded={false} style={{ paddingHorizontal: spacing.lg }}>
         {NOT_SHARED.map((s) => (
-          <View key={s.label} style={styles.row}>
+          <View key={s.label} accessible accessibilityLabel={`Not shared: ${s.label}. ${s.detail}`} style={styles.row}>
             <View style={[styles.icon, { backgroundColor: colors.surfaceSunken }]}>
               <Feather name="lock" size={18} color={colors.textMuted} />
             </View>
