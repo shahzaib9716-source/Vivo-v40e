@@ -1,5 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, ReactNode } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AppState, Platform, View, useColorScheme } from 'react-native';
+
+import { APP_VARIANT, SPLASH_BG } from '@/config/variant';
+import { loadState, resolvedRequestIds, serialiseState, STATE_KEY, type PersistedState } from './persist';
+import { readKey, removeKey, writeKey } from './storage';
 
 export type AppCategory = 'social' | 'games' | 'video' | 'education' | 'music' | 'web' | 'messaging' | 'creativity';
 
@@ -202,6 +206,23 @@ export function nowLabel() {
 
 const ONBOARDED_KEY = 'haven.onboarded';
 
+/** The starting demo data: what a first launch shows and what "reset" goes back to. */
+const SEED: PersistedState = {
+  children: initialChildren,
+  activeChildId: 'c1',
+  requests: initialRequests,
+  alerts: initialAlerts,
+  places: initialPlaces,
+  tasks: initialTasks,
+  schedules: initialSchedules,
+  messages: initialMessages,
+  sites: initialSites,
+  sosActive: false,
+};
+
+/** How long the state has to stay unchanged before it is written to storage. */
+const SAVE_DELAY_MS = 400;
+
 export type Role = 'parent' | 'child' | null;
 
 interface Store {
@@ -246,46 +267,163 @@ interface Store {
   triggerSOS: () => void;
   clearSOS: () => void;
   hasOnboarded: boolean;
-  /** False until the saved "has seen the introduction" flag has been read. */
+  /**
+   * False until both saved values have been read: the "has seen the introduction" flag and the
+   * demo state. Screens are only mounted once it is true, so they never see seed data first.
+   */
   ready: boolean;
   completeOnboarding: () => void;
   resetOnboarding: () => void;
-  /** Puts every piece of demo data back to its starting state. Keeps the onboarding flag. */
+  /** Puts every piece of demo data back to its starting state and forgets the saved copy. Keeps the onboarding flag. */
   resetDemoData: () => void;
 }
 
 const Ctx = createContext<Store | null>(null);
 
 export function StoreProvider({ children: node }: { children: ReactNode }) {
-  const [role, setRole] = useState<Role>(null);
-  const [kids, setKids] = useState<Child[]>(initialChildren);
-  const [activeChildId, setActiveChildId] = useState('c1');
-  const [requests, setRequests] = useState<FamilyRequest[]>(initialRequests);
-  const [alerts, setAlerts] = useState<Alert[]>(initialAlerts);
-  const [places, setPlaces] = useState<Place[]>(initialPlaces);
-  const [tasks, setTasks] = useState<RewardTask[]>(initialTasks);
-  const [schedules, setSchedules] = useState<Schedule[]>(initialSchedules);
-  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
-  const [sites, setSites] = useState<SiteRule[]>(initialSites);
-  const [sosActive, setSosActive] = useState(false);
+  // A parent-only or child-only build knows its side from the start, so a deep link or a web
+  // reload that skips the welcome screen still has the right role.
+  const [role, setRole] = useState<Role>(APP_VARIANT);
+  const [kids, setKids] = useState<Child[]>(SEED.children);
+  const [activeChildId, setActiveChildId] = useState(SEED.activeChildId);
+  const [requests, setRequests] = useState<FamilyRequest[]>(SEED.requests);
+  const [alerts, setAlerts] = useState<Alert[]>(SEED.alerts);
+  const [places, setPlaces] = useState<Place[]>(SEED.places);
+  const [tasks, setTasks] = useState<RewardTask[]>(SEED.tasks);
+  const [schedules, setSchedules] = useState<Schedule[]>(SEED.schedules);
+  const [messages, setMessages] = useState<ChatMessage[]>(SEED.messages);
+  const [sites, setSites] = useState<SiteRule[]>(SEED.sites);
+  const [sosActive, setSosActive] = useState(SEED.sosActive);
   const [hasOnboarded, setHasOnboarded] = useState(false);
   const [ready, setReady] = useState(false);
 
-  // The introduction is shown once per install. Everything else is demo state kept in memory.
+  /** Requests answered so far. Rebuilt whenever the requests are replaced wholesale (load, reset). */
+  const resolvedIds = useRef(new Set<string>());
+
+  // --- Persistence ---------------------------------------------------------------------------
+  // The slices below are written to storage as one JSON value (see ./persist). Order of events:
+  // read once on mount -> `ready` -> from then on every change is saved after a short pause.
+
+  /** True once the stored values have been read and applied. Nothing is written before that. */
+  const hydrated = useRef(false);
+  /** Set when the data is reset before the first read has come back, so that read is not applied. */
+  const discardStored = useRef(false);
+  /** The newest state that still has to be written, or null when there is nothing to write. */
+  const pendingSave = useRef<PersistedState | null>(null);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /**
+   * The state that needs no write, serialised: what was read at startup, what was written last, or
+   * the seed right after a reset. A save that would store exactly this is skipped.
+   */
+  const savedJson = useRef<string | null>(null);
+
+  // Read the onboarding flag and the demo state together. `ready` flips only after both reads
+  // have finished, whether they found something, found nothing or failed.
   useEffect(() => {
+    if (hydrated.current) return;
     let alive = true;
-    AsyncStorage.getItem(ONBOARDED_KEY)
-      .then((v) => {
-        if (alive && v === '1') setHasOnboarded(true);
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (alive) setReady(true);
-      });
+    Promise.all([readKey(ONBOARDED_KEY), readKey(STATE_KEY)]).then(([flag, raw]) => {
+      if (!alive) return;
+      if (flag === '1') setHasOnboarded(true);
+      if (!discardStored.current) {
+        // Anything unreadable falls back to the seed, slice by slice. A slice that falls back is
+        // the seed array itself, so setting it is a no-op. loadState does not throw; the catch
+        // only makes sure a surprise here can never leave the app stuck before `ready`.
+        let state = SEED;
+        try {
+          state = loadState(raw, SEED).state;
+        } catch {
+          state = SEED;
+        }
+        // "now" and "just now" were true when they were saved. After a restart they are not.
+        if (state.alerts.some((a) => a.ago === 'now')) {
+          state = { ...state, alerts: state.alerts.map((a) => (a.ago === 'now' ? { ...a, ago: 'earlier' } : a)) };
+        }
+        if (state.requests.some((r) => r.ago === 'just now')) {
+          state = { ...state, requests: state.requests.map((r) => (r.ago === 'just now' ? { ...r, ago: 'earlier' } : r)) };
+        }
+        setKids(state.children);
+        setActiveChildId(state.activeChildId);
+        setRequests(state.requests);
+        setAlerts(state.alerts);
+        setPlaces(state.places);
+        setTasks(state.tasks);
+        setSchedules(state.schedules);
+        setMessages(state.messages);
+        setSites(state.sites);
+        setSosActive(state.sosActive);
+        resolvedIds.current = resolvedRequestIds(state.requests);
+        savedJson.current = serialiseState(state);
+      }
+      hydrated.current = true;
+      setReady(true);
+    });
     return () => {
       alive = false;
     };
   }, []);
+
+  /** Writes the pending state now, if there is one and it differs from what is already saved. */
+  const flushSave = useCallback(() => {
+    if (saveTimer.current != null) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    const next = pendingSave.current;
+    if (!next) return;
+    pendingSave.current = null;
+    const json = serialiseState(next);
+    if (json === savedJson.current) return;
+    savedJson.current = json;
+    writeKey(STATE_KEY, json).then((ok) => {
+      // A failed write is forgotten, so the next change tries again.
+      if (!ok && savedJson.current === json) savedJson.current = null;
+    });
+  }, []);
+
+  const snapshot = useMemo<PersistedState>(
+    () => ({ children: kids, activeChildId, requests, alerts, places, tasks, schedules, messages, sites, sosActive }),
+    [kids, activeChildId, requests, alerts, places, tasks, schedules, messages, sites, sosActive],
+  );
+
+  // Save on change, debounced. Nothing is scheduled until the stored state has been read, so the
+  // seed can never overwrite a saved copy during startup. The cleanup only stops the timer: the
+  // pending state stays, to be replaced by a newer one or flushed below.
+  useEffect(() => {
+    if (!ready) return;
+    pendingSave.current = snapshot;
+    saveTimer.current = setTimeout(flushSave, SAVE_DELAY_MS);
+    return () => {
+      if (saveTimer.current != null) {
+        clearTimeout(saveTimer.current);
+        saveTimer.current = null;
+      }
+    };
+  }, [snapshot, ready, flushSave]);
+
+  // Do not wait for the timer when the app is about to be suspended or the page closed.
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      if (typeof document === 'undefined' || typeof window === 'undefined') return;
+      const onVisibility = () => {
+        if (document.visibilityState === 'hidden') flushSave();
+      };
+      document.addEventListener('visibilitychange', onVisibility);
+      window.addEventListener('pagehide', flushSave);
+      return () => {
+        document.removeEventListener('visibilitychange', onVisibility);
+        window.removeEventListener('pagehide', flushSave);
+        flushSave();
+      };
+    }
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') flushSave();
+    });
+    return () => {
+      sub.remove();
+      flushSave();
+    };
+  }, [flushSave]);
 
   const updateChild = useCallback((id: string, fn: (c: Child) => Child) => {
     setKids((prev) => prev.map((c) => (c.id === id ? fn(c) : c)));
@@ -310,7 +448,6 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
   const pauseDevice = useCallback((id: string) => updateChild(id, (c) => ({ ...c, bedtime: true })), [updateChild]);
   const resumeDevice = useCallback((id: string) => updateChild(id, (c) => ({ ...c, bedtime: false })), [updateChild]);
 
-  const resolvedIds = useRef(new Set<string>());
   const resolveRequest = useCallback((id: string, approve: boolean) => {
     const req = requests.find((r) => r.id === id);
     // Only a pending request can be resolved, and only once: the ref also stops presses that
@@ -407,25 +544,40 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
 
   const completeOnboarding = useCallback(() => {
     setHasOnboarded(true);
-    AsyncStorage.setItem(ONBOARDED_KEY, '1').catch(() => {});
+    writeKey(ONBOARDED_KEY, '1');
   }, []);
   const resetOnboarding = useCallback(() => {
     setHasOnboarded(false);
-    AsyncStorage.removeItem(ONBOARDED_KEY).catch(() => {});
+    removeKey(ONBOARDED_KEY);
   }, []);
 
   const resetDemoData = useCallback(() => {
-    setKids(initialChildren);
-    setActiveChildId('c1');
-    setRequests(initialRequests);
-    setAlerts(initialAlerts);
-    setPlaces(initialPlaces);
-    setTasks(initialTasks);
-    setSchedules(initialSchedules);
-    setMessages(initialMessages);
-    setSites(initialSites);
-    setSosActive(false);
-    resolvedIds.current = new Set();
+    // Drop any save that is still waiting, so the old data cannot be written back after this.
+    if (saveTimer.current != null) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    pendingSave.current = null;
+    // A reset that arrives before the first read has finished wins over whatever that read finds.
+    if (!hydrated.current) discardStored.current = true;
+
+    setKids(SEED.children);
+    setActiveChildId(SEED.activeChildId);
+    setRequests(SEED.requests);
+    setAlerts(SEED.alerts);
+    setPlaces(SEED.places);
+    setTasks(SEED.tasks);
+    setSchedules(SEED.schedules);
+    setMessages(SEED.messages);
+    setSites(SEED.sites);
+    setSosActive(SEED.sosActive);
+    resolvedIds.current = resolvedRequestIds(SEED.requests);
+
+    // Storage goes back to "nothing saved". Marking the seed as already saved means the re-render
+    // caused by this reset schedules a save that turns out to be a no-op; the next real change
+    // writes again. Only the demo state is removed: the onboarding flag has its own key.
+    savedJson.current = serialiseState(SEED);
+    removeKey(STATE_KEY);
   }, []);
 
   const activeChild = kids.find((c) => c.id === activeChildId) ?? kids[0];
@@ -450,7 +602,19 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
       checkIn, sosActive, triggerSOS, clearSOS, hasOnboarded, ready, completeOnboarding, resetOnboarding, resetDemoData],
   );
 
-  return <Ctx.Provider value={value}>{node}</Ctx.Provider>;
+  // The app is mounted only once the saved state is in place. Reading takes a few milliseconds, and
+  // without this a screen opened directly (a reloaded web page, a deep link) would draw the seed
+  // data first and then jump to the saved data.
+  return <Ctx.Provider value={value}>{ready ? node : <HoldScreen />}</Ctx.Provider>;
+}
+
+/** Fills the moment before the saved state has been read. On a phone it carries on the splash colour. */
+function HoldScreen() {
+  const dark = useColorScheme() === 'dark';
+  // A web page is blank until its script has run anyway; staying blank one frame longer is calmer
+  // than flashing a colour.
+  if (Platform.OS === 'web') return null;
+  return <View style={{ flex: 1, backgroundColor: dark ? SPLASH_BG.dark : SPLASH_BG.light }} />;
 }
 
 export function useStore() {

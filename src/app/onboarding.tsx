@@ -31,11 +31,13 @@ import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Path, RadialGra
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { Button, Logo, Text } from '@/components/ui';
+import { APP_NAME, APP_VARIANT, type AppVariant } from '@/config/variant';
 import { useStore } from '@/state/store';
 import { categoryColors, radius, shadow, spacing, useTheme } from '@/theme';
 
 /**
- * First-run introduction: four swipeable slides in Haven's voice.
+ * First-run introduction: four swipeable slides in Haven's voice. A parent-only or child-only
+ * build (see @/config/variant) changes a few lines of copy to suit its side.
  * Every illustration is original, composed from Views, SVG shapes, gradients and icons.
  */
 
@@ -51,7 +53,8 @@ interface SlideDef {
   body: string;
 }
 
-const SLIDES: SlideDef[] = [
+/** The introduction as the combined build shows it: written for a parent choosing a side next. */
+const BASE_SLIDES: SlideDef[] = [
   {
     key: 'balance',
     eyebrow: 'Screen time',
@@ -81,6 +84,35 @@ const SLIDES: SlideDef[] = [
     body: "Pair your child's device with one code, then agree together on what Haven will share.",
   },
 ];
+
+/**
+ * A parent-only or child-only build goes straight to its own side afterwards, so the lines that
+ * depend on who is reading speak to that side: the Haven app pairs with Haven Kids, and Haven Kids
+ * is the device being paired, read by the child.
+ */
+const SIDE_COPY: Record<AppVariant, Partial<Record<SlideKey, Partial<SlideDef>>>> = {
+  parent: {
+    setup: {
+      body: "Add Haven Kids to your child's device, pair it with one code, then agree together on what Haven will share.",
+    },
+  },
+  child: {
+    safety: {
+      title: "Your family knows you're safe",
+      body: 'Your family can see where you are, and gets a gentle heads-up when you arrive at or leave the places that matter.',
+    },
+    transparency: {
+      body: "Nothing runs in secret: you can always see exactly what Haven shares with your family and what's limited.",
+    },
+    setup: {
+      title: 'Link this device in a minute',
+      body: "Type the code from a parent's Haven app on this device, then agree together on what Haven will share.",
+    },
+  },
+};
+
+const sideCopy = APP_VARIANT ? SIDE_COPY[APP_VARIANT] : null;
+const SLIDES: SlideDef[] = sideCopy ? BASE_SLIDES.map((slide) => ({ ...slide, ...sideCopy[slide.key] })) : BASE_SLIDES;
 
 const LAST = SLIDES.length - 1;
 
@@ -211,8 +243,8 @@ export default function Onboarding() {
         <Animated.View style={[styles.column, enterStyle]} onLayout={onColumnLayout}>
           <View style={styles.topBar}>
             <View style={styles.brand}>
-              <Logo size={30} color={colors.primary} />
-              <Text variant="h3">Haven</Text>
+              <Logo size={30} color={APP_VARIANT === 'child' ? colors.accent : colors.primary} />
+              <Text variant="h3">{APP_NAME}</Text>
             </View>
             <Animated.View style={skipStyle}>
               <Pressable
@@ -796,7 +828,7 @@ function SetupArt({ index, progress, accent }: ArtProps) {
       </Drift>
 
       <Drift {...drift} depth={60} style={[styles.abs, { right: 0, top: 246 }]}>
-        <FloatCard icon="zap" tint={accent} title="About a minute" caption="Scan or type the code" />
+        <FloatCard icon="zap" tint={accent} title="About a minute" caption={APP_VARIANT === 'child' ? "Type a parent's code" : 'Scan or type the code'} />
       </Drift>
     </>
   );

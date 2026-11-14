@@ -3,7 +3,9 @@ import { router } from 'expo-router';
 import { Pressable, View } from 'react-native';
 
 import { InlineNote } from '@/components/InlineNote';
+import { InlineConfirm } from '@/components/RuleForm';
 import { Avatar, Card, Header, Row, Screen, SectionLabel, Text, Toggle } from '@/components/ui';
+import { APP_NAME, isSingleSide } from '@/config/variant';
 import { useStore } from '@/state/store';
 import { spacing, useTheme } from '@/theme';
 
@@ -12,7 +14,7 @@ type DemoRow = 'profile' | 'data' | 'help' | 'terms';
 
 const DEMO_NOTES: Record<DemoRow, { title: string; detail: string }> = {
   profile: { title: 'Demo: profile is fixed', detail: 'The parent account cannot be edited in this build.' },
-  data: { title: 'Demo: nothing to export', detail: 'This build keeps sample data in memory only. Nothing was downloaded or deleted.' },
+  data: { title: 'Demo: nothing to export', detail: 'Sample data is saved on this device only. Nothing was downloaded or deleted.' },
   help: { title: 'Demo: no help center yet', detail: 'There is no support site behind this build. Nothing was opened.' },
   terms: { title: 'Demo: no documents yet', detail: 'Terms and a privacy policy are not part of this build. Nothing was opened.' },
 };
@@ -21,7 +23,7 @@ const EDIT_HIT_SLOP = { top: 14, bottom: 14, left: 12, right: 12 };
 
 export default function Settings() {
   const { colors } = useTheme();
-  const { setRole, resetOnboarding } = useStore();
+  const { setRole, resetOnboarding, resetDemoData } = useStore();
 
   /** Pops back to the tabs first, so the replace swaps out the whole parent app, not just this screen. */
   const leaveTo = (href: string) => {
@@ -38,10 +40,31 @@ export default function Settings() {
   const [emailDigest, setEmailDigest] = useState(false);
   const [biometric, setBiometric] = useState(true);
   const [demo, setDemo] = useState<DemoRow | null>(null);
+  /** "Reset demo data": idle, asking to confirm, or done (the note stays until the screen closes). */
+  const [reset, setReset] = useState<'idle' | 'confirm' | 'done'>('idle');
+  const [noAccount, setNoAccount] = useState(false);
 
   const signOut = () => {
+    // A parent-only or child-only build has no chooser to land on, and no account either.
+    if (isSingleSide) {
+      setNoAccount(true);
+      return;
+    }
     setRole(null);
     leaveTo('/');
+  };
+
+  // "Data & export" and "Reset demo data" share a group, and only one of them has a message
+  // under it at a time.
+  const showDataNote = () => {
+    setDemo('data');
+    setReset('idle');
+  };
+
+  const confirmReset = () => {
+    resetDemoData();
+    setDemo((row) => (row === 'data' ? null : row));
+    setReset('done');
   };
 
   const note = (rows: DemoRow[]) =>
@@ -84,22 +107,57 @@ export default function Settings() {
       <Card padded={false} style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.xl }}>
         <Row title="Require Face ID to open" icon="lock" iconColor={colors.primary} chevron={false} right={<Toggle value={biometric} onChange={setBiometric} />} />
         <Row title="Privacy & transparency" subtitle="What your child sees about sharing" icon="eye" iconColor={colors.success} onPress={() => (router.push as any)('/transparency?as=parent')} />
-        <Row title="Data & export" subtitle="Download or delete your data" icon="database" iconColor={colors.textMuted} onPress={() => setDemo('data')} />
+        <Row title="Data & export" subtitle="Download or delete your data" icon="database" iconColor={colors.textMuted} onPress={showDataNote} />
+        <Row
+          title="Reset demo data"
+          subtitle="Restore the starting sample data"
+          icon="rotate-ccw"
+          iconColor={colors.textMuted}
+          chevron={false}
+          onPress={reset === 'confirm' ? undefined : () => setReset('confirm')}
+        />
+        {reset === 'confirm' && (
+          <View style={{ paddingBottom: spacing.lg }}>
+            <InlineConfirm
+              title="Reset demo data?"
+              detail="Limits, requests, alerts, places, schedules, rewards and messages go back to how they started. The saved copy on this device is cleared too."
+              confirmLabel="Reset"
+              onCancel={() => setReset('idle')}
+              onConfirm={confirmReset}
+            />
+          </View>
+        )}
       </Card>
       {note(['data'])}
+      {reset === 'done' && (
+        <InlineNote
+          tone="success"
+          title="Demo data reset"
+          detail="Limits, requests, alerts, places, schedules, rewards and messages are back to how they started."
+          style={{ marginTop: -spacing.sm, marginBottom: spacing.xl }}
+        />
+      )}
 
       <SectionLabel>About</SectionLabel>
       <Card padded={false} style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.xl }}>
         <Row title="Help center" icon="help-circle" iconColor={colors.info} onPress={() => setDemo('help')} />
         <Row title="Terms & privacy policy" icon="file-text" iconColor={colors.textMuted} onPress={() => setDemo('terms')} />
         <Row title="Replay introduction" subtitle="See the welcome tour again" icon="play-circle" iconColor={colors.primary} onPress={replayIntro} />
-        <Row title="Version" subtitle="Haven 1.0.0 (demo)" icon="info" iconColor={colors.textMuted} chevron={false} />
+        <Row title="Version" subtitle={`${APP_NAME} 1.0.0 (demo)`} icon="info" iconColor={colors.textMuted} chevron={false} />
       </Card>
       {note(['help', 'terms'])}
 
       <Card padded={false} style={{ paddingHorizontal: spacing.lg }}>
         <Row title="Sign out" icon="log-out" danger chevron={false} onPress={signOut} />
       </Card>
+      {noAccount && (
+        <InlineNote
+          tone="neutral"
+          title="Demo: there is no account to sign out of"
+          detail={`This build has no accounts and no server, so ${APP_NAME} stays open on this device.`}
+          style={{ marginTop: spacing.md }}
+        />
+      )}
 
       <Text variant="tiny" tone="faint" center style={{ marginTop: spacing.lg }}>
         Demo build: the switches on this screen reset when you close the app.

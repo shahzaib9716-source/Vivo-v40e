@@ -7,6 +7,7 @@ import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withTimi
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Logo, Text } from '@/components/ui';
+import { APP_VARIANT, SIDE_HOME, SPLASH_BG } from '@/config/variant';
 import { useStore } from '@/state/store';
 import { radius, shadow, spacing, useTheme } from '@/theme';
 
@@ -14,9 +15,16 @@ export default function Welcome() {
   const { colors, mode } = useTheme();
   const { setRole, hasOnboarded, ready } = useStore();
 
-  // Hold on the brand colour until the saved flag is read, so a returning user never sees the intro flash.
+  // A parent-only or child-only build has no chooser. Once the saved state is in and the
+  // introduction has been seen, it takes its own role and goes straight to its own side.
+  const ownSide = ready && hasOnboarded ? APP_VARIANT : null;
+  useEffect(() => {
+    if (ownSide) setRole(ownSide);
+  }, [ownSide, setRole]);
+
+  // Hold on the splash colour until the saved flag is read, so a returning user never sees the intro flash.
   if (!ready) {
-    return <View style={{ flex: 1, backgroundColor: mode === 'dark' ? '#1B183F' : '#5B51E0' }} />;
+    return <View style={{ flex: 1, backgroundColor: mode === 'dark' ? SPLASH_BG.dark : SPLASH_BG.light }} />;
   }
 
   // First run: show the introduction before the role chooser.
@@ -24,9 +32,14 @@ export default function Welcome() {
     return <Redirect href={'/onboarding' as any} />;
   }
 
+  if (ownSide) {
+    return <Redirect href={SIDE_HOME[ownSide] as any} />;
+  }
+
+  // Combined build only from here on: the role chooser.
   const go = (role: 'parent' | 'child') => {
     setRole(role);
-    (router.replace as any)(role === 'parent' ? '/(parent)/dashboard' : '/(child)/home');
+    (router.replace as any)(SIDE_HOME[role]);
   };
 
   return (

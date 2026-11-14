@@ -5,6 +5,7 @@ import { Platform, useColorScheme } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { APP_NAME } from '@/config/variant';
 import { StoreProvider } from '@/state/store';
 import { palette } from '@/theme';
 
@@ -12,7 +13,7 @@ export default function RootLayout() {
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
 
   useEffect(() => {
-    if (Platform.OS === 'web' && typeof document !== 'undefined') document.title = 'Haven';
+    if (Platform.OS === 'web' && typeof document !== 'undefined') document.title = APP_NAME;
   }, []);
 
   const navTheme =

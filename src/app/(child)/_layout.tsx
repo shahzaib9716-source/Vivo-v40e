@@ -1,12 +1,23 @@
-import { Tabs } from 'expo-router';
+import { useCallback } from 'react';
+import { Tabs, useFocusEffect } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useStore } from '@/state/store';
 import { useTheme } from '@/theme';
 
 export default function ChildLayout() {
   const { colors, mode } = useTheme();
   const insets = useSafeAreaInsets();
+  const { setRole } = useStore();
+
+  // Whichever way this side was reached (welcome screen, deep link, web reload, Back), screens
+  // that read the role see the right one.
+  useFocusEffect(
+    useCallback(() => {
+      setRole('child');
+    }, [setRole]),
+  );
 
   return (
     <Tabs

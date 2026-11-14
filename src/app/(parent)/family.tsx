@@ -3,7 +3,8 @@ import { router } from 'expo-router';
 import { Pressable, View, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 
-import { Avatar, Card, Row, Screen, SectionLabel, Text } from '@/components/ui';
+import { Avatar, Card, IconBadge, Row, Screen, SectionLabel, Text } from '@/components/ui';
+import { APP_VARIANT, NO_SERVER_NOTE, SIDE_HOME } from '@/config/variant';
 import { useStore } from '@/state/store';
 import { categoryColors, radius, shadow, spacing, useTheme } from '@/theme';
 
@@ -17,6 +18,13 @@ export default function Family() {
   const switchMode = () => {
     setRole(null);
     (router.replace as any)('/');
+  };
+
+  // Parent-only and child-only builds have no chooser to switch through. The child side is still
+  // in the build, so one phone can show the whole loop: it opens as a clearly labelled demo.
+  const openChildSide = () => {
+    setRole('child');
+    (router.replace as any)(SIDE_HOME.child);
   };
 
   const openProfile = (childId: string) => {
@@ -89,13 +97,51 @@ export default function Family() {
         <Row title="Help & Support" subtitle="Guides and contact" icon="help-circle" iconColor={colors.success} onPress={() => (router.push as any)('/settings')} />
       </Card>
 
-      <Card onPress={switchMode} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm }}>
-        <Feather name="repeat" size={16} color={colors.primary} />
-        <Text variant="smallStrong" color={colors.primary}>
-          Switch mode
-        </Text>
-      </Card>
+      {APP_VARIANT === 'parent' ? (
+        // The Haven app: there is no child app to reach, so preview it here.
+        <DemoSideRow icon="smartphone" title="Demo: preview the child app on this device" detail={NO_SERVER_NOTE} onPress={openChildSide} />
+      ) : APP_VARIANT === 'child' ? (
+        // The Haven Kids app, previewing the parent side: this is the way back.
+        <DemoSideRow
+          icon="corner-up-left"
+          title="Demo: back to the child app"
+          detail="You are previewing the parent app inside Haven Kids. This demo build has no server linking two phones."
+          onPress={openChildSide}
+        />
+      ) : (
+        <Card onPress={switchMode} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm }}>
+          <Feather name="repeat" size={16} color={colors.primary} />
+          <Text variant="smallStrong" color={colors.primary}>
+            Switch mode
+          </Text>
+        </Card>
+      )}
     </Screen>
+  );
+}
+
+/**
+ * Takes the place of "Switch mode" in a parent-only or child-only build: a card-sized row that
+ * opens the other side on this device, with a line saying why it is there. The title may wrap.
+ * (The child side's Me tab has the same row.)
+ */
+function DemoSideRow({ icon, title, detail, onPress }: { icon: keyof typeof Feather.glyphMap; title: string; detail: string; onPress: () => void }) {
+  const { colors } = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${title}. ${detail}`}
+      style={({ pressed }) => [styles.demo, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.demoPressed]}>
+      <IconBadge name={icon} color={colors.primary} size={40} />
+      <View style={styles.demoText}>
+        <Text variant="title">{title}</Text>
+        <Text variant="small" tone="muted" style={styles.demoDetail}>
+          {detail}
+        </Text>
+      </View>
+      <Feather name="chevron-right" size={20} color={colors.textFaint} />
+    </Pressable>
   );
 }
 
@@ -105,4 +151,9 @@ const styles = StyleSheet.create({
   // Tall enough to tap comfortably; the white pill sits on the gradient in both colour modes.
   premiumBtn: { backgroundColor: '#FFFFFF', minHeight: 40, paddingHorizontal: spacing.lg, justifyContent: 'center', borderRadius: radius.pill },
   premiumBtnPressed: { opacity: 0.85, transform: [{ scale: 0.97 }] },
+
+  demo: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.lg, borderRadius: radius.card, borderWidth: StyleSheet.hairlineWidth, ...shadow(1) },
+  demoPressed: { opacity: 0.85, transform: [{ scale: 0.99 }] },
+  demoText: { flex: 1 },
+  demoDetail: { marginTop: 2 },
 });

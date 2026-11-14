@@ -1,5 +1,5 @@
 import { ComponentRef, useEffect, useRef, useState } from 'react';
-import { Keyboard, KeyboardAvoidingView, ScrollView, StyleSheet, View } from 'react-native';
+import { Keyboard, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';
@@ -13,6 +13,35 @@ const NAME_MAX = 24;
 
 /** Trimmed, with runs of spaces collapsed, so initials and first names stay clean. */
 const tidyName = (raw: string) => raw.trim().replace(/\s+/g, ' ');
+
+/**
+ * Opens the parent's Location tab so that Back, in the app and in the browser, leads to Home.
+ * (router.dismissTo('/(parent)/location') also lands there, but on the web it writes Location over
+ * the tabs' own history entry, so Back skips Home.) The same helper is in notifications.tsx.
+ */
+function openLocationTab() {
+  if (router.canDismiss()) {
+    // Back to the tabs this screen was opened from, then across to Location.
+    router.dismissAll();
+    (router.navigate as any)('/(parent)/location');
+    return;
+  }
+  // Opened directly from a link: there are no tabs underneath, so put them in this screen's place.
+  (router.replace as any)('/(parent)/location');
+  if (Platform.OS !== 'web') return;
+  // The browser still has a single entry. Once the tabs are showing, step to Home and straight back
+  // in one update: nothing visible changes, and the browser gains a Home entry under Location.
+  let frames = 0;
+  const whenTabsShow = () => {
+    if (window.location.pathname.endsWith('/location')) {
+      (router.navigate as any)('/(parent)/dashboard');
+      (router.navigate as any)('/(parent)/location');
+    } else if (++frames < 180) {
+      requestAnimationFrame(whenTabsShow);
+    }
+  };
+  requestAnimationFrame(whenTabsShow);
+}
 
 export default function ChildProfile() {
   const { colors } = useTheme();
@@ -120,7 +149,7 @@ export default function ChildProfile() {
             <Row title="Screen Time" subtitle={`Limit ${fmtDuration(activeChild.limitMin)}/day`} icon="clock" iconColor={categoryColors.screenTime} onPress={() => (router.push as any)('/screen-time')} />
             <Row title="App Limits" subtitle={`${activeChild.apps.length} apps`} icon="grid" iconColor={categoryColors.apps} onPress={() => (router.push as any)('/app-limits')} />
             <Row title="Schedules" subtitle="Bedtime & school" icon="calendar" iconColor={categoryColors.schedules} onPress={() => (router.push as any)('/schedules')} />
-            <Row title="Location" subtitle={activeChild.place} icon="map-pin" iconColor={categoryColors.location} onPress={() => (router.dismissTo as any)('/(parent)/location')} />
+            <Row title="Location" subtitle={activeChild.place} icon="map-pin" iconColor={categoryColors.location} onPress={openLocationTab} />
           </Card>
 
           <SectionLabel>Device</SectionLabel>

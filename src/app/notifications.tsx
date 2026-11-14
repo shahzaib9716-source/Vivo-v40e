@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 
@@ -48,6 +48,35 @@ function kindOf(a: Alert): Kind | null {
   return null;
 }
 
+/**
+ * Opens the parent's Location tab so that Back, in the app and in the browser, leads to Home.
+ * (router.dismissTo('/(parent)/location') also lands there, but on the web it writes Location over
+ * the tabs' own history entry, so Back skips Home.) The same helper is in child-profile.tsx.
+ */
+function openLocationTab() {
+  if (router.canDismiss()) {
+    // Back to the tabs this screen was opened from, then across to Location.
+    router.dismissAll();
+    (router.navigate as any)('/(parent)/location');
+    return;
+  }
+  // Opened directly from a link: there are no tabs underneath, so put them in this screen's place.
+  (router.replace as any)('/(parent)/location');
+  if (Platform.OS !== 'web') return;
+  // The browser still has a single entry. Once the tabs are showing, step to Home and straight back
+  // in one update: nothing visible changes, and the browser gains a Home entry under Location.
+  let frames = 0;
+  const whenTabsShow = () => {
+    if (window.location.pathname.endsWith('/location')) {
+      (router.navigate as any)('/(parent)/dashboard');
+      (router.navigate as any)('/(parent)/location');
+    } else if (++frames < 180) {
+      requestAnimationFrame(whenTabsShow);
+    }
+  };
+  requestAnimationFrame(whenTabsShow);
+}
+
 export default function Notifications() {
   const { colors } = useTheme();
   const { alerts, markAlertsRead, sosActive, clearSOS, childSelf, setActiveChildId } = useStore();
@@ -80,7 +109,7 @@ export default function Notifications() {
   const viewLocation = () => {
     // An SOS always comes from the child using the child app.
     setActiveChildId(childSelf.id);
-    (router.dismissTo as any)('/(parent)/location');
+    openLocationTab();
   };
 
   return (
