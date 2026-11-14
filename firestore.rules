@@ -1,0 +1,69 @@
+rules_version = '2';
+
+// Security rules for Haven's family link. Paste this whole file into
+// Firebase console > Firestore Database > Rules, then press Publish.
+//
+// There are no user accounts in this build. A family id is a long random string that works as
+// the key to that family's data, and a pairing code is a short-lived way to hand that key to
+// another phone. So: anyone who knows a family id can read and change that family; nobody can
+// list families or codes to find one. That is acceptable for a demo with made-up data. A real
+// product needs sign-in and rules that check who is asking.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Each shared slice is stored as a JSON string.
+    function sliceOk(state, key) {
+      return !(key in state) || (state[key] is string && state[key].size() < 250000);
+    }
+
+    function stateOk(state) {
+      return state is map
+        && state.keys().hasOnly(['children', 'requests', 'alerts', 'places', 'tasks', 'schedules', 'messages', 'sites', 'sosActive'])
+        && sliceOk(state, 'children') && sliceOk(state, 'requests') && sliceOk(state, 'alerts')
+        && sliceOk(state, 'places') && sliceOk(state, 'tasks') && sliceOk(state, 'schedules')
+        && sliceOk(state, 'messages') && sliceOk(state, 'sites') && sliceOk(state, 'sosActive');
+    }
+
+    function familyOk(data) {
+      return data.keys().hasOnly(['v', 'createdAt', 'updatedAt', 'state', 'members'])
+        && data.v == 1
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && stateOk(data.state)
+        && data.members is map
+        && data.members.size() <= 20;
+    }
+
+    match /families/{familyId} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if familyOk(request.resource.data)
+        && request.resource.data.createdAt == request.time;
+      allow update: if familyOk(request.resource.data)
+        && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if false;
+    }
+
+    match /pairing/{code} {
+      allow get: if true;
+      allow list: if false;
+      // A code is 8 characters, points at a family that exists, and lasts 20 minutes at most.
+      allow create: if code.matches('^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{8}$')
+        && request.resource.data.keys().hasOnly(['familyId', 'createdAt', 'expiresAt'])
+        && request.resource.data.familyId is string
+        && request.resource.data.familyId.size() <= 64
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.expiresAt > request.time
+        && request.resource.data.expiresAt <= request.time + duration.value(20, 'm')
+        && exists(/databases/$(database)/documents/families/$(request.resource.data.familyId));
+      // A code is never changed, so a code that is taken cannot be pointed somewhere else.
+      allow update: if false;
+      allow delete: if true;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

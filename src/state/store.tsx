@@ -276,6 +276,10 @@ interface Store {
   resetOnboarding: () => void;
   /** Puts every piece of demo data back to its starting state and forgets the saved copy. Keeps the onboarding flag. */
   resetDemoData: () => void;
+  /** The saved slices as one object. The link layer (src/sync) watches this to send changes. */
+  syncSnapshot: PersistedState;
+  /** Replaces the given slices with values that arrived from a linked device. */
+  applyRemote: (patch: Partial<Omit<PersistedState, 'activeChildId'>>) => void;
 }
 
 const Ctx = createContext<Store | null>(null);
@@ -584,6 +588,22 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
   const childSelf = kids[0];
   const points = tasks.filter((t) => t.done).reduce((s, t) => s + t.points, 0);
 
+  const applyRemote = useCallback((patch: Partial<Omit<PersistedState, 'activeChildId'>>) => {
+    if (patch.children !== undefined && patch.children.length > 0) setKids(patch.children);
+    if (patch.requests !== undefined) {
+      setRequests(patch.requests);
+      // Answers given on the other device count here too.
+      resolvedIds.current = resolvedRequestIds(patch.requests);
+    }
+    if (patch.alerts !== undefined) setAlerts(patch.alerts);
+    if (patch.places !== undefined) setPlaces(patch.places);
+    if (patch.tasks !== undefined) setTasks(patch.tasks);
+    if (patch.schedules !== undefined) setSchedules(patch.schedules);
+    if (patch.messages !== undefined) setMessages(patch.messages);
+    if (patch.sites !== undefined) setSites(patch.sites);
+    if (patch.sosActive !== undefined) setSosActive(patch.sosActive);
+  }, []);
+
   const value = useMemo<Store>(
     () => ({
       role, setRole, children: kids, activeChildId, setActiveChildId, activeChild, childSelf,
@@ -593,13 +613,15 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
       addPlace, removePlace, schedules, toggleSchedule, addSchedule, removeSchedule,
       messages, sendMessage, sites, addSite, removeSite, renameChild, requestUnlock,
       checkIn, sosActive, triggerSOS, clearSOS, hasOnboarded, ready, completeOnboarding, resetOnboarding, resetDemoData,
+      syncSnapshot: snapshot, applyRemote,
     }),
     [role, kids, activeChildId, activeChild, childSelf, requests, alerts, places, tasks, points,
       adjustLimit, grantBonus, toggleApp, setAppLimit, pauseDevice, resumeDevice, resolveRequest,
       toggleTask, requestExtraTime, markAlertsRead, togglePlaceAlert,
       addPlace, removePlace, schedules, toggleSchedule, addSchedule, removeSchedule,
       messages, sendMessage, sites, addSite, removeSite, renameChild, requestUnlock,
-      checkIn, sosActive, triggerSOS, clearSOS, hasOnboarded, ready, completeOnboarding, resetOnboarding, resetDemoData],
+      checkIn, sosActive, triggerSOS, clearSOS, hasOnboarded, ready, completeOnboarding, resetOnboarding, resetDemoData,
+      snapshot, applyRemote],
   );
 
   // The app is mounted only once the saved state is in place. Reading takes a few milliseconds, and
