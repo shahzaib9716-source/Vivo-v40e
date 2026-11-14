@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "vivov40e",
+    "scheme": "haven",
     "userInterfaceStyle": "automatic",
     "ios": {
       "bundleIdentifier": "com.haven.familysafety",
@@ -13,6 +13,10 @@
         "light": "./assets/images/icon.png",
         "dark": "./assets/images/ios-icon-dark.png",
         "tinted": "./assets/images/ios-icon-tinted.png"
+      },
+      "supportsTablet": false,
+      "config": {
+        "usesNonExemptEncryption": false
       }
     },
     "android": {

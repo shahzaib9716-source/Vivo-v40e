@@ -1,78 +1,14 @@
 /**
- * Dynamic app config. The static values live in app.json; this file adjusts them by the
- * APP_VARIANT environment variable, so one codebase builds two separately installable apps.
+ * Dynamic app config. The static values live in app.json; this file adds what depends on the
+ * build environment:
  *
- *   (unset)              combined build: both sides behind a role chooser. Use it for Expo Go and web.
- *   APP_VARIANT=parent   "Haven"        com.haven.familysafety.parent   scheme haven
- *   APP_VARIANT=child    "Haven Kids"   com.haven.familysafety.kids     scheme havenkids
+ *   - the Firebase web config that links phones (firebase.config.json, or HAVEN_FIREBASE_CONFIG)
+ *   - EAS Update, once the project has an EAS project id (see docs/RELEASE.md)
+ *   - local emulator settings for test builds
  *
- * The app reads its variant at run time from Constants.expoConfig.extra.variant
- * (see src/config/variant.ts). Set the variable for every command that reads this config:
- * `expo start`, `expo prebuild`, `expo run:android`, a Gradle or EAS build. The slug is the same
- * for all three.
+ * Haven is one app for Android and iOS. The parent or child role is chosen in the app at setup
+ * and then fixed by the server; it is not a build setting.
  */
-
-/** Splash background for the child app: a deep coral. Keep in step with src/config/variant.ts. */
-const CHILD_SPLASH = { light: '#E8553C', dark: '#3D1814' };
-
-const CHILD_IMAGES = './assets/images/child';
-
-/** @type {Record<string, (config: import('expo/config').ExpoConfig) => import('expo/config').ExpoConfig>} */
-const VARIANTS = {
-  parent: (config) => ({
-    ...config,
-    name: 'Haven',
-    scheme: 'haven',
-    ios: { ...config.ios, bundleIdentifier: 'com.haven.familysafety.parent' },
-    android: { ...config.android, package: 'com.haven.familysafety.parent' },
-    extra: { ...config.extra, variant: 'parent' },
-  }),
-
-  // Its own icon set and splash in the child accent (coral into pink), so the two apps are easy
-  // to tell apart on a home screen.
-  child: (config) => ({
-    ...config,
-    name: 'Haven Kids',
-    scheme: 'havenkids',
-    icon: `${CHILD_IMAGES}/icon.png`,
-    ios: {
-      ...config.ios,
-      bundleIdentifier: 'com.haven.familysafety.kids',
-      icon: {
-        light: `${CHILD_IMAGES}/icon.png`,
-        dark: `${CHILD_IMAGES}/ios-icon-dark.png`,
-        tinted: `${CHILD_IMAGES}/ios-icon-tinted.png`,
-      },
-    },
-    android: {
-      ...config.android,
-      package: 'com.haven.familysafety.kids',
-      adaptiveIcon: {
-        ...config.android?.adaptiveIcon,
-        backgroundColor: '#FF7A59',
-        foregroundImage: `${CHILD_IMAGES}/android-icon-foreground.png`,
-        backgroundImage: `${CHILD_IMAGES}/android-icon-background.png`,
-        monochromeImage: `${CHILD_IMAGES}/android-icon-monochrome.png`,
-      },
-    },
-    web: { ...config.web, favicon: `${CHILD_IMAGES}/favicon.png` },
-    plugins: withSplash(config.plugins, (props) => ({
-      ...props,
-      backgroundColor: CHILD_SPLASH.light,
-      image: `${CHILD_IMAGES}/splash-icon.png`,
-      dark: { ...props.dark, backgroundColor: CHILD_SPLASH.dark, image: `${CHILD_IMAGES}/splash-icon.png` },
-    })),
-    extra: { ...config.extra, variant: 'child' },
-  }),
-};
-
-/** Returns the plugin list with the expo-splash-screen options passed through `change`. */
-function withSplash(plugins = [], change) {
-  const name = 'expo-splash-screen';
-  const isSplash = (plugin) => plugin === name || (Array.isArray(plugin) && plugin[0] === name);
-  if (!plugins.some(isSplash)) return [...plugins, [name, change({})]];
-  return plugins.map((plugin) => (isSplash(plugin) ? [name, change((Array.isArray(plugin) && plugin[1]) || {})] : plugin));
-}
 
 const fs = require('fs');
 const path = require('path');
@@ -117,20 +53,23 @@ function withBackend(config) {
   return { ...next, plugins: [...(next.plugins ?? []), ...hosts.map((host) => ['./plugins/withLocalEmulatorNetwork', { host }])] };
 }
 
-/** @param {import('expo/config').ConfigContext} context */
-module.exports = ({ config }) => withBackend(applyVariant(config));
-
-function applyVariant(config) {
-  const variant = process.env.APP_VARIANT;
-
-  // Unset (or empty): the combined build, exactly as app.json describes it.
-  if (variant == null || variant === '') return config;
-
-  if (!Object.hasOwn(VARIANTS, variant)) {
-    throw new Error(
-      `Unknown APP_VARIANT "${variant}". Use "parent" for the Haven app or "child" for the Haven Kids app, ` +
-        'or leave it unset for the combined build with the role chooser.',
-    );
+/**
+ * EAS Update: over-the-air updates for JavaScript and assets. Switched on only when the project is
+ * linked to EAS (`eas init` writes extra.eas.projectId into app.json). The runtime version is a
+ * fingerprint of everything native, so an update is only ever offered to builds it is compatible
+ * with: a JavaScript change goes over the air, a native change needs a new build.
+ */
+function withUpdates(config) {
+  const projectId = config.extra?.eas?.projectId;
+  if (typeof projectId !== 'string' || !projectId) {
+    return { ...config, updates: { ...config.updates, enabled: false } };
   }
-  return VARIANTS[variant](config);
-};
+  return {
+    ...config,
+    runtimeVersion: config.runtimeVersion ?? { policy: 'fingerprint' },
+    updates: { ...config.updates, url: config.updates?.url ?? `https://u.expo.dev/${projectId}` },
+  };
+}
+
+/** @param {import('expo/config').ConfigContext} context */
+module.exports = ({ config }) => withUpdates(withBackend(config));
