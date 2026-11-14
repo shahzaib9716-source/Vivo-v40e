@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, ReactNode } from 'react';
 import { AppState, Platform, View, useColorScheme } from 'react-native';
 
-import { APP_VARIANT, SPLASH_BG } from '@/config/variant';
+import { SPLASH_BG } from '@/config/variant';
 import { newId } from '@/sync/ids';
 import { agoLabel, clockLabel } from '@/sync/labels';
 import { rebaseList } from '@/sync/reconcile';
@@ -303,6 +303,12 @@ const takeRemote =
   };
 
 const ONBOARDED_KEY = 'haven.onboarded';
+/**
+ * Which side this device was set up as, so the next start opens it without asking again. It is only
+ * a starting point: once the device is in a family, the role the server gave it decides
+ * (src/app/_layout.tsx keeps the two in step and closes the other side).
+ */
+const ROLE_KEY = 'haven.role.v1';
 
 /** The starting demo data: what a first launch shows and what "reset" goes back to. */
 const SEED: PersistedState = {
@@ -421,8 +427,14 @@ interface Store {
   ready: boolean;
   completeOnboarding: () => void;
   resetOnboarding: () => void;
-  /** Puts every piece of demo data back to its starting state and forgets the saved copy. Keeps the onboarding flag. */
+  /**
+   * Puts every piece of demo data back to its starting state and forgets the saved copy. Keeps the
+   * onboarding flag. Does nothing on a device that is in a family: there the data is the family's,
+   * and putting the samples back would be sent to the other phones as if it were a change.
+   */
   resetDemoData: () => void;
+  /** Link layer only: the same reset without that check, for a device that has just left its family. */
+  wipeToSample: () => void;
   /** The saved slices as one object. The link layer (src/sync) watches this to send changes. */
   syncSnapshot: PersistedState;
   /**
@@ -447,9 +459,16 @@ interface Store {
 const Ctx = createContext<Store | null>(null);
 
 export function StoreProvider({ children: node }: { children: ReactNode }) {
-  // A parent-only or child-only build knows its side from the start, so a deep link or a web
-  // reload that skips the welcome screen still has the right role.
-  const [role, setRole] = useState<Role>(APP_VARIANT);
+  // The side chosen at setup, read back from storage at start (see ROLE_KEY).
+  const [role, setRoleState] = useState<Role>(null);
+  const roleRef = useRef<Role>(null);
+  const setRole = useCallback((next: Role) => {
+    if (roleRef.current === next) return;
+    roleRef.current = next;
+    setRoleState(next);
+    if (next) writeKey(ROLE_KEY, next);
+    else removeKey(ROLE_KEY);
+  }, []);
   const [kids, setKids] = useState<Child[]>(SEED.children);
   const [activeChildIdChoice, setActiveChildId] = useState(SEED.activeChildId);
   const [requests, setRequests] = useState<FamilyRequest[]>(SEED.requests);
@@ -463,7 +482,12 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
   const [sosChildId, setSosChildId] = useState<string | null>(SEED.sosChildId);
   /** Set by the link layer. Not saved here: the link layer sets both again at every start. */
   const [selfChildId, setSelfChildId] = useState<string | null>(null);
-  const [live, setLive] = useState(false);
+  const [live, setLiveState] = useState(false);
+  const liveRef = useRef(false);
+  const setLive = useCallback((next: boolean) => {
+    liveRef.current = next;
+    setLiveState(next);
+  }, []);
   /** The link layer's record. It is state so that it commits, and is saved, together with the slices. */
   const [syncRecord, setSyncRecord] = useState<unknown>(undefined);
   const storedSync = useRef<StoredSyncRecord | null>(null);
@@ -497,9 +521,14 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
   useEffect(() => {
     if (hydrated.current) return;
     let alive = true;
-    Promise.all([readKey(ONBOARDED_KEY), readKey(STATE_KEY)]).then(([flag, raw]) => {
+    Promise.all([readKey(ONBOARDED_KEY), readKey(STATE_KEY), readKey(ROLE_KEY)]).then(([flag, raw, savedRole]) => {
       if (!alive) return;
       if (flag === '1') setHasOnboarded(true);
+      // A side picked before this read came back wins over the saved one.
+      if (roleRef.current === null && (savedRole === 'parent' || savedRole === 'child')) {
+        roleRef.current = savedRole;
+        setRoleState(savedRole);
+      }
       if (!discardStored.current) {
         // Anything unreadable falls back to the seed, slice by slice. A slice that falls back is
         // the seed array itself, so setting it is a no-op. loadState does not throw; the catch
@@ -779,7 +808,7 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
     removeKey(ONBOARDED_KEY);
   }, []);
 
-  const resetDemoData = useCallback(() => {
+  const wipeToSample = useCallback(() => {
     // Drop any save that is still waiting, so the old data cannot be written back after this.
     if (saveTimer.current != null) {
       clearTimeout(saveTimer.current);
@@ -811,6 +840,11 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
     savedJson.current = serialiseState(SEED);
     removeKey(STATE_KEY);
   }, []);
+
+  const resetDemoData = useCallback(() => {
+    if (liveRef.current) return;
+    wipeToSample();
+  }, [wipeToSample]);
 
   const points = tasks.filter((t) => t.done).reduce((s, t) => s + t.points, 0);
   const sosChild = (sosChildId != null ? kids.find((c) => c.id === sosChildId) : undefined) ?? childSelf;
@@ -860,7 +894,7 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
       addPlace, removePlace, schedules, toggleSchedule, addSchedule, removeSchedule,
       messages, sendMessage, sites, addSite, removeSite, renameChild, addChild, requestUnlock,
       checkIn, sosActive, sosChildId, sosChild, sosMine, triggerSOS, clearSOS, live,
-      hasOnboarded, ready, completeOnboarding, resetOnboarding, resetDemoData,
+      hasOnboarded, ready, completeOnboarding, resetOnboarding, resetDemoData, wipeToSample,
       syncSnapshot: snapshot, applyRemote, readSyncRecord, setSelfChildId, setLive,
     }),
     [role, kids, activeChildId, activeChild, childSelf, requests, alerts, places, tasks, points,
@@ -869,8 +903,8 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
       addPlace, removePlace, schedules, toggleSchedule, addSchedule, removeSchedule,
       messages, sendMessage, sites, addSite, removeSite, renameChild, addChild, requestUnlock,
       checkIn, sosActive, sosChildId, sosChild, sosMine, triggerSOS, clearSOS, live,
-      hasOnboarded, ready, completeOnboarding, resetOnboarding, resetDemoData,
-      snapshot, applyRemote, readSyncRecord],
+      hasOnboarded, ready, completeOnboarding, resetOnboarding, resetDemoData, wipeToSample,
+      snapshot, applyRemote, readSyncRecord, setRole, setLive],
   );
 
   // The app is mounted only once the saved state is in place. Reading takes a few milliseconds, and

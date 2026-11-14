@@ -5,7 +5,7 @@ import { Pressable, View } from 'react-native';
 import { InlineNote } from '@/components/InlineNote';
 import { InlineConfirm } from '@/components/RuleForm';
 import { Avatar, Card, Header, Row, Screen, SectionLabel, Text, Toggle } from '@/components/ui';
-import { APP_NAME, isSingleSide } from '@/config/variant';
+import { APP_NAME } from '@/config/variant';
 import { useLink } from '@/sync/link';
 import { useStore } from '@/state/store';
 import { spacing, useTheme } from '@/theme';
@@ -46,21 +46,24 @@ export default function Settings() {
   const [demo, setDemo] = useState<DemoRow | null>(null);
   /** "Reset demo data": idle, asking to confirm, or done (the note stays until the screen closes). */
   const [reset, setReset] = useState<'idle' | 'confirm' | 'done'>('idle');
-  const [noAccount, setNoAccount] = useState(false);
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
+  const [signOutProblem, setSignOutProblem] = useState<string | null>(null);
+  const account = link.account && !link.account.anonymous ? link.account : null;
 
-  const signOut = () => {
-    // TODO(v2-ui): a proper sign-out flow (confirm, show progress and failures) comes with the account screens.
-    if (link.account && !link.account.anonymous) {
-      // The device goes back to sample data; the family stays as it is on the server.
-      link.signOut().catch(() => {});
-      if (isSingleSide) return;
-    } else if (isSingleSide) {
-      // A parent-only or child-only build has no chooser to land on, and nobody is signed in.
-      setNoAccount(true);
-      return;
-    }
+  /** Back to the start screen, where the side of the app is chosen again. */
+  const toChooser = () => {
     setRole(null);
     leaveTo('/');
+  };
+
+  const signOut = () => {
+    setConfirmSignOut(false);
+    setSignOutProblem(null);
+    // The device goes back to sample data; the family stays as it is on the server.
+    link
+      .signOut()
+      .then(toChooser)
+      .catch((e: unknown) => setSignOutProblem(e instanceof Error && e.message ? e.message : 'Signing out did not work. Please try again.'));
   };
 
   // "Data & export" and "Reset demo data" share a group, and only one of them has a message
@@ -86,21 +89,23 @@ export default function Settings() {
       <Header back title="Settings" />
 
       <Card style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.xl }}>
-        <Avatar name="Jordan Carter" size={52} />
+        <Avatar name={account?.email ?? 'Jordan Carter'} size={52} />
         <View style={{ flex: 1 }}>
-          <Text variant="title">Jordan Carter</Text>
-          <Text variant="small" tone="muted">
-            Parent · Free plan
+          <Text variant="title" numberOfLines={1}>
+            {account?.email ?? 'Jordan Carter'}
+          </Text>
+          <Text variant="small" tone="muted" numberOfLines={1}>
+            {account ? `Parent · ${link.familyName ?? 'no family yet'}` : 'Parent · sample profile'}
           </Text>
         </View>
         <Pressable
-          onPress={() => setDemo('profile')}
+          onPress={() => (account ? (router.push as any)('/account') : setDemo('profile'))}
           accessibilityRole="button"
-          accessibilityLabel="Edit profile"
+          accessibilityLabel={account ? 'Open parent account' : 'Edit profile'}
           hitSlop={EDIT_HIT_SLOP}
           style={({ pressed }) => pressed && { opacity: 0.6 }}>
           <Text variant="smallStrong" color={colors.primary}>
-            Edit
+            {account ? 'Account' : 'Edit'}
           </Text>
         </Pressable>
       </Card>
@@ -117,8 +122,7 @@ export default function Settings() {
         <Row title="Require Face ID to open" icon="lock" iconColor={colors.primary} chevron={false} right={<Toggle value={biometric} onChange={setBiometric} />} />
         <Row title="Privacy & transparency" subtitle="What your child sees about sharing" icon="eye" iconColor={colors.success} onPress={() => (router.push as any)('/transparency?as=parent')} />
         <Row title="Data & export" subtitle="Download or delete your data" icon="database" iconColor={colors.textMuted} onPress={showDataNote} />
-        {/* A linked device mirrors its family: putting the sample data back there would send it to the
-            family as if it were real. TODO(v2-ui): decide what, if anything, replaces this row when linked. */}
+        {/* A device in a family shows the family's data, so there is no sample data to put back. */}
         {!linked && (
           <Row
             title="Reset demo data"
@@ -156,28 +160,38 @@ export default function Settings() {
         <Row title="Help center" icon="help-circle" iconColor={colors.info} onPress={() => setDemo('help')} />
         <Row title="Terms & privacy policy" icon="file-text" iconColor={colors.textMuted} onPress={() => setDemo('terms')} />
         <Row title="Replay introduction" subtitle="See the welcome tour again" icon="play-circle" iconColor={colors.primary} onPress={replayIntro} />
-        <Row title="Version" subtitle={`${APP_NAME} 1.0.0 (demo)`} icon="info" iconColor={colors.textMuted} chevron={false} />
+        <Row title="Version" subtitle={`${APP_NAME} 1.0.0`} icon="info" iconColor={colors.textMuted} chevron={false} />
       </Card>
       {note(['help', 'terms'])}
 
-      <Card padded={false} style={{ paddingHorizontal: spacing.lg }}>
-        <Row title="Sign out" icon="log-out" danger chevron={false} onPress={signOut} />
-      </Card>
-      {noAccount && (
-        <InlineNote
-          tone="neutral"
-          title={link.configured ? 'Nobody is signed in' : 'Demo: there is no account to sign out of'}
-          detail={
-            link.configured
-              ? `There is no parent account signed in on this device, so ${APP_NAME} stays open.`
-              : `This build has no accounts and no server, so ${APP_NAME} stays open on this device.`
-          }
-          style={{ marginTop: spacing.md }}
-        />
+      {account ? (
+        confirmSignOut ? (
+          <InlineConfirm
+            title="Sign out on this device?"
+            detail="This device goes back to sample data. Your family stays as it is: signing in again, here or on another phone, brings it back."
+            confirmLabel="Sign out"
+            onCancel={() => setConfirmSignOut(false)}
+            onConfirm={signOut}
+          />
+        ) : (
+          <Card padded={false} style={{ paddingHorizontal: spacing.lg }}>
+            <Row title="Sign out" subtitle={account.email ?? undefined} icon="log-out" danger chevron={false} onPress={() => setConfirmSignOut(true)} />
+          </Card>
+        )
+      ) : (
+        <Card padded={false} style={{ paddingHorizontal: spacing.lg }}>
+          <Row
+            title={link.configured ? 'Sign in or set up your family' : 'Back to the start screen'}
+            icon={link.configured ? 'user' : 'log-out'}
+            onPress={link.configured ? () => (router.push as any)('/account') : toChooser}
+          />
+          {link.configured ? <Row title="Switch mode" subtitle="Choose parent or child again" icon="repeat" chevron={false} onPress={toChooser} /> : null}
+        </Card>
       )}
+      {signOutProblem ? <InlineNote tone="neutral" icon="alert-circle" title="That didn't work" detail={signOutProblem} style={{ marginTop: spacing.md }} /> : null}
 
       <Text variant="tiny" tone="faint" center style={{ marginTop: spacing.lg }}>
-        Demo build: the switches on this screen reset when you close the app.
+        The switches on this screen are examples: they are not saved and change nothing on the phone.
       </Text>
     </Screen>
   );

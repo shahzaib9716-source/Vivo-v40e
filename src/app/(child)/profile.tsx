@@ -4,7 +4,6 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 
 import { Avatar, Card, IconBadge, Row, Screen, SectionLabel, Text } from '@/components/ui';
-import { APP_VARIANT, NO_SERVER_NOTE, SIDE_HOME } from '@/config/variant';
 import { linkSummary } from '@/components/LinkParts';
 import { useLink } from '@/sync/link';
 import { useStore, fmtDuration } from '@/state/store';
@@ -29,7 +28,6 @@ export default function ChildProfileTab() {
   const { colors } = useTheme();
   const { childSelf, setRole, sosMine: sosActive } = useStore();
   const link = useLink();
-  const previewNote = link.configured ? 'Opens the other side on this phone. To use two phones, link them under “Family link”.' : NO_SERVER_NOTE;
   const [helpOpen, setHelpOpen] = useState(false);
 
   const left = Math.max(0, childSelf.limitMin - childSelf.usedMin);
@@ -37,13 +35,6 @@ export default function ChildProfileTab() {
   const switchMode = () => {
     setRole(null);
     (router.replace as any)('/');
-  };
-
-  // Parent-only and child-only builds have no chooser to switch through. The parent side is still
-  // in the build, so one phone can show the whole loop: it opens as a clearly labelled demo.
-  const openParentSide = () => {
-    setRole('parent');
-    (router.replace as any)(SIDE_HOME.parent);
   };
 
   return (
@@ -148,51 +139,17 @@ export default function ChildProfileTab() {
         )}
       </Card>
 
-      {APP_VARIANT === 'child' ? (
-        // The Haven Kids app: there is no parent app to reach, so preview it here.
-        <DemoSideRow icon="users" title="Demo: preview the parent app on this device" detail={previewNote} onPress={openParentSide} />
-      ) : APP_VARIANT === 'parent' ? (
-        // The Haven app, previewing the child side: this is the way back.
-        <DemoSideRow
-          icon="corner-up-left"
-          title="Demo: back to the parent app"
-          detail="You are previewing the child app inside Haven."
-          onPress={openParentSide}
-        />
-      ) : (
+      {/* Only a device that is not in a family can change sides: it shows sample data either way.
+          In a family this phone is a child's phone, and the parent side is closed to it. */}
+      {link.role === null ? (
         <Card onPress={switchMode} style={styles.switch}>
           <Feather name="repeat" size={16} color={colors.primary} />
           <Text variant="smallStrong" color={colors.primary}>
             Switch mode
           </Text>
         </Card>
-      )}
+      ) : null}
     </Screen>
-  );
-}
-
-/**
- * Takes the place of "Switch mode" in a parent-only or child-only build: a card-sized row that
- * opens the other side on this device, with a line saying why it is there. The title may wrap.
- * (The parent side's Family tab has the same row.)
- */
-function DemoSideRow({ icon, title, detail, onPress }: { icon: keyof typeof Feather.glyphMap; title: string; detail: string; onPress: () => void }) {
-  const { colors } = useTheme();
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={`${title}. ${detail}`}
-      style={({ pressed }) => [styles.demo, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.demoPressed]}>
-      <IconBadge name={icon} color={colors.primary} size={40} />
-      <View style={styles.demoText}>
-        <Text variant="title">{title}</Text>
-        <Text variant="small" tone="muted" style={styles.demoDetail}>
-          {detail}
-        </Text>
-      </View>
-      <Feather name="chevron-right" size={20} color={colors.textFaint} />
-    </Pressable>
   );
 }
 
@@ -224,9 +181,4 @@ const styles = StyleSheet.create({
   helpAnswer: { marginTop: 2 },
 
   switch: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
-
-  demo: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.lg, borderRadius: radius.card, borderWidth: StyleSheet.hairlineWidth, ...shadow(1) },
-  demoPressed: { opacity: 0.85, transform: [{ scale: 0.99 }] },
-  demoText: { flex: 1 },
-  demoDetail: { marginTop: 2 },
 });

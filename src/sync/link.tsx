@@ -25,14 +25,16 @@ const Ctx = createContext<LinkState | null>(null);
 
 export function LinkProvider({ children }: { children: ReactNode }) {
   const store = useStore();
-  const { syncSnapshot, applyRemote, readSyncRecord, resetDemoData, setSelfChildId, setLive } = store;
+  // `wipeToSample` is the reset without the "not while in a family" check: the link layer calls it
+  // exactly when a device has left its family.
+  const { syncSnapshot, applyRemote, readSyncRecord, wipeToSample, setSelfChildId, setLive } = store;
   const [controller] = useState(() => new LinkController());
   const [seq, setSeq] = useState(0);
 
   // Every one of these functions is stable, so this runs once: start on mount, shut down on unmount.
   useEffect(
-    () => controller.attach({ applyRemote, readSyncRecord, resetDemoData, setSelfChildId, setLive, mark: setSeq }),
-    [controller, applyRemote, readSyncRecord, resetDemoData, setSelfChildId, setLive],
+    () => controller.attach({ applyRemote, readSyncRecord, resetDemoData: wipeToSample, setSelfChildId, setLive, mark: setSeq }),
+    [controller, applyRemote, readSyncRecord, wipeToSample, setSelfChildId, setLive],
   );
 
   useEffect(() => {

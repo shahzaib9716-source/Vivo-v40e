@@ -1,29 +1,38 @@
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Redirect, router } from 'expo-router';
-import { ReactNode, useEffect } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Logo, Text } from '@/components/ui';
-import { APP_VARIANT, SIDE_HOME, SPLASH_BG } from '@/config/variant';
+import { SIDE_HOME, SPLASH_BG, type AppSide } from '@/config/variant';
 import { useStore } from '@/state/store';
+import { useLink } from '@/sync/link';
 import { radius, shadow, spacing, useTheme } from '@/theme';
 
 export default function Welcome() {
   const { colors, mode } = useTheme();
-  const { setRole, hasOnboarded, ready } = useStore();
+  const { role, setRole, hasOnboarded, ready } = useStore();
+  const link = useLink();
 
-  // A parent-only or child-only build has no chooser. Once the saved state is in and the
-  // introduction has been seen, it takes its own role and goes straight to its own side.
-  const ownSide = ready && hasOnboarded ? APP_VARIANT : null;
+  // Which side to open. A device that is in a family has the role the server gave it; otherwise it
+  // is the side picked here the last time. Neither: the chooser below.
+  const side: AppSide | null = link.role ?? role;
+
+  // Right after a start the link layer is still reading what this device is. Wait for that briefly
+  // before offering a choice, so a linked phone never shows the chooser first.
+  const undecided = link.configured && link.status === 'connecting' && side === null;
+  const [waited, setWaited] = useState(false);
   useEffect(() => {
-    if (ownSide) setRole(ownSide);
-  }, [ownSide, setRole]);
+    if (!undecided) return;
+    const timer = setTimeout(() => setWaited(true), 2500);
+    return () => clearTimeout(timer);
+  }, [undecided]);
 
   // Hold on the splash colour until the saved flag is read, so a returning user never sees the intro flash.
-  if (!ready) {
+  if (!ready || (undecided && !waited)) {
     return <View style={{ flex: 1, backgroundColor: mode === 'dark' ? SPLASH_BG.dark : SPLASH_BG.light }} />;
   }
 
@@ -32,14 +41,17 @@ export default function Welcome() {
     return <Redirect href={'/onboarding' as any} />;
   }
 
-  if (ownSide) {
-    return <Redirect href={SIDE_HOME[ownSide] as any} />;
+  if (side) {
+    return <Redirect href={SIDE_HOME[side] as any} />;
   }
 
-  // Combined build only from here on: the role chooser.
-  const go = (role: 'parent' | 'child') => {
-    setRole(role);
-    (router.replace as any)(SIDE_HOME[role]);
+  // First setup, or after "Switch mode": choose the side. With a server in the build, the next
+  // step is the real setup (a parent's account, or a code on a child's phone); both can be skipped
+  // to look around with sample data.
+  const go = (next: AppSide) => {
+    setRole(next);
+    (router.replace as any)(SIDE_HOME[next]);
+    if (link.configured) (router.push as any)(next === 'parent' ? '/account' : '/link-device');
   };
 
   return (
@@ -73,7 +85,7 @@ export default function Welcome() {
               Who's setting up?
             </Text>
             <Text variant="small" tone="muted" style={{ marginBottom: spacing.lg }}>
-              Choose a mode. You can switch anytime from settings.
+              Choose how this device is used. Once it joins your family, that role is fixed by your family’s account.
             </Text>
           </Entrance>
 
