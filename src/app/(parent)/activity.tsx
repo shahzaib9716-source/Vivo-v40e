@@ -6,6 +6,7 @@ import { BarChart, Card, Row, Screen, SectionLabel, Text } from '@/components/ui
 import { TODAY_INDEX, WEEKDAY_LETTERS, WEEKDAY_NAMES, sum, weekChange } from '@/components/reportData';
 import { useStore, fmtDuration } from '@/state/store';
 import { categoryColors, spacing, useTheme } from '@/theme';
+import { SampleNote } from '@/components/SampleNote';
 
 export default function Activity() {
   const { colors } = useTheme();
@@ -30,6 +31,7 @@ export default function Activity() {
           {firstName}'s week
         </Text>
       </View>
+      <SampleNote about="usage" />
 
       <Card onPress={() => (router.push as any)('/reports')} style={{ marginBottom: spacing.xl }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.md }}>

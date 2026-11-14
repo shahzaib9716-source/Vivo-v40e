@@ -35,7 +35,8 @@ export default function ChildHome() {
   const paused = childSelf.bedtime;
   const left = Math.max(0, childSelf.limitMin - childSelf.usedMin);
   const progress = childSelf.limitMin > 0 ? Math.min(1, childSelf.usedMin / childSelf.limitMin) : 1;
-  const outOfTime = !paused && left === 0;
+  // Time used is only known in the sample data: a real family's phone is not measured by this version.
+  const outOfTime = !live && !paused && left === 0;
   const apps = childSelf.apps.filter((a) => !a.blocked).slice(0, 8);
   const blockedCount = childSelf.apps.length - childSelf.apps.filter((a) => !a.blocked).length;
   const openTasks = tasks.filter((t) => !t.done).length;
@@ -109,7 +110,7 @@ export default function ChildHome() {
                     SOS sent: your family has been alerted
                   </Text>
                   <Text variant="small" color="rgba(255,255,255,0.92)" style={styles.sosDetail}>
-                    They can see your live location until you say you're safe.
+                    {live ? 'They see it when Haven is open on their phone. If you are in danger, call them or the emergency number.' : "They can see your live location until you say you're safe."}
                   </Text>
                 </View>
               </View>
@@ -141,7 +142,7 @@ export default function ChildHome() {
               <View style={styles.heroChip}>
                 <Feather name="clock" size={13} color="#FFFFFF" />
                 <Text variant="smallStrong" color="#FFFFFF">
-                  {left > 0 ? `${fmtDuration(left)} left for later` : 'No time left today'}
+                  {live ? `Your limit is ${fmtDuration(childSelf.limitMin)} a day` : left > 0 ? `${fmtDuration(left)} left for later` : 'No time left today'}
                 </Text>
               </View>
               <HeroButton label="Ask for more time" onPress={askForTime} />
@@ -152,23 +153,27 @@ export default function ChildHome() {
                 style={styles.ring}
                 accessible
                 accessibilityRole="text"
-                accessibilityLabel={`${fmtDuration(left)} left today`}>
-                <ProgressRing progress={progress} size={150} stroke={14} color="#FFFFFF" track="rgba(255,255,255,0.28)" />
+                accessibilityLabel={live ? `Your limit is ${fmtDuration(childSelf.limitMin)} a day` : `${fmtDuration(left)} left today`}>
+                <ProgressRing progress={live ? 1 : progress} size={150} stroke={14} color="#FFFFFF" track="rgba(255,255,255,0.28)" />
                 <View style={styles.ringCenter}>
                   <Text variant="h1" color="#FFFFFF">
-                    {fmtDuration(left)}
+                    {fmtDuration(live ? childSelf.limitMin : left)}
                   </Text>
                   <Text variant="smallStrong" color="#FFFFFF">
-                    left today
+                    {live ? 'a day' : 'left today'}
                   </Text>
                 </View>
               </View>
+              {/* In a real family the phone's use is not measured by this version, so there is no
+                  "used" and no "left" to show: only the limit the family agreed. */}
               <Text variant="smallStrong" color="#FFFFFF" center style={styles.heroUsed}>
-                {outOfTime
-                  ? "You've used all your time for today"
-                  : `You've used ${fmtDuration(childSelf.usedMin)} of ${fmtDuration(childSelf.limitMin)} today`}
+                {live
+                  ? 'The screen time your family agreed for each day'
+                  : outOfTime
+                    ? "You've used all your time for today"
+                    : `You've used ${fmtDuration(childSelf.usedMin)} of ${fmtDuration(childSelf.limitMin)} today`}
               </Text>
-              {outOfTime && <HeroButton label="Ask for more time" onPress={askForTime} />}
+              {(outOfTime || live) && <HeroButton label="Ask for more time" onPress={askForTime} />}
             </LinearGradient>
           )}
 
@@ -265,7 +270,7 @@ export default function ChildHome() {
             )}
             <View style={styles.appGrid}>
               {apps.map((a) => (
-                <AppTile key={a.id} app={a} state={paused ? 'paused' : outOfTime ? 'spent' : 'open'} />
+                <AppTile key={a.id} app={a} state={paused ? 'paused' : outOfTime ? 'spent' : 'open'} live={live} />
               ))}
             </View>
             {apps.length === 0 && (
@@ -368,12 +373,13 @@ function HeroButton({ label, onPress }: { label: string; onPress: () => void }) 
   );
 }
 
-function AppTile({ app, state }: { app: ManagedApp; state: 'open' | 'paused' | 'spent' }) {
+function AppTile({ app, state, live }: { app: ManagedApp; state: 'open' | 'paused' | 'spent'; live: boolean }) {
   const { colors } = useTheme();
-  const appLeft = app.limitMin == null ? null : Math.max(0, app.limitMin - app.usedMin);
+  // In a real family only the agreed limit is known, not the time used.
+  const appLeft = app.limitMin == null ? null : live ? app.limitMin : Math.max(0, app.limitMin - app.usedMin);
   const resting = state !== 'open' || appLeft === 0;
   const caption =
-    state === 'paused' ? 'Paused' : state === 'spent' || appLeft === 0 ? "Time's up" : appLeft == null ? 'Anytime' : `${fmtDuration(appLeft)} left`;
+    state === 'paused' ? 'Paused' : state === 'spent' || appLeft === 0 ? "Time's up" : appLeft == null ? 'Anytime' : live ? `${fmtDuration(appLeft)} a day` : `${fmtDuration(appLeft)} left`;
 
   return (
     <View style={styles.appItem} accessible accessibilityRole="text" accessibilityLabel={`${app.name}, ${caption}`}>

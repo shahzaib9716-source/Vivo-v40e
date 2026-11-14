@@ -5,6 +5,7 @@ import { Feather } from '@expo/vector-icons';
 import { Card, Header, Screen, SectionLabel, SegmentedControl, Text } from '@/components/ui';
 import { Child, useStore } from '@/state/store';
 import { categoryColors, radius, spacing, useTheme } from '@/theme';
+import { SampleNote } from '@/components/SampleNote';
 
 const RANGES = ['Today', 'Week', 'Month'] as const;
 type Range = (typeof RANGES)[number];
@@ -127,6 +128,7 @@ export default function LocationHistory() {
   return (
     <Screen>
       <Header back title="Location History" subtitle={activeChild.name.split(' ')[0]} />
+      <SampleNote about="location" />
       <View style={{ marginBottom: spacing.lg }}>
         <SegmentedControl
           options={[...RANGES]}

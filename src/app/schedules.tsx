@@ -8,6 +8,7 @@ import { DAY_SHORT, ScheduleFace, daysLabel, isActiveAt, nextStart, parseClock, 
 import { Button, Card, Header, IconBadge, Screen, SectionLabel, Text, Toggle } from '@/components/ui';
 import { fmtDuration, useStore, type Schedule } from '@/state/store';
 import { categoryColors, radius, spacing, useTheme } from '@/theme';
+import { SampleNote } from '@/components/SampleNote';
 
 /* The current minute, refreshed while the screen is open. Null on the server so web hydration matches. */
 function subscribeToClock(onTick: () => void) {
@@ -63,6 +64,7 @@ export default function Schedules() {
   return (
     <Screen>
       <Header back title="Schedules & Bedtime" subtitle="When the device winds down" />
+      <SampleNote about="rules" />
 
       {schedules.length === 0 ? (
         <Card style={styles.empty}>

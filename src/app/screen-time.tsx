@@ -6,6 +6,7 @@ import { InlineNote } from '@/components/InlineNote';
 import { Button, Card, Chip, Header, ProgressRing, Screen, SectionLabel, Text } from '@/components/ui';
 import { useStore, fmtDuration } from '@/state/store';
 import { categoryColors, radius, spacing, useTheme } from '@/theme';
+import { SampleNote } from '@/components/SampleNote';
 
 const PRESETS = [60, 120, 180, 240];
 const STEP = 15;
@@ -40,6 +41,7 @@ export default function ScreenTime() {
   return (
     <Screen>
       <Header back title="Screen Time" subtitle={firstName} />
+      <SampleNote about="usage" />
 
       <Card style={{ alignItems: 'center', paddingVertical: spacing.xl }}>
         <ProgressRing progress={progress} size={168} stroke={16} label={fmtDuration(left)} sublabel="remaining today" />

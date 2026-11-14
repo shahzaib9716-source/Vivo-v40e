@@ -4,6 +4,7 @@ import { View } from 'react-native';
 import { Avatar, Card, Row, Screen, SectionLabel, Text } from '@/components/ui';
 import { useStore } from '@/state/store';
 import { categoryColors, spacing, useTheme } from '@/theme';
+import { SampleNote } from '@/components/SampleNote';
 
 export default function Controls() {
   const { colors } = useTheme();
@@ -19,6 +20,7 @@ export default function Controls() {
           Rules and limits for {activeChild.name.split(' ')[0]}
         </Text>
       </View>
+      <SampleNote about="rules" />
 
       <Card onPress={() => (router.push as any)('/child-profile')} style={{ marginBottom: spacing.xl, flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
         <Avatar name={activeChild.name} size={48} />

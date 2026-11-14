@@ -26,7 +26,7 @@ const HELP = [
 
 export default function ChildProfileTab() {
   const { colors } = useTheme();
-  const { childSelf, setRole, sosMine: sosActive } = useStore();
+  const { childSelf, setRole, sosMine: sosActive, live } = useStore();
   const link = useLink();
   const [helpOpen, setHelpOpen] = useState(false);
 
@@ -57,26 +57,40 @@ export default function ChildProfileTab() {
         )}
       </View>
 
-      <SectionLabel>Today</SectionLabel>
-      <Card style={styles.today}>
-        <View style={styles.stat}>
-          <Text variant="h2" color={colors.primary}>
-            {fmtDuration(childSelf.usedMin)}
-          </Text>
-          <Text variant="small" tone="muted">
-            Used
-          </Text>
-        </View>
-        <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
-        <View style={styles.stat}>
-          <Text variant="h2" color={colors.success}>
-            {fmtDuration(left)}
-          </Text>
-          <Text variant="small" tone="muted">
-            Left
-          </Text>
-        </View>
-      </Card>
+      <SectionLabel>{live ? 'My screen time' : 'Today'}</SectionLabel>
+      {live ? (
+        // In a real family the time used is not measured by this version: only the agreed limit is known.
+        <Card style={styles.today}>
+          <View style={styles.stat}>
+            <Text variant="h2" color={colors.primary}>
+              {fmtDuration(childSelf.limitMin)}
+            </Text>
+            <Text variant="small" tone="muted">
+              Agreed for each day
+            </Text>
+          </View>
+        </Card>
+      ) : (
+        <Card style={styles.today}>
+          <View style={styles.stat}>
+            <Text variant="h2" color={colors.primary}>
+              {fmtDuration(childSelf.usedMin)}
+            </Text>
+            <Text variant="small" tone="muted">
+              Used
+            </Text>
+          </View>
+          <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+          <View style={styles.stat}>
+            <Text variant="h2" color={colors.success}>
+              {fmtDuration(left)}
+            </Text>
+            <Text variant="small" tone="muted">
+              Left
+            </Text>
+          </View>
+        </Card>
+      )}
 
       <SectionLabel>My family</SectionLabel>
       <Card padded={false} style={styles.group}>
@@ -115,6 +129,13 @@ export default function ChildProfileTab() {
           icon="eye"
           iconColor={colors.success}
           onPress={() => (router.push as any)('/transparency')}
+        />
+        <Row
+          title="What this version does"
+          subtitle="On this phone, and what it leaves out"
+          icon="list"
+          iconColor={colors.primary}
+          onPress={() => (router.push as any)('/about-version')}
         />
         <Row
           title="Help"

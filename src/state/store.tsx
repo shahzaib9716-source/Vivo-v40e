@@ -259,6 +259,46 @@ export const SEED_PLACES: readonly Place[] = initialPlaces;
 export const SEED_SCHEDULES: readonly Schedule[] = initialSchedules;
 export const SEED_TASKS: readonly RewardTask[] = initialTasks;
 
+/**
+ * What a request asks for, worded here from its structured fields. In a family the request comes
+ * from the child's phone, and the server checks its shape, not its words: the title a parent reads
+ * before approving must say what approving will really do (these minutes, this app).
+ */
+export function requestTitle(request: FamilyRequest, child?: Child | null): string {
+  if (request.kind === 'extra_time') return request.minutes ? `${request.minutes} more minutes` : 'More screen time';
+  if (request.kind === 'unlock_app') {
+    const app = child?.apps.find((a) => a.id === request.appId);
+    return app ? `Unlock ${app.name}` : 'Unlock an app';
+  }
+  return 'A later bedtime';
+}
+
+/**
+ * Title and body of a feed entry. In a family (`live`), the entries a child's phone writes
+ * (check-in, SOS, a request, leaving the family) are worded here from what they are, whom they are
+ * about and the server's time, not from the text that phone supplied. Everything else, and all
+ * sample data, is shown as stored.
+ */
+export function alertText(alert: Alert, kids: readonly Child[], live: boolean): { title: string; body: string; icon: string; color: string } {
+  const stored = { title: alert.title, body: alert.body, icon: alert.icon, color: alert.color };
+  if (!live || alert.at == null) return stored;
+  const child = alert.childId != null ? kids.find((c) => c.id === alert.childId) : undefined;
+  const first = child ? child.name.split(' ')[0] : 'A child';
+  const at = clockLabel(alert.at);
+  switch (alert.kind) {
+    case 'checkin':
+      return { title: `${first} checked in`, body: `At ${at}`, icon: 'map-pin', color: '#2E8BFF' };
+    case 'sos':
+      return { title: `SOS from ${first}`, body: `Sent at ${at}`, icon: 'alert-circle', color: '#FB4A4A' };
+    case 'request':
+      return { title: `${first} sent a request`, body: `At ${at}`, icon: 'inbox', color: '#F5A623' };
+    case 'left':
+      return { title: `${first}’s phone left the family`, body: 'It was unlinked on the phone itself.', icon: 'x-circle', color: '#F5A623' };
+    default:
+      return stored;
+  }
+}
+
 /** What `updatedAgo` says for a child that has not checked in yet. */
 export const NEVER_CHECKED_IN = 'never';
 

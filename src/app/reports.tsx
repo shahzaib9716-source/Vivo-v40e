@@ -18,6 +18,7 @@ import {
 } from '@/components/reportData';
 import { Child, useStore, fmtDuration } from '@/state/store';
 import { spacing, useTheme } from '@/theme';
+import { SampleNote } from '@/components/SampleNote';
 
 const RANGES = ['Day', 'Week', 'Month'] as const;
 type Range = (typeof RANGES)[number];
@@ -169,6 +170,7 @@ export default function Reports() {
   return (
     <Screen>
       <Header back title="Screen Time Report" subtitle={activeChild.name.split(' ')[0]} />
+      <SampleNote about="usage" />
 
       <View style={{ marginBottom: spacing.xl }}>
         <SegmentedControl

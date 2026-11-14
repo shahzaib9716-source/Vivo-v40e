@@ -6,6 +6,7 @@ import { router } from 'expo-router';
 import { Card, Header, IconBadge, Row, Screen, SectionLabel, Text, Toggle } from '@/components/ui';
 import { useStore } from '@/state/store';
 import { spacing, useTheme } from '@/theme';
+import { SampleNote } from '@/components/SampleNote';
 
 interface Cat {
   id: string;
@@ -43,6 +44,7 @@ export default function WebFilter() {
   return (
     <Screen>
       <Header back title="Web & Content Filter" />
+      <SampleNote about="rules" />
 
       <Card style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.xl }}>
         <IconBadge name="shield" color={colors.success} size={48} />

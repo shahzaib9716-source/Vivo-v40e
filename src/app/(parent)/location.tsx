@@ -8,6 +8,7 @@ import { InlineNote } from '@/components/InlineNote';
 import { Avatar, Card, IconBadge, MockMap, Row, SectionLabel, Text } from '@/components/ui';
 import { nowLabel, updatedAgoOf, useNow, useStore } from '@/state/store';
 import { categoryColors, radius, spacing, useTheme } from '@/theme';
+import { SampleNote } from '@/components/SampleNote';
 
 // Child chips are about 34pt tall; extend the press target to 44pt.
 const CHIP_HIT_SLOP = { top: 5, bottom: 5 };
@@ -39,6 +40,7 @@ export default function Location() {
               Location
             </Text>
           </View>
+          <SampleNote about="location" style={{ marginHorizontal: spacing.xl }} />
 
           {/* Child chips */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>

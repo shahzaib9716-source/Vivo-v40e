@@ -8,6 +8,7 @@ import { IconButton, InlineConfirm } from '@/components/RuleForm';
 import { Button, Card, Header, IconBadge, Screen, SectionLabel, Text, Toggle } from '@/components/ui';
 import { useStore } from '@/state/store';
 import { categoryColors, radius, spacing, useTheme } from '@/theme';
+import { SampleNote } from '@/components/SampleNote';
 
 /** "Mia is here now", "Mia and Leo are here now" */
 function hereNow(names: string[]) {
@@ -28,6 +29,7 @@ export default function Geofences() {
   return (
     <Screen>
       <Header back title="Places & Geofences" subtitle="Get alerts on arrival and departure" />
+      <SampleNote about="location" />
 
       <View style={[styles.map, { borderColor: colors.border }]}>
         <PlaceMap height={180} label={mapLabel} markers={places.map((p) => ({ id: p.id, icon: p.icon }))} />

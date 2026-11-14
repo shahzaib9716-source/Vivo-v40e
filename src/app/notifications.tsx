@@ -4,7 +4,7 @@ import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 
 import { Button, Card, Header, IconBadge, Screen, Text } from '@/components/ui';
-import { useStore, agoOf, useNow, type Alert } from '@/state/store';
+import { alertText, useStore, agoOf, useNow, type Alert } from '@/state/store';
 import { radius, shadow, spacing, useTheme } from '@/theme';
 
 type Kind = 'location' | 'screen' | 'safety';
@@ -79,7 +79,7 @@ function openLocationTab() {
 
 export default function Notifications() {
   const { colors } = useTheme();
-  const { alerts, markAlertsRead, sosActive, clearSOS, sosChild, setActiveChildId } = useStore();
+  const { alerts, markAlertsRead, sosActive, clearSOS, sosChild, setActiveChildId, children, live: inFamily } = useStore();
   const now = useNow();
   const [filter, setFilter] = useState<Filter>('all');
 
@@ -110,7 +110,9 @@ export default function Notifications() {
   const viewLocation = () => {
     // The child the SOS came from.
     setActiveChildId(sosChild.id);
-    openLocationTab();
+    // A real family has no location to show (this version does not read it): reach the child instead.
+    if (inFamily) (router.push as any)(`/messages?childId=${sosChild.id}`);
+    else openLocationTab();
   };
 
   return (
@@ -149,6 +151,8 @@ export default function Notifications() {
       <View style={styles.list}>
         {shown.map((a) => {
           const isNew = a.unread || fresh.has(a.id);
+          // In a family, what a child's phone reported is worded here, not taken from its text.
+          const text = alertText(a, children, inFamily);
 
           if (isSOS(a)) {
             const live = a.id === liveSosId;
@@ -165,9 +169,9 @@ export default function Notifications() {
                 <View style={styles.row}>
                   <IconBadge name="alert-circle" color={colors.danger} size={44} soft={false} />
                   <View style={styles.flex}>
-                    <Text variant="title">{a.title}</Text>
+                    <Text variant="title">{text.title}</Text>
                     <Text variant="small" tone="muted">
-                      {a.body}
+                      {text.body}
                     </Text>
                   </View>
                   <View style={styles.meta}>
@@ -195,8 +199,8 @@ export default function Notifications() {
 
                 <View style={styles.sosActions}>
                   <Button
-                    label="View location"
-                    icon="map-pin"
+                    label={inFamily ? 'Message' : 'View location'}
+                    icon={inFamily ? 'message-circle' : 'map-pin'}
                     size="sm"
                     variant={live ? 'danger' : 'secondary'}
                     onPress={viewLocation}
@@ -211,11 +215,11 @@ export default function Notifications() {
           return (
             <Card key={a.id} style={isNew ? { borderColor: colors.primary + '55' } : undefined}>
               <View style={styles.row}>
-                <IconBadge name={a.icon} color={a.color} size={44} />
+                <IconBadge name={text.icon} color={text.color} size={44} />
                 <View style={styles.flex}>
-                  <Text variant="title">{a.title}</Text>
+                  <Text variant="title">{text.title}</Text>
                   <Text variant="small" tone="muted">
-                    {a.body}
+                    {text.body}
                   </Text>
                 </View>
                 <View style={styles.meta}>

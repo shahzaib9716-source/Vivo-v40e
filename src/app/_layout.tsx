@@ -77,6 +77,7 @@ function Screens({ scheme }: { scheme: 'light' | 'dark' }) {
       <Stack.Screen name="messages" />
       <Stack.Screen name="transparency" />
       <Stack.Screen name="link-device" />
+      <Stack.Screen name="about-version" />
 
       {/* The parent side: the tabs and everything reached from them. */}
       <Stack.Protected guard={parentAllowed}>

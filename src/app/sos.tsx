@@ -42,7 +42,7 @@ const noop = () => {};
 
 export default function SOS() {
   // `sosMine`: this child's own SOS. Another child's SOS does not put this screen into its sent state.
-  const { childSelf, sosMine: sosActive, triggerSOS, clearSOS } = useStore();
+  const { childSelf, sosMine: sosActive, triggerSOS, clearSOS, live } = useStore();
 
   // Measured rather than read from the window: a modal sheet is shorter than the screen, and a page
   // rendered on the server has no window to ask.
@@ -100,9 +100,9 @@ export default function SOS() {
           </Pressable>
 
           {showSent ? (
-            <SentPanel place={childSelf.place} onSafe={safe} onMessage={openMessages} />
+            <SentPanel place={childSelf.place} live={live} onSafe={safe} onMessage={openMessages} />
           ) : (
-            <HoldPanel compact={compact} onSend={send} onMessage={openMessages} />
+            <HoldPanel compact={compact} live={live} onSend={send} onMessage={openMessages} />
           )}
         </View>
       </SafeAreaView>
@@ -114,7 +114,12 @@ export default function SOS() {
  * The red screen. The SOS only goes out after the button has been held for HOLD_MS, and letting go
  * early cancels it. A timer decides when that is; the fill is only the picture of it.
  */
-function HoldPanel({ compact, onSend, onMessage }: { compact: boolean; onSend: () => void; onMessage: () => void }) {
+/**
+ * `live`: this phone is in a real family. There the wording promises only what happens: the alert
+ * appears in the family's Haven app. No location is read or shared, nobody is called, and a parent
+ * sees the alert when Haven is open on their phone.
+ */
+function HoldPanel({ compact, live, onSend, onMessage }: { compact: boolean; live: boolean; onSend: () => void; onMessage: () => void }) {
   const [phase, setPhase] = useState<Phase>('idle');
   const progress = useSharedValue(0);
 
@@ -217,7 +222,9 @@ function HoldPanel({ compact, onSend, onMessage }: { compact: boolean; onSend: (
           Emergency SOS
         </Text>
         <Text variant="body" color={WHITE} center style={styles.lead}>
-          This alerts your family right away and shares your live location with them.
+          {live
+            ? 'This shows an SOS alert in your family’s Haven app. It does not share your location or call anyone. If you are in danger, call the emergency number.'
+            : 'This alerts your family right away and shares your live location with them.'}
         </Text>
 
         <Pressable
@@ -277,7 +284,7 @@ function HoldFace({ color }: { color: string }) {
 }
 
 /** The green screen, shown once the SOS is out. */
-function SentPanel({ place, onSafe, onMessage }: { place: string; onSafe: () => void; onMessage: () => void }) {
+function SentPanel({ place, live, onSafe, onMessage }: { place: string; live: boolean; onSafe: () => void; onMessage: () => void }) {
   const pop = useSharedValue(0);
 
   useEffect(() => {
@@ -299,14 +306,25 @@ function SentPanel({ place, onSafe, onMessage }: { place: string; onSafe: () => 
           SOS sent
         </Text>
         <Text variant="body" color={WHITE} center style={styles.lead}>
-          Your family has been alerted and can see your live location. Stay where you are if it's safe.
+          {live
+            ? 'Your family sees this as soon as Haven is open on their phone. If you are in danger, call them or the emergency number now.'
+            : "Your family has been alerted and can see your live location. Stay where you are if it's safe."}
         </Text>
-        <View style={styles.chip}>
-          <Feather name="map-pin" size={13} color={WHITE} />
-          <Text variant="smallStrong" color={WHITE}>
-            Sharing your location near {place}
-          </Text>
-        </View>
+        {live ? (
+          <View style={styles.chip}>
+            <Feather name="info" size={13} color={WHITE} />
+            <Text variant="smallStrong" color={WHITE}>
+              Your location is not shared
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.chip}>
+            <Feather name="map-pin" size={13} color={WHITE} />
+            <Text variant="smallStrong" color={WHITE}>
+              Sharing your location near {place}
+            </Text>
+          </View>
+        )}
       </View>
 
       <View style={styles.footer}>

@@ -5,6 +5,7 @@ import { Feather } from '@expo/vector-icons';
 import { InlineNote } from '@/components/InlineNote';
 import { Button, Card, Header, IconBadge, Screen, SectionLabel, Text } from '@/components/ui';
 import { spacing, useTheme } from '@/theme';
+import { SampleNote } from '@/components/SampleNote';
 
 interface Routine {
   id: string;
@@ -31,6 +32,7 @@ export default function Routines() {
   return (
     <Screen>
       <Header back title="Routines & Focus" subtitle="One tap to change the rules" />
+      <SampleNote about="rules" />
 
       <View
         accessibilityLiveRegion="polite"

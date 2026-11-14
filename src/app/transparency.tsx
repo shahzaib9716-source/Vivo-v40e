@@ -14,6 +14,27 @@ const SHARED = [
   { icon: 'battery', label: 'Battery level', detail: 'So your family knows if your device is low', parentDetail: 'So you know if their device is running low' },
 ] as const;
 
+/**
+ * A real family: exactly what travels between the phones in this version. It reads nothing from the
+ * phone itself (no location, no usage, no battery), so those are listed as not shared.
+ */
+const LIVE_SHARED = [
+  { icon: 'send', label: 'Requests', detail: 'When you ask for more time or to unlock an app', parentDetail: 'When your child asks for more time or to unlock an app' },
+  { icon: 'check-circle', label: 'Check-ins', detail: 'The time you tap “Check in”. Not where you are', parentDetail: 'The time your child taps “Check in”. Not where they are' },
+  { icon: 'message-circle', label: 'Messages in Haven', detail: 'The chat between you and your parent in this app', parentDetail: 'The chat between you and your child in this app' },
+  { icon: 'alert-circle', label: 'SOS', detail: 'When you send an SOS and when you say you are safe', parentDetail: 'When your child sends an SOS and when it is cleared' },
+  { icon: 'award', label: 'Tasks', detail: 'The tasks you tick off', parentDetail: 'The tasks your child ticks off' },
+  { icon: 'smartphone', label: 'This phone', detail: 'Its name, and when Haven was last open on it', parentDetail: 'Each phone’s name, and when Haven was last open on it' },
+] as const;
+
+const LIVE_NOT_SHARED = [
+  { label: 'Your location', parentLabel: 'Their location', detail: 'This version of Haven does not read where the phone is', parentDetail: 'This version of Haven does not read where a phone is' },
+  { label: 'Screen time and apps', parentLabel: 'Screen time and apps', detail: 'Haven does not measure what you use. Limits are agreements, shown here', parentDetail: 'Haven does not measure use or lock the phone. Limits are agreements, shown on their phone' },
+  { label: 'Other messages, calls and photos', parentLabel: 'Other messages, calls and photos', detail: 'Haven does not read texts, chats, calls or your camera roll', parentDetail: 'Haven does not read texts, chats, calls or the camera roll' },
+  { label: 'Browsing and what you watch', parentLabel: 'Browsing and what they watch', detail: 'Those parent screens are previews with example data only', parentDetail: 'Those screens are previews with example data only' },
+  { label: 'Hidden tracking', parentLabel: 'Hidden tracking', detail: 'Nothing runs secretly — this screen shows it all', parentDetail: 'Nothing runs secretly. Your child sees this same list' },
+] as const;
+
 const NOT_SHARED = [
   { label: 'The content of your messages', parentLabel: 'The content of their messages', detail: 'Haven does not read your texts or chats', parentDetail: 'Haven does not read texts or chats' },
   { label: 'Your photos', parentLabel: 'Their photos', detail: 'Your camera roll stays private', parentDetail: 'The camera roll stays private' },
@@ -23,9 +44,11 @@ const NOT_SHARED = [
 
 export default function Transparency() {
   const { colors } = useTheme();
-  const { role } = useStore();
+  const { role, live } = useStore();
   const { as } = useLocalSearchParams<{ as?: string }>();
   const parent = as === 'parent' || role === 'parent';
+  const shared = live ? LIVE_SHARED : SHARED;
+  const notShared = live ? LIVE_NOT_SHARED : NOT_SHARED;
   return (
     <Screen>
       <Header back title="What's shared" subtitle="Haven is built on transparency" />
@@ -42,7 +65,7 @@ export default function Transparency() {
 
       <SectionLabel>{parent ? 'You can see' : 'Your family can see'}</SectionLabel>
       <Card padded={false} style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.xl }}>
-        {SHARED.map((s) => (
+        {shared.map((s) => (
           <View key={s.label} accessible accessibilityLabel={`Shared: ${s.label}. ${parent ? s.parentDetail : s.detail}`} style={styles.row}>
             <View style={[styles.icon, { backgroundColor: colors.primarySoft }]}>
               <Feather name={s.icon} size={18} color={colors.primary} />
@@ -60,7 +83,7 @@ export default function Transparency() {
 
       <SectionLabel>{parent ? 'You cannot see' : 'Your family cannot see'}</SectionLabel>
       <Card padded={false} style={{ paddingHorizontal: spacing.lg }}>
-        {NOT_SHARED.map((s) => (
+        {notShared.map((s) => (
           <View key={s.label} accessible accessibilityLabel={`Not shared: ${parent ? s.parentLabel : s.label}. ${parent ? s.parentDetail : s.detail}`} style={styles.row}>
             <View style={[styles.icon, { backgroundColor: colors.surfaceSunken }]}>
               <Feather name="lock" size={18} color={colors.textMuted} />

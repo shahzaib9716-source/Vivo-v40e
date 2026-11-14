@@ -5,6 +5,7 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Card, Chip, Header, Screen, Text, Toggle } from '@/components/ui';
 import { ManagedApp, useStore, fmtDuration } from '@/state/store';
 import { radius, spacing, useTheme } from '@/theme';
+import { SampleNote } from '@/components/SampleNote';
 
 const FILTERS = ['All', 'Social', 'Games', 'Video', 'Messaging', 'Education'] as const;
 
@@ -23,6 +24,7 @@ export default function AppLimits() {
   return (
     <Screen>
       <Header back title="App Limits" subtitle={`${activeChild.apps.length} apps on ${activeChild.deviceName}`} />
+      <SampleNote about="usage" />
 
       <ScrollView
         horizontal

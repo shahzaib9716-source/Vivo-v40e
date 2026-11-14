@@ -7,7 +7,8 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar, Button, Card, IconBadge, ProgressRing, Text } from '@/components/ui';
-import { useStore, fmtDuration, agoOf, timeOf, useNow } from '@/state/store';
+import { useStore, alertText, fmtDuration, agoOf, requestTitle, timeOf, updatedAgoOf, useNow } from '@/state/store';
+import { useLink } from '@/sync/link';
 import { categoryColors, radius, shadow, spacing, useTheme } from '@/theme';
 
 /** How many requests show before "Show all". */
@@ -41,7 +42,10 @@ export default function Dashboard() {
     sosActive,
     clearSOS,
   } = useStore();
+  const link = useLink();
   const [showAllRequests, setShowAllRequests] = useState(false);
+  // A build with a server, on a device that is not in a family yet: everything below is sample data.
+  const needsSetup = link.configured && link.role === null && link.status !== 'connecting';
 
   const pending = requests.filter((r) => r.status === 'pending');
   const visibleRequests = showAllRequests ? pending : pending.slice(0, REQUEST_PREVIEW);
@@ -59,11 +63,14 @@ export default function Dashboard() {
   const sosName = sosChild.name.split(' ')[0];
   const sosAlert = alerts.find((a) => (a.kind === 'sos' || /^sos\b/i.test(a.title)) && (a.childId == null || a.childId === sosChild.id));
   // A real family's phone has not said where it is, so no place is named for it.
-  const sosDetail = sosAlert?.body ?? (live ? 'Raised just now' : `Live location shared · near ${sosChild.place}`);
+  const sosDetail = (sosAlert ? alertText(sosAlert, children, live).body : null) ?? (live ? 'Raised just now' : `Live location shared · near ${sosChild.place}`);
 
+  // In a real family there is no location to show (this version does not read it): the useful
+  // next step is to reach the child.
   const viewSosLocation = () => {
     setActiveChildId(sosChild.id);
-    (router.push as any)('/(parent)/location');
+    if (live) (router.push as any)(`/messages?childId=${sosChild.id}`);
+    else (router.push as any)('/(parent)/location');
   };
 
   // After a request is resolved its card leaves and the next one slides into the same spot, so a
@@ -128,9 +135,9 @@ export default function Dashboard() {
                     onPress={viewSosLocation}
                     accessibilityRole="button"
                     style={({ pressed }) => [styles.sosBtn, styles.sosBtnSolid, pressed && styles.pressed]}>
-                    <Feather name="map-pin" size={16} color={SOS_INK} />
+                    <Feather name={live ? 'message-circle' : 'map-pin'} size={16} color={SOS_INK} />
                     <Text variant="smallStrong" color={SOS_INK}>
-                      View location
+                      {live ? `Message ${sosName}` : 'View location'}
                     </Text>
                   </Pressable>
                   <Pressable
@@ -145,6 +152,22 @@ export default function Dashboard() {
                 </View>
               </LinearGradient>
             </Animated.View>
+          )}
+
+          {/* Not in a family yet: say so, and offer the real setup. */}
+          {needsSetup && (
+            <View style={styles.setupWrap}>
+              <Card onPress={() => (router.push as any)('/account')} style={styles.setup}>
+                <IconBadge name="user-plus" color={colors.primary} size={44} />
+                <View style={styles.flex}>
+                  <Text variant="title">{link.status === 'needs-family' ? 'Create your family' : 'Set up your family'}</Text>
+                  <Text variant="small" tone="muted">
+                    You are looking at sample data. {link.status === 'needs-family' ? 'Finish setting up to see your own family here.' : 'Sign in or create your parent account to start.'}
+                  </Text>
+                </View>
+                <Feather name="chevron-right" size={20} color={colors.textFaint} />
+              </Card>
+            </View>
           )}
 
           {/* Child selector */}
@@ -194,23 +217,32 @@ export default function Dashboard() {
                   <View style={styles.heroMeta}>
                     <Feather name="smartphone" size={13} color="rgba(255,255,255,0.8)" />
                     <Text variant="small" color="rgba(255,255,255,0.85)">
-                      {activeChild.deviceName}
+                      {activeChild.deviceName || (live ? 'No phone linked yet' : '')}
                     </Text>
                   </View>
-                  <View style={styles.chips}>
-                    <HeroChip icon="battery" label={`${activeChild.battery}%`} />
-                    <HeroChip icon="map-pin" label={activeChild.place} />
-                    <HeroChip icon={activeChild.bedtime ? 'moon' : 'circle'} label={activeChild.bedtime ? 'Paused' : 'Active'} />
-                  </View>
+                  {live ? (
+                    // A real family: only what the phones really report. Battery, place and time
+                    // used are not read by this version, so they are not shown as if they were.
+                    <View style={styles.chips}>
+                      <HeroChip icon="check-circle" label={activeChild.checkInAt != null ? `Checked in ${updatedAgoOf(activeChild, now)}` : 'No check-in yet'} />
+                      <HeroChip icon={activeChild.bedtime ? 'moon' : 'circle'} label={activeChild.bedtime ? 'Paused' : 'Active'} />
+                    </View>
+                  ) : (
+                    <View style={styles.chips}>
+                      <HeroChip icon="battery" label={`${activeChild.battery}%`} />
+                      <HeroChip icon="map-pin" label={activeChild.place} />
+                      <HeroChip icon={activeChild.bedtime ? 'moon' : 'circle'} label={activeChild.bedtime ? 'Paused' : 'Active'} />
+                    </View>
+                  )}
                 </View>
                 <ProgressRing
-                  progress={used}
+                  progress={live ? 1 : used}
                   size={104}
                   stroke={11}
                   color="#FFFFFF"
                   track="rgba(255,255,255,0.25)"
-                  label={fmtDuration(left)}
-                  sublabel="left"
+                  label={fmtDuration(live ? activeChild.limitMin : left)}
+                  sublabel={live ? 'a day' : 'left'}
                   centerColor="#FFFFFF"
                 />
               </View>
@@ -227,7 +259,11 @@ export default function Dashboard() {
 
           {/* Stat row */}
           <View style={styles.statRow}>
-            <MiniStat value={fmtDuration(activeChild.usedMin)} caption="Used today" color={colors.primary} icon="clock" />
+            {live ? (
+              <MiniStat value={fmtDuration(activeChild.limitMin)} caption="Daily limit" color={colors.primary} icon="clock" />
+            ) : (
+              <MiniStat value={fmtDuration(activeChild.usedMin)} caption="Used today" color={colors.primary} icon="clock" />
+            )}
             <MiniStat value={`${blocked}`} caption="Apps blocked" color={colors.accent} icon="slash" />
             <MiniStat value={`${pending.length}`} caption="Requests" color={colors.warning} icon="inbox" />
           </View>
@@ -282,7 +318,7 @@ export default function Dashboard() {
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
                       {kid && <Avatar name={kid.name} size={40} />}
                       <View style={{ flex: 1 }}>
-                        <Text variant="title">{r.label}</Text>
+                        <Text variant="title">{requestTitle(r, kid)}</Text>
                         <Text variant="small" tone="muted">
                           {kid?.name.split(' ')[0]} · {agoOf(r, now)}
                         </Text>
@@ -396,6 +432,8 @@ const styles = StyleSheet.create({
   sosBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 44, borderRadius: radius.md },
   sosBtnSolid: { backgroundColor: '#FFFFFF' },
   sosBtnGhost: { backgroundColor: 'rgba(255,255,255,0.2)' },
+  setupWrap: { paddingHorizontal: spacing.xl, paddingBottom: spacing.lg },
+  setup: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   kids: { paddingHorizontal: spacing.xl, gap: spacing.lg, paddingBottom: spacing.lg },
   kid: { alignItems: 'center', gap: 6 },
   kidAvatar: { padding: 2, borderRadius: 999, borderWidth: 2, borderColor: 'transparent' },
