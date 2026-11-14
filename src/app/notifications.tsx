@@ -4,7 +4,7 @@ import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 
 import { Button, Card, Header, IconBadge, Screen, Text } from '@/components/ui';
-import { useStore, type Alert } from '@/state/store';
+import { useStore, agoOf, useNow, type Alert } from '@/state/store';
 import { radius, shadow, spacing, useTheme } from '@/theme';
 
 type Kind = 'location' | 'screen' | 'safety';
@@ -34,7 +34,7 @@ const KIND_BY_ICON = new Map<string, Kind>([
   ['lock', 'safety'],
 ]);
 
-const isSOS = (a: Alert) => /^sos\b/i.test(a.title);
+const isSOS = (a: Alert) => a.kind === 'sos' || /^sos\b/i.test(a.title);
 
 /** Sorts an alert into a filter by its icon first, then by the wording of its title. */
 function kindOf(a: Alert): Kind | null {
@@ -79,7 +79,8 @@ function openLocationTab() {
 
 export default function Notifications() {
   const { colors } = useTheme();
-  const { alerts, markAlertsRead, sosActive, clearSOS, childSelf, setActiveChildId } = useStore();
+  const { alerts, markAlertsRead, sosActive, clearSOS, sosChild, setActiveChildId } = useStore();
+  const now = useNow();
   const [filter, setFilter] = useState<Filter>('all');
 
   // Opening the screen marks everything as read, which clears the bell on the dashboard. The dots
@@ -107,8 +108,8 @@ export default function Notifications() {
   const current = FILTERS.find((f) => f.key === filter) ?? FILTERS[0];
 
   const viewLocation = () => {
-    // An SOS always comes from the child using the child app.
-    setActiveChildId(childSelf.id);
+    // The child the SOS came from.
+    setActiveChildId(sosChild.id);
     openLocationTab();
   };
 
@@ -171,7 +172,7 @@ export default function Notifications() {
                   </View>
                   <View style={styles.meta}>
                     <Text variant="tiny" tone="muted">
-                      {a.ago}
+                      {agoOf(a, now, true)}
                     </Text>
                     {isNew && <View style={[styles.dot, { backgroundColor: colors.danger }]} />}
                   </View>
@@ -219,7 +220,7 @@ export default function Notifications() {
                 </View>
                 <View style={styles.meta}>
                   <Text variant="tiny" tone="faint">
-                    {a.ago}
+                    {agoOf(a, now, true)}
                   </Text>
                   {isNew && <View style={[styles.dot, { backgroundColor: colors.primary }]} />}
                 </View>

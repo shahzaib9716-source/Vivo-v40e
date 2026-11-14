@@ -83,7 +83,8 @@ const FIREBASE_KEYS = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'me
  * The backend that links two phones (see docs/BACKEND.md). The Firebase web config is read from
  * the HAVEN_FIREBASE_CONFIG environment variable (a JSON string) or from firebase.config.json
  * next to this file. With neither, the build has no backend and linking is switched off.
- * HAVEN_FIRESTORE_EMULATOR ("host:port") points the app at a local Firestore emulator for tests.
+ * HAVEN_FIRESTORE_EMULATOR and HAVEN_AUTH_EMULATOR ("host:port") point the app at local Firebase
+ * emulators for tests.
  */
 function readFirebaseConfig() {
   let raw = null;
@@ -106,13 +107,14 @@ function readFirebaseConfig() {
 function withBackend(config) {
   const firebase = readFirebaseConfig();
   const firestoreEmulator = process.env.HAVEN_FIRESTORE_EMULATOR || null;
-  if (!firebase && !firestoreEmulator) return config;
-  const next = { ...config, extra: { ...config.extra, firebase, firestoreEmulator } };
-  if (!firestoreEmulator) return next;
-  // A local emulator speaks plain HTTP, which Android refuses by default. Allow it to that one
-  // host in test builds that name an emulator, and only in those.
-  const host = firestoreEmulator.replace(/:\d+$/, '');
-  return { ...next, plugins: [...(next.plugins ?? []), ['./plugins/withLocalEmulatorNetwork', { host }]] };
+  const authEmulator = process.env.HAVEN_AUTH_EMULATOR || null;
+  if (!firebase && !firestoreEmulator && !authEmulator) return config;
+  const next = { ...config, extra: { ...config.extra, firebase, firestoreEmulator, authEmulator } };
+  // Local emulators speak plain HTTP, which Android refuses by default. Allow it to their host
+  // in test builds that name an emulator, and only in those.
+  const hosts = [...new Set([firestoreEmulator, authEmulator].filter(Boolean).map((value) => value.replace(/:\d+$/, '')))];
+  if (hosts.length === 0) return next;
+  return { ...next, plugins: [...(next.plugins ?? []), ...hosts.map((host) => ['./plugins/withLocalEmulatorNetwork', { host }])] };
 }
 
 /** @param {import('expo/config').ConfigContext} context */

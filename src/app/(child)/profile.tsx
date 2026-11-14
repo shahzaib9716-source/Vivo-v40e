@@ -27,7 +27,7 @@ const HELP = [
 
 export default function ChildProfileTab() {
   const { colors } = useTheme();
-  const { childSelf, setRole, sosActive } = useStore();
+  const { childSelf, setRole, sosMine: sosActive } = useStore();
   const link = useLink();
   const previewNote = link.configured ? 'Opens the other side on this phone. To use two phones, link them under “Family link”.' : NO_SERVER_NOTE;
   const [helpOpen, setHelpOpen] = useState(false);

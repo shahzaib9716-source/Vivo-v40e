@@ -27,14 +27,19 @@ rules_version = '2';
 //   families/{fid}/places|schedules|sites|tasks/{id}   family rules (parent-owned)
 //   families/{fid}/signals/sos                   the SOS flag
 //
-// See docs/SECURITY.md for the reasoning, the tests and how to publish this file.
+// See docs/SECURITY.md for the reasoning and how to publish this file. Every rule below is
+// covered by the tests in tests/rules (npm run test:rules): change a rule and its tests together.
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
     // ------------------------------------------------------------------------------------------
     // EDIT BEFORE PUBLISHING: the email addresses that may create a family in this project.
-    // Lower case, exactly as typed when signing up. Everyone else can only join by pairing code.
+    // Everyone else can only join by pairing code.
+    // Write them in lower case: Firebase Auth lower-cases the address of an account, and the
+    // comparison here is exact. Keep the form  return ['a@b.c', 'd@e.f'];  on one line: the tests
+    // (tests/rules) put their own test address in its place, so editing the list does not break
+    // them, and one of them checks that every entry is lower case.
     // ------------------------------------------------------------------------------------------
     function ownerEmails() {
       return ['owner@example.com'];
@@ -73,16 +78,21 @@ service cloud.firestore {
       return signedIn() && exists(memberPath(fid, request.auth.uid));
     }
 
+    // The caller's own member record. For an account that is not in the family there is no such
+    // record: reading it is an error, and a rule that hits an error refuses. So isParent and
+    // isChild below fail closed for outsiders without a separate exists() call. That keeps every
+    // request at one lookup of the member record (Firestore allows 10 lookups per write and 20
+    // per batch; see tests/rules/07-access-call-budget.test.mjs).
     function myRecord(fid) {
       return get(memberPath(fid, request.auth.uid)).data;
     }
 
     function isParent(fid) {
-      return isMember(fid) && myRecord(fid).role == 'parent';
+      return signedIn() && myRecord(fid).role == 'parent';
     }
 
     function isChild(fid) {
-      return isMember(fid) && myRecord(fid).role == 'child';
+      return signedIn() && myRecord(fid).role == 'child';
     }
 
     // The device enrolled as this particular child.
@@ -144,6 +154,24 @@ service cloud.firestore {
     // approve: a parent of the family, in the same batch that creates the member record
     // Codes cannot be listed, and can be read only by the family's parents and by the device that
     // claimed them. A wrong guess reveals nothing: the claim is simply refused.
+    //
+    // How long a code lasts is measured on the server's clock: 15 minutes from createdAt, which is
+    // always the server's time. expiresAt is written by the parent's phone (the app shows a
+    // countdown to it). A phone clock is rarely exact, so expiresAt may sit up to 5 minutes later
+    // than the server's "15 minutes from now" when the code is made. It can end a code early but
+    // never keep it alive: a code stops working 15 minutes after the server stored it, whatever
+    // expiresAt says.
+
+    function codeOpen(pairing) {
+      return request.time < pairing.createdAt + duration.value(15, 'm')
+        && request.time < pairing.expiresAt;
+    }
+
+    // A claim that came in just before the end can still be approved for 15 more minutes.
+    function codeApprovable(pairing) {
+      return request.time < pairing.createdAt + duration.value(30, 'm')
+        && request.time < pairing.expiresAt + duration.value(15, 'm');
+    }
 
     match /pairing/{code} {
       allow get: if signedIn()
@@ -162,7 +190,8 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time
         && request.resource.data.expiresAt is timestamp
         && request.resource.data.expiresAt > request.time
-        && request.resource.data.expiresAt <= request.time + duration.value(15, 'm')
+        // 15 minutes, plus 5 for a phone whose clock runs fast (see codeOpen above)
+        && request.resource.data.expiresAt <= request.time + duration.value(20, 'm')
         && request.resource.data.claimedBy == null
         && request.resource.data.claimName == null
         && request.resource.data.claimPlatform == null
@@ -173,7 +202,7 @@ service cloud.firestore {
       allow update: if signedIn()
         && resource.data.claimedBy == null
         && resource.data.approved == false
-        && request.time < resource.data.expiresAt
+        && codeOpen(resource.data)
         && onlyChanged(['claimedBy', 'claimName', 'claimPlatform', 'claimedAt'])
         && request.resource.data.claimedBy == request.auth.uid
         && nonEmptyText(request.resource.data.claimName, 40)
@@ -187,7 +216,7 @@ service cloud.firestore {
       allow update: if isParent(resource.data.familyId)
         && resource.data.claimedBy != null
         && resource.data.approved == false
-        && request.time < resource.data.expiresAt + duration.value(15, 'm')
+        && codeApprovable(resource.data)
         && onlyChanged(['approved'])
         && request.resource.data.approved == true
         && existsAfter(memberPath(resource.data.familyId, resource.data.claimedBy))
@@ -246,7 +275,7 @@ service cloud.firestore {
           && pairing.claimName == data.name
           && pairing.claimPlatform == data.platform
           && pairing.approved == false
-          && request.time < pairing.expiresAt + duration.value(15, 'm')
+          && codeApprovable(pairing)
           && getAfter(codePath).data.approved == true;
       }
 
@@ -286,9 +315,11 @@ service cloud.firestore {
                 : (request.resource.data.childId is string && childExists(fid, request.resource.data.childId)));
 
         // A parent removes a device, or a device leaves by itself. The founder always stays.
-        allow delete: if signedIn()
+        // Only a member can do either, so an outsider cannot use this to find out whether a
+        // family id exists.
+        allow delete: if isMember(fid)
           && uid != get(familyPath(fid)).data.owner
-          && (isParent(fid) || request.auth.uid == uid);
+          && (request.auth.uid == uid || isParent(fid));
       }
 
       // ---- devices/{deviceId}: "last seen" per installed app --------------------------------
@@ -306,7 +337,7 @@ service cloud.firestore {
           && platformOk(request.resource.data.platform)
           && request.resource.data.lastSeenAt == request.time;
 
-        allow delete: if isParent(fid) || (signedIn() && resource.data.uid == request.auth.uid);
+        allow delete: if (signedIn() && resource.data.uid == request.auth.uid) || isParent(fid);
       }
 
       // ---- children/{cid}: profile, limits and app rules. Parent-owned. ----------------------

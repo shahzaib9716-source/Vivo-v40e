@@ -7,7 +7,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar, Button, Card, IconBadge, ProgressRing, Text } from '@/components/ui';
-import { useStore, fmtDuration } from '@/state/store';
+import { useStore, fmtDuration, agoOf, timeOf, useNow } from '@/state/store';
 import { categoryColors, radius, shadow, spacing, useTheme } from '@/theme';
 
 /** How many requests show before "Show all". */
@@ -29,7 +29,8 @@ export default function Dashboard() {
     activeChild,
     activeChildId,
     setActiveChildId,
-    childSelf,
+    sosChild,
+    live,
     requests,
     alerts,
     messages,
@@ -53,13 +54,15 @@ export default function Dashboard() {
   const thread = messages.filter((m) => m.childId === activeChildId);
   const lastMessage = thread.length > 0 ? thread[thread.length - 1] : null;
 
-  // An SOS always comes from the child using the child app. Alerts are newest first.
-  const sosName = childSelf.name.split(' ')[0];
-  const sosAlert = alerts.find((a) => /^sos\b/i.test(a.title));
-  const sosDetail = sosAlert?.body ?? `Live location shared · near ${childSelf.place}`;
+  // The store knows which child raised the SOS. Alerts are newest first.
+  const now = useNow();
+  const sosName = sosChild.name.split(' ')[0];
+  const sosAlert = alerts.find((a) => (a.kind === 'sos' || /^sos\b/i.test(a.title)) && (a.childId == null || a.childId === sosChild.id));
+  // A real family's phone has not said where it is, so no place is named for it.
+  const sosDetail = sosAlert?.body ?? (live ? 'Raised just now' : `Live location shared · near ${sosChild.place}`);
 
   const viewSosLocation = () => {
-    setActiveChildId(childSelf.id);
+    setActiveChildId(sosChild.id);
     (router.push as any)('/(parent)/location');
   };
 
@@ -245,7 +248,7 @@ export default function Dashboard() {
               </View>
               {lastMessage && (
                 <Text variant="tiny" tone="faint">
-                  {lastMessage.time}
+                  {timeOf(lastMessage)}
                 </Text>
               )}
               <Feather name="chevron-right" size={20} color={colors.textFaint} />
@@ -281,7 +284,7 @@ export default function Dashboard() {
                       <View style={{ flex: 1 }}>
                         <Text variant="title">{r.label}</Text>
                         <Text variant="small" tone="muted">
-                          {kid?.name.split(' ')[0]} · {r.ago}
+                          {kid?.name.split(' ')[0]} · {agoOf(r, now)}
                         </Text>
                       </View>
                     </View>

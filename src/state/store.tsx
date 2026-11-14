@@ -2,8 +2,14 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { AppState, Platform, View, useColorScheme } from 'react-native';
 
 import { APP_VARIANT, SPLASH_BG } from '@/config/variant';
-import { loadState, resolvedRequestIds, serialiseState, STATE_KEY, type PersistedState } from './persist';
+import { newId } from '@/sync/ids';
+import { agoLabel, clockLabel } from '@/sync/labels';
+import { rebaseList } from '@/sync/reconcile';
+import { loadState, resolvedRequestIds, serialiseState, STATE_KEY, type PersistedState, type SliceKey } from './persist';
 import { readKey, removeKey, writeKey } from './storage';
+
+export { newId } from '@/sync/ids';
+export { agoLabel, clockLabel } from '@/sync/labels';
 
 export type AppCategory = 'social' | 'games' | 'video' | 'education' | 'music' | 'web' | 'messaging' | 'creativity';
 
@@ -30,7 +36,10 @@ export interface Child {
   limitMin: number;
   place: string;
   placeIcon: string;
+  /** Shown when there is no `checkInAt` (the sample data). */
   updatedAgo: string;
+  /** When this child last checked in, in milliseconds. Set by a check-in; in a linked family it is the server's time. */
+  checkInAt?: number;
   apps: ManagedApp[];
   weekly: number[]; // minutes per weekday, Mon..Sun
 }
@@ -43,7 +52,10 @@ export interface FamilyRequest {
   detail: string;
   minutes?: number;
   appId?: string;
+  /** Shown when there is no `at` (the sample data). */
   ago: string;
+  /** When it was asked, in milliseconds: the device's clock at first, the server's time once sent. */
+  at?: number;
   status: 'pending' | 'approved' | 'denied';
 }
 
@@ -53,8 +65,15 @@ export interface Alert {
   color: string;
   title: string;
   body: string;
+  /** Shown when there is no `at` (the sample data). */
   ago: string;
   unread: boolean;
+  /** When it happened, in milliseconds: the device's clock at first, the server's time once sent. */
+  at?: number;
+  /** What it is about: 'checkin', 'sos', 'request', 'left', or anything a parent device adds. */
+  kind?: string;
+  /** The child it is about, when it is about one. */
+  childId?: string | null;
 }
 
 export interface Place {
@@ -160,7 +179,10 @@ export interface ChatMessage {
   childId: string;
   from: 'parent' | 'child';
   text: string;
+  /** Shown when there is no `at` (the sample data). */
   time: string;
+  /** When it was sent, in milliseconds: the device's clock at first, the server's time once sent. */
+  at?: number;
 }
 
 export interface SiteRule {
@@ -196,13 +218,89 @@ const initialSites: SiteRule[] = [
 ];
 
 export function nowLabel() {
-  const d = new Date();
-  let h = d.getHours();
-  const m = d.getMinutes().toString().padStart(2, '0');
-  const ap = h >= 12 ? 'PM' : 'AM';
-  h = h % 12 || 12;
-  return `${h}:${m} ${ap}`;
+  return clockLabel(Date.now());
 }
+
+// --- Labels for items that may carry a real time ----------------------------------------------
+// An item with `at` (or a child with `checkInAt`) is drawn from that time, so the label is always
+// fresh. Without one, the stored label is shown as it is. Pass `now` from `useNow()` so a screen that
+// stays open keeps its labels moving.
+
+/** "5m ago" for a request ("just now" under a minute). With `short`: "5m" / "now", as the alert list shows. */
+export function agoOf(item: { at?: number; ago: string }, now?: number, short = false): string {
+  return item.at != null ? agoLabel(item.at, now, short) : item.ago;
+}
+
+/** The clock time of a chat message, "3:42 PM". */
+export function timeOf(message: { at?: number; time: string }): string {
+  return message.at != null ? clockLabel(message.at) : message.time;
+}
+
+/** When a child last checked in, "5m ago". */
+export function updatedAgoOf(child: { checkInAt?: number; updatedAgo: string }, now?: number): string {
+  return child.checkInAt != null ? agoLabel(child.checkInAt, now) : child.updatedAgo;
+}
+
+/** The current time, refreshed every `everyMs`, for labels such as "5m ago" on a screen that stays open. */
+export function useNow(everyMs = 30_000): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), everyMs);
+    return () => clearInterval(timer);
+  }, [everyMs]);
+  return now;
+}
+
+// --- What a new family starts with -------------------------------------------------------------
+// The link layer seeds a new family with these (see SPEC 3.1): one child built by `makeChild`, the
+// sample places, schedules and tasks, and nothing else.
+
+export const SEED_PLACES: readonly Place[] = initialPlaces;
+export const SEED_SCHEDULES: readonly Schedule[] = initialSchedules;
+export const SEED_TASKS: readonly RewardTask[] = initialTasks;
+
+/** What `updatedAgo` says for a child that has not checked in yet. */
+export const NEVER_CHECKED_IN = 'never';
+
+/**
+ * A new child record: the sample app list and numbers of the first sample child, no device name and
+ * no check-in. `age` is kept within what the server accepts (0 to 25).
+ */
+export function makeChild(id: string, name: string, age?: number): Child {
+  const template = initialChildren[0];
+  const years = age == null || !Number.isFinite(age) ? template.age : Math.min(25, Math.max(0, Math.round(age)));
+  return {
+    ...template,
+    id,
+    name,
+    age: years,
+    deviceName: '',
+    updatedAgo: NEVER_CHECKED_IN,
+    apps: mkApps(0),
+    weekly: [...template.weekly],
+  };
+}
+
+/** Stands in for "the child" on the rare linked device whose family has no child yet. Never stored. */
+const BLANK_CHILD: Child = { ...makeChild('', 'Child'), usedMin: 0, online: false, place: '', placeIcon: 'map-marker', apps: [], weekly: [0, 0, 0, 0, 0, 0, 0] };
+
+const sameJson = (a: unknown, b: unknown) => a === b || JSON.stringify(a) === JSON.stringify(b);
+
+/**
+ * A state updater for a slice that arrives from the link layer.
+ *
+ * `next` was worked out from `from`. Normally the slice still is `from` and simply becomes `next`.
+ * If something was changed here in the meantime (a tap whose update is queued ahead of this one),
+ * that change is replayed on top of `next` instead of being overwritten; the link layer sees the
+ * result as a local change and sends it. A slice that ends up saying what it already said keeps its
+ * array, so applying the same data twice changes nothing.
+ */
+const takeRemote =
+  <T extends { id: string }>(next: readonly T[], from: readonly T[] | undefined) =>
+  (prev: T[]): T[] => {
+    const target = from === undefined || prev === from ? next : rebaseList(from, next, prev);
+    return sameJson(prev, target) ? prev : (target as T[]);
+  };
 
 const ONBOARDED_KEY = 'haven.onboarded';
 
@@ -218,10 +316,45 @@ const SEED: PersistedState = {
   messages: initialMessages,
   sites: initialSites,
   sosActive: false,
+  sosChildId: null,
 };
+
+/** The slices the link layer may replace. `activeChildId` is this device's own choice. */
+export type RemotePatch = {
+  [K in Exclude<keyof PersistedState, 'activeChildId'>]?: PersistedState[K] extends (infer T)[] ? readonly T[] : PersistedState[K];
+};
+
+export interface ApplyRemoteOptions {
+  /**
+   * The slices the patch was worked out from: the `syncSnapshot` the link layer reconciled. With
+   * it, a change made on this device after that snapshot was taken is kept (replayed on top of the
+   * patch) rather than overwritten. Without it the patch replaces the slices as they are.
+   */
+  basis?: RemotePatch;
+  /**
+   * Write the state (and the record) to storage as soon as it has been applied instead of after
+   * the usual short pause. For a patch that carries news from the server which a kill must not
+   * lose: a write of ours was confirmed.
+   */
+  saveNow?: boolean;
+}
+
+/** What the link layer saved with the state last time, as read at startup. */
+export interface StoredSyncRecord {
+  /** Exactly what was passed to `applyRemote(patch, record)`; validate it before use. */
+  record: unknown;
+  /**
+   * Slices whose saved copy could not be used and came back as sample data. They do not match the
+   * record: treat them as not authoritative (adopt the server's copy, write nothing from them).
+   */
+  untrusted: readonly SliceKey[];
+}
 
 /** How long the state has to stay unchanged before it is written to storage. */
 const SAVE_DELAY_MS = 400;
+
+/** The longest daily limit the server accepts for a child, in minutes (firestore.rules, childShapeOk). */
+export const MAX_LIMIT_MIN = 1440;
 
 export type Role = 'parent' | 'child' | null;
 
@@ -232,7 +365,11 @@ interface Store {
   activeChildId: string;
   setActiveChildId: (id: string) => void;
   activeChild: Child;
-  childSelf: Child; // the child viewing the child-app
+  /**
+   * The child using the child app on this device: the child the link layer named with
+   * `setSelfChildId`, otherwise the first child.
+   */
+  childSelf: Child;
   requests: FamilyRequest[];
   alerts: Alert[];
   places: Place[];
@@ -261,11 +398,21 @@ interface Store {
   addSite: (host: string, list: 'blocked' | 'allowed') => void;
   removeSite: (id: string) => void;
   renameChild: (id: string, name: string) => void;
+  /** Adds a child with the sample app list and numbers. Returns the new child's id. */
+  addChild: (name: string, age?: number) => string;
   requestUnlock: (appId: string) => void;
   checkIn: () => void;
   sosActive: boolean;
+  /** The child whose SOS is on, or null when none is (or when an older save did not record it). */
+  sosChildId: string | null;
+  /** The child an active SOS came from: `sosChildId` when it names a child, otherwise `childSelf`. */
+  sosChild: Child;
+  /** True when the SOS that is on belongs to `childSelf`. The child app shows only its own SOS. */
+  sosMine: boolean;
   triggerSOS: () => void;
   clearSOS: () => void;
+  /** True while the link layer says this device is in a real family. Sample wording is dropped then. */
+  live: boolean;
   hasOnboarded: boolean;
   /**
    * False until both saved values have been read: the "has seen the introduction" flag and the
@@ -278,8 +425,23 @@ interface Store {
   resetDemoData: () => void;
   /** The saved slices as one object. The link layer (src/sync) watches this to send changes. */
   syncSnapshot: PersistedState;
-  /** Replaces the given slices with values that arrived from a linked device. */
-  applyRemote: (patch: Partial<Omit<PersistedState, 'activeChildId'>>) => void;
+  /**
+   * Replaces the given slices with values that arrived from the family, all in one update. A slice
+   * that already says the same thing is left alone, so applying the same data twice changes nothing
+   * and causes no save. Labels are not touched and nothing is relabelled.
+   *
+   * `record`, when given, is the link layer's own record (what the server has confirmed and so on).
+   * It is saved in the same write as the state it belongs to, never separately: pass the record
+   * that matches the patch. `applyRemote({}, record)` stores a new record on its own and
+   * `applyRemote({}, null)` removes it.
+   */
+  applyRemote: (patch: RemotePatch, record?: unknown, options?: ApplyRemoteOptions) => void;
+  /** The record that was saved with the state, as read at startup (null when there was none). Stable function. */
+  readSyncRecord: () => StoredSyncRecord | null;
+  /** Link layer: which child this device is enrolled as. null: the first child, as on an unlinked device. */
+  setSelfChildId: (id: string | null) => void;
+  /** Link layer: true while this device is in a real family. */
+  setLive: (live: boolean) => void;
 }
 
 const Ctx = createContext<Store | null>(null);
@@ -289,7 +451,7 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
   // reload that skips the welcome screen still has the right role.
   const [role, setRole] = useState<Role>(APP_VARIANT);
   const [kids, setKids] = useState<Child[]>(SEED.children);
-  const [activeChildId, setActiveChildId] = useState(SEED.activeChildId);
+  const [activeChildIdChoice, setActiveChildId] = useState(SEED.activeChildId);
   const [requests, setRequests] = useState<FamilyRequest[]>(SEED.requests);
   const [alerts, setAlerts] = useState<Alert[]>(SEED.alerts);
   const [places, setPlaces] = useState<Place[]>(SEED.places);
@@ -298,6 +460,13 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
   const [messages, setMessages] = useState<ChatMessage[]>(SEED.messages);
   const [sites, setSites] = useState<SiteRule[]>(SEED.sites);
   const [sosActive, setSosActive] = useState(SEED.sosActive);
+  const [sosChildId, setSosChildId] = useState<string | null>(SEED.sosChildId);
+  /** Set by the link layer. Not saved here: the link layer sets both again at every start. */
+  const [selfChildId, setSelfChildId] = useState<string | null>(null);
+  const [live, setLive] = useState(false);
+  /** The link layer's record. It is state so that it commits, and is saved, together with the slices. */
+  const [syncRecord, setSyncRecord] = useState<unknown>(undefined);
+  const storedSync = useRef<StoredSyncRecord | null>(null);
   const [hasOnboarded, setHasOnboarded] = useState(false);
   const [ready, setReady] = useState(false);
 
@@ -312,9 +481,11 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
   const hydrated = useRef(false);
   /** Set when the data is reset before the first read has come back, so that read is not applied. */
   const discardStored = useRef(false);
-  /** The newest state that still has to be written, or null when there is nothing to write. */
-  const pendingSave = useRef<PersistedState | null>(null);
+  /** The newest state (and the link record that goes with it) still to be written, or null when there is nothing to write. */
+  const pendingSave = useRef<{ state: PersistedState; sync: unknown } | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Set by `applyRemote(..., { saveNow: true })`: the next save is not delayed. */
+  const saveAtOnce = useRef(false);
   /**
    * The state that needs no write, serialised: what was read at startup, what was written last, or
    * the seed right after a reset. A save that would store exactly this is skipped.
@@ -334,17 +505,26 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
         // the seed array itself, so setting it is a no-op. loadState does not throw; the catch
         // only makes sure a surprise here can never leave the app stuck before `ready`.
         let state = SEED;
+        let sync: unknown = undefined;
         try {
-          state = loadState(raw, SEED).state;
+          const loaded = loadState(raw, SEED);
+          state = loaded.state;
+          sync = loaded.sync;
+          if (sync !== undefined) storedSync.current = { record: sync, untrusted: loaded.fallbacks };
         } catch {
           state = SEED;
+          sync = undefined;
         }
-        // "now" and "just now" were true when they were saved. After a restart they are not.
-        if (state.alerts.some((a) => a.ago === 'now')) {
-          state = { ...state, alerts: state.alerts.map((a) => (a.ago === 'now' ? { ...a, ago: 'earlier' } : a)) };
+        // "now" and "just now" were true when they were saved. After a restart they are not. Only
+        // items without a real time are relabelled: one with `at` is drawn from it and is left as
+        // it is, so a cold start never changes anything the link layer compares or sends.
+        const staleAlert = (a: Alert) => a.ago === 'now' && a.at == null;
+        const staleRequest = (r: FamilyRequest) => r.ago === 'just now' && r.at == null;
+        if (state.alerts.some(staleAlert)) {
+          state = { ...state, alerts: state.alerts.map((a) => (staleAlert(a) ? { ...a, ago: 'earlier' } : a)) };
         }
-        if (state.requests.some((r) => r.ago === 'just now')) {
-          state = { ...state, requests: state.requests.map((r) => (r.ago === 'just now' ? { ...r, ago: 'earlier' } : r)) };
+        if (state.requests.some(staleRequest)) {
+          state = { ...state, requests: state.requests.map((r) => (staleRequest(r) ? { ...r, ago: 'earlier' } : r)) };
         }
         setKids(state.children);
         setActiveChildId(state.activeChildId);
@@ -356,8 +536,10 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
         setMessages(state.messages);
         setSites(state.sites);
         setSosActive(state.sosActive);
+        setSosChildId(state.sosChildId);
+        setSyncRecord(sync);
         resolvedIds.current = resolvedRequestIds(state.requests);
-        savedJson.current = serialiseState(state);
+        savedJson.current = serialiseState(state, sync);
       }
       hydrated.current = true;
       setReady(true);
@@ -376,7 +558,7 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
     const next = pendingSave.current;
     if (!next) return;
     pendingSave.current = null;
-    const json = serialiseState(next);
+    const json = serialiseState(next.state, next.sync);
     if (json === savedJson.current) return;
     savedJson.current = json;
     writeKey(STATE_KEY, json).then((ok) => {
@@ -385,17 +567,31 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
     });
   }, []);
 
+  // The child the parent is looking at. When the saved choice matches no child any more (the family's
+  // children replaced the sample ones), the first child takes its place, and that is the id the rest
+  // of the app sees and acts on.
+  const activeChild = kids.find((c) => c.id === activeChildIdChoice) ?? kids[0] ?? BLANK_CHILD;
+  const activeChildId = kids.length > 0 ? activeChild.id : activeChildIdChoice;
+  const childSelf = (selfChildId != null ? kids.find((c) => c.id === selfChildId) : undefined) ?? kids[0] ?? BLANK_CHILD;
+
   const snapshot = useMemo<PersistedState>(
-    () => ({ children: kids, activeChildId, requests, alerts, places, tasks, schedules, messages, sites, sosActive }),
-    [kids, activeChildId, requests, alerts, places, tasks, schedules, messages, sites, sosActive],
+    () => ({ children: kids, activeChildId, requests, alerts, places, tasks, schedules, messages, sites, sosActive, sosChildId }),
+    [kids, activeChildId, requests, alerts, places, tasks, schedules, messages, sites, sosActive, sosChildId],
   );
+  /** What one save holds: the state and the link record that committed with it. */
+  const toSave = useMemo(() => ({ state: snapshot, sync: syncRecord }), [snapshot, syncRecord]);
 
   // Save on change, debounced. Nothing is scheduled until the stored state has been read, so the
   // seed can never overwrite a saved copy during startup. The cleanup only stops the timer: the
   // pending state stays, to be replaced by a newer one or flushed below.
   useEffect(() => {
     if (!ready) return;
-    pendingSave.current = snapshot;
+    pendingSave.current = toSave;
+    if (saveAtOnce.current) {
+      saveAtOnce.current = false;
+      flushSave();
+      return;
+    }
     saveTimer.current = setTimeout(flushSave, SAVE_DELAY_MS);
     return () => {
       if (saveTimer.current != null) {
@@ -403,7 +599,7 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
         saveTimer.current = null;
       }
     };
-  }, [snapshot, ready, flushSave]);
+  }, [toSave, ready, flushSave]);
 
   // Do not wait for the timer when the app is about to be suspended or the page closed.
   useEffect(() => {
@@ -433,13 +629,17 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
     setKids((prev) => prev.map((c) => (c.id === id ? fn(c) : c)));
   }, []);
 
+  // In a real family a daily limit cannot exceed the day: the server refuses more than 24 hours, and
+  // a refused value would be put back. On its own, with the sample data, nothing is capped.
+  const limitCap = live ? MAX_LIMIT_MIN : Number.POSITIVE_INFINITY;
+
   const adjustLimit = useCallback((id: string, delta: number) => {
-    updateChild(id, (c) => ({ ...c, limitMin: Math.max(0, c.limitMin + delta) }));
-  }, [updateChild]);
+    updateChild(id, (c) => ({ ...c, limitMin: Math.max(0, Math.min(Math.max(limitCap, c.limitMin), c.limitMin + delta)) }));
+  }, [updateChild, limitCap]);
 
   const grantBonus = useCallback((id: string, min: number) => {
-    updateChild(id, (c) => ({ ...c, limitMin: c.limitMin + min, bedtime: false }));
-  }, [updateChild]);
+    updateChild(id, (c) => ({ ...c, limitMin: Math.min(Math.max(limitCap, c.limitMin), c.limitMin + min), bedtime: false }));
+  }, [updateChild, limitCap]);
 
   const toggleApp = useCallback((id: string, appId: string) => {
     updateChild(id, (c) => ({ ...c, apps: c.apps.map((a) => (a.id === appId ? { ...a, blocked: !a.blocked } : a)) }));
@@ -475,12 +675,14 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
     setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
   }, []);
 
+  const selfId = childSelf.id;
+
   const requestExtraTime = useCallback((minutes: number) => {
-    setRequests((prev) => [
-      { id: 'r' + Date.now(), kind: 'extra_time', childId: 'c1', label: `${minutes} more minutes`, detail: 'You asked for extra screen time', minutes, ago: 'just now', status: 'pending' } as FamilyRequest,
-      ...prev,
-    ]);
-  }, []);
+    const request: FamilyRequest = {
+      id: newId('r'), kind: 'extra_time', childId: selfId, label: `${minutes} more minutes`, detail: 'You asked for extra screen time', minutes, ago: 'just now', at: Date.now(), status: 'pending',
+    };
+    setRequests((prev) => [request, ...prev]);
+  }, [selfId]);
 
   const markAlertsRead = useCallback(() => setAlerts((prev) => prev.map((a) => ({ ...a, unread: false }))), []);
 
@@ -488,12 +690,14 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
     setPlaces((prev) => prev.map((p) => (p.id === placeId ? { ...p, [which]: !p[which] } : p)));
   }, []);
 
-  const pushAlert = useCallback((a: Omit<Alert, 'id' | 'ago' | 'unread'>) => {
-    setAlerts((prev) => [{ ...a, id: 'n' + Date.now(), ago: 'now', unread: true }, ...prev]);
+  const pushAlert = useCallback((a: Omit<Alert, 'id' | 'ago' | 'unread' | 'at'>, at: number) => {
+    const alert: Alert = { ...a, id: newId('n'), ago: 'now', at, unread: true };
+    setAlerts((prev) => [alert, ...prev]);
   }, []);
 
   const addPlace = useCallback((p: Omit<Place, 'id'>) => {
-    setPlaces((prev) => [...prev, { ...p, id: 'p' + Date.now() }]);
+    const place: Place = { ...p, id: newId('p') };
+    setPlaces((prev) => [...prev, place]);
   }, []);
   const removePlace = useCallback((id: string) => setPlaces((prev) => prev.filter((p) => p.id !== id)), []);
 
@@ -501,20 +705,24 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
     setSchedules((prev) => prev.map((x) => (x.id === id ? { ...x, on: !x.on } : x)));
   }, []);
   const addSchedule = useCallback((sc: Omit<Schedule, 'id'>) => {
-    setSchedules((prev) => [...prev, { ...sc, id: 's' + Date.now() }]);
+    const schedule: Schedule = { ...sc, id: newId('s') };
+    setSchedules((prev) => [...prev, schedule]);
   }, []);
   const removeSchedule = useCallback((id: string) => setSchedules((prev) => prev.filter((x) => x.id !== id)), []);
 
   const sendMessage = useCallback((childId: string, from: 'parent' | 'child', text: string) => {
     const clean = text.trim();
     if (!clean) return;
-    setMessages((prev) => [...prev, { id: 'm' + Date.now(), childId, from, text: clean, time: nowLabel() }]);
+    const at = Date.now();
+    const message: ChatMessage = { id: newId('m'), childId, from, text: clean, time: clockLabel(at), at };
+    setMessages((prev) => [...prev, message]);
   }, []);
 
   const addSite = useCallback((host: string, list: 'blocked' | 'allowed') => {
     const clean = host.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
     if (!clean) return;
-    setSites((prev) => (prev.some((x) => x.host === clean && x.list === list) ? prev : [...prev, { id: 'w' + Date.now(), host: clean, list }]));
+    const site: SiteRule = { id: newId('w'), host: clean, list };
+    setSites((prev) => (prev.some((x) => x.host === clean && x.list === list) ? prev : [...prev, site]));
   }, []);
   const removeSite = useCallback((id: string) => setSites((prev) => prev.filter((x) => x.id !== id)), []);
 
@@ -524,27 +732,43 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
     updateChild(id, (c) => ({ ...c, name: clean }));
   }, [updateChild]);
 
+  const addChild = useCallback((name: string, age?: number) => {
+    const child = makeChild(newId('c'), name.trim() || 'Child', age);
+    setKids((prev) => [...prev, child]);
+    return child.id;
+  }, []);
+
   const requestUnlock = useCallback((appId: string) => {
-    const app = kids[0].apps.find((a) => a.id === appId);
+    const app = childSelf.apps.find((a) => a.id === appId);
     if (!app) return;
-    setRequests((prev) => [
-      { id: 'r' + Date.now(), childId: 'c1', kind: 'unlock_app', label: `Unlock ${app.name}`, detail: 'You asked to unlock an app', appId, ago: 'just now', status: 'pending' },
-      ...prev,
-    ]);
-  }, [kids]);
+    const request: FamilyRequest = {
+      id: newId('r'), childId: childSelf.id, kind: 'unlock_app', label: `Unlock ${app.name}`, detail: 'You asked to unlock an app', appId, ago: 'just now', at: Date.now(), status: 'pending',
+    };
+    setRequests((prev) => [request, ...prev]);
+  }, [childSelf]);
 
   const checkIn = useCallback(() => {
-    const me = kids[0];
-    updateChild(me.id, (c) => ({ ...c, updatedAgo: 'just now' }));
-    pushAlert({ icon: 'map-pin', color: '#2E8BFF', title: `${me.name.split(' ')[0]} checked in`, body: `At ${me.place} · ${nowLabel()}` });
-  }, [kids, updateChild, pushAlert]);
+    const me = childSelf;
+    const at = Date.now();
+    updateChild(me.id, (c) => ({ ...c, updatedAgo: 'just now', checkInAt: at }));
+    // A phone in a real family does not know where it is, so it reports the time and nothing else.
+    // On its own, with the sample data, it keeps naming the sample place.
+    const body = live ? `At ${clockLabel(at)}` : `At ${me.place} · ${clockLabel(at)}`;
+    pushAlert({ kind: 'checkin', childId: me.id, icon: 'map-pin', color: '#2E8BFF', title: `${me.name.split(' ')[0]} checked in`, body }, at);
+  }, [childSelf, live, updateChild, pushAlert]);
 
   const triggerSOS = useCallback(() => {
-    const me = kids[0];
+    const me = childSelf;
+    const at = Date.now();
     setSosActive(true);
-    pushAlert({ icon: 'alert-circle', color: '#FB4A4A', title: `SOS from ${me.name.split(' ')[0]}`, body: `Live location shared · near ${me.place}` });
-  }, [kids, pushAlert]);
-  const clearSOS = useCallback(() => setSosActive(false), []);
+    setSosChildId(me.id);
+    const body = live ? `Sent at ${clockLabel(at)}` : `Live location shared · near ${me.place}`;
+    pushAlert({ kind: 'sos', childId: me.id, icon: 'alert-circle', color: '#FB4A4A', title: `SOS from ${me.name.split(' ')[0]}`, body }, at);
+  }, [childSelf, live, pushAlert]);
+  const clearSOS = useCallback(() => {
+    setSosActive(false);
+    setSosChildId(null);
+  }, []);
 
   const completeOnboarding = useCallback(() => {
     setHasOnboarded(true);
@@ -575,6 +799,10 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
     setMessages(SEED.messages);
     setSites(SEED.sites);
     setSosActive(SEED.sosActive);
+    setSosChildId(SEED.sosChildId);
+    // The link layer's record goes with the data it described.
+    setSyncRecord(undefined);
+    storedSync.current = null;
     resolvedIds.current = resolvedRequestIds(SEED.requests);
 
     // Storage goes back to "nothing saved". Marking the seed as already saved means the re-render
@@ -584,25 +812,44 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
     removeKey(STATE_KEY);
   }, []);
 
-  const activeChild = kids.find((c) => c.id === activeChildId) ?? kids[0];
-  const childSelf = kids[0];
   const points = tasks.filter((t) => t.done).reduce((s, t) => s + t.points, 0);
+  const sosChild = (sosChildId != null ? kids.find((c) => c.id === sosChildId) : undefined) ?? childSelf;
+  const sosMine = sosActive && (sosChildId == null || sosChildId === childSelf.id);
 
-  const applyRemote = useCallback((patch: Partial<Omit<PersistedState, 'activeChildId'>>) => {
-    if (patch.children !== undefined && patch.children.length > 0) setKids(patch.children);
+  // Every setter below is queued in the same tick, so React commits the whole patch (and the link
+  // record) in one render: no screen and no save ever sees half of it. A slice that already says the
+  // same thing keeps its array, which is what stops an applied patch from echoing back as a change.
+  const applyRemote = useCallback((patch: RemotePatch, record?: unknown, options?: ApplyRemoteOptions) => {
+    const basis = options?.basis;
+    if (patch.children !== undefined) setKids(takeRemote(patch.children, basis?.children));
     if (patch.requests !== undefined) {
-      setRequests(patch.requests);
-      // Answers given on the other device count here too.
-      resolvedIds.current = resolvedRequestIds(patch.requests);
+      setRequests(takeRemote(patch.requests, basis?.requests));
+      // Answers given on another device count here too. An id is never taken out again: a request
+      // this device has answered stays answered here even if the server turns the answer down and
+      // the request shows as pending for a moment, so one tap can never grant its bonus twice.
+      for (const id of resolvedRequestIds(patch.requests)) resolvedIds.current.add(id);
     }
-    if (patch.alerts !== undefined) setAlerts(patch.alerts);
-    if (patch.places !== undefined) setPlaces(patch.places);
-    if (patch.tasks !== undefined) setTasks(patch.tasks);
-    if (patch.schedules !== undefined) setSchedules(patch.schedules);
-    if (patch.messages !== undefined) setMessages(patch.messages);
-    if (patch.sites !== undefined) setSites(patch.sites);
-    if (patch.sosActive !== undefined) setSosActive(patch.sosActive);
+    if (patch.alerts !== undefined) setAlerts(takeRemote(patch.alerts, basis?.alerts));
+    if (patch.places !== undefined) setPlaces(takeRemote(patch.places, basis?.places));
+    if (patch.tasks !== undefined) setTasks(takeRemote(patch.tasks, basis?.tasks));
+    if (patch.schedules !== undefined) setSchedules(takeRemote(patch.schedules, basis?.schedules));
+    if (patch.messages !== undefined) setMessages(takeRemote(patch.messages, basis?.messages));
+    if (patch.sites !== undefined) setSites(takeRemote(patch.sites, basis?.sites));
+    // The two SOS values: kept as they are when they were changed here after `basis` was taken.
+    const sosTouched = basis !== undefined && basis.sosActive !== undefined;
+    if (patch.sosActive !== undefined) {
+      const next = patch.sosActive;
+      setSosActive((prev) => (sosTouched && prev !== basis.sosActive ? prev : next));
+    }
+    if (patch.sosChildId !== undefined) {
+      const next = patch.sosChildId;
+      setSosChildId((prev) => (basis !== undefined && basis.sosChildId !== undefined && prev !== basis.sosChildId ? prev : next));
+    }
+    if (record !== undefined) setSyncRecord(record === null ? undefined : record);
+    if (options?.saveNow) saveAtOnce.current = true;
   }, []);
+
+  const readSyncRecord = useCallback(() => storedSync.current, []);
 
   const value = useMemo<Store>(
     () => ({
@@ -611,17 +858,19 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
       adjustLimit, grantBonus, toggleApp, setAppLimit, pauseDevice, resumeDevice,
       resolveRequest, toggleTask, requestExtraTime, markAlertsRead, togglePlaceAlert,
       addPlace, removePlace, schedules, toggleSchedule, addSchedule, removeSchedule,
-      messages, sendMessage, sites, addSite, removeSite, renameChild, requestUnlock,
-      checkIn, sosActive, triggerSOS, clearSOS, hasOnboarded, ready, completeOnboarding, resetOnboarding, resetDemoData,
-      syncSnapshot: snapshot, applyRemote,
+      messages, sendMessage, sites, addSite, removeSite, renameChild, addChild, requestUnlock,
+      checkIn, sosActive, sosChildId, sosChild, sosMine, triggerSOS, clearSOS, live,
+      hasOnboarded, ready, completeOnboarding, resetOnboarding, resetDemoData,
+      syncSnapshot: snapshot, applyRemote, readSyncRecord, setSelfChildId, setLive,
     }),
     [role, kids, activeChildId, activeChild, childSelf, requests, alerts, places, tasks, points,
       adjustLimit, grantBonus, toggleApp, setAppLimit, pauseDevice, resumeDevice, resolveRequest,
       toggleTask, requestExtraTime, markAlertsRead, togglePlaceAlert,
       addPlace, removePlace, schedules, toggleSchedule, addSchedule, removeSchedule,
-      messages, sendMessage, sites, addSite, removeSite, renameChild, requestUnlock,
-      checkIn, sosActive, triggerSOS, clearSOS, hasOnboarded, ready, completeOnboarding, resetOnboarding, resetDemoData,
-      snapshot, applyRemote],
+      messages, sendMessage, sites, addSite, removeSite, renameChild, addChild, requestUnlock,
+      checkIn, sosActive, sosChildId, sosChild, sosMine, triggerSOS, clearSOS, live,
+      hasOnboarded, ready, completeOnboarding, resetOnboarding, resetDemoData,
+      snapshot, applyRemote, readSyncRecord],
   );
 
   // The app is mounted only once the saved state is in place. Reading takes a few milliseconds, and

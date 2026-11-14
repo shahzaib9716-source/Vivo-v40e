@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { InlineNote } from '@/components/InlineNote';
 import { Avatar, Card, IconBadge, MockMap, Row, SectionLabel, Text } from '@/components/ui';
-import { nowLabel, useStore } from '@/state/store';
+import { nowLabel, updatedAgoOf, useNow, useStore } from '@/state/store';
 import { categoryColors, radius, spacing, useTheme } from '@/theme';
 
 // Child chips are about 34pt tall; extend the press target to 44pt.
@@ -24,6 +24,7 @@ export default function Location() {
   const { colors } = useTheme();
   const { children, activeChild, activeChildId, setActiveChildId, places } = useStore();
   const [action, setAction] = useState<DemoAction | null>(null);
+  const now = useNow();
 
   const firstName = activeChild.name.split(' ')[0];
   const shownAction = action?.childId === activeChildId ? action : null;
@@ -77,7 +78,7 @@ export default function Location() {
                   {firstName} is at {activeChild.place}
                 </Text>
                 <Text variant="small" tone="muted">
-                  Updated {activeChild.updatedAgo}
+                  Updated {updatedAgoOf(activeChild, now)}
                 </Text>
               </View>
               <View accessible accessibilityLabel={`Battery ${activeChild.battery} percent`} style={{ alignItems: 'center' }}>

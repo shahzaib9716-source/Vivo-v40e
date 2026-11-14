@@ -19,7 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChatBubble, TypingBubble, bubbleTint, type BubblePosition, type BubbleTone } from '@/components/ChatBubble';
 import { Avatar, Text } from '@/components/ui';
 import { useLink } from '@/sync/link';
-import { useStore, type ChatMessage } from '@/state/store';
+import { useStore, timeOf, updatedAgoOf, useNow, type ChatMessage } from '@/state/store';
 import { radius, spacing, useTheme } from '@/theme';
 
 type Sender = ChatMessage['from'];
@@ -113,14 +113,16 @@ function groupMessages(list: ChatMessage[]) {
   const groups: Group[] = [];
   for (const message of list) {
     const last = groups[groups.length - 1];
+    // A message with a real time is labelled from it; the sample messages keep their stored label.
+    const label = timeOf(message);
     const before = last ? minutesOf(last.time) : null;
-    const now = minutesOf(message.time);
+    const now = minutesOf(label);
     const close = before == null || now == null || (now >= before && now - before <= GROUP_WINDOW_MIN);
     if (last && last.from === message.from && close) {
       last.items.push(message);
-      last.time = message.time;
+      last.time = label;
     } else {
-      groups.push({ key: message.id, from: message.from, items: [message], time: message.time });
+      groups.push({ key: message.id, from: message.from, items: [message], time: label });
     }
   }
   return groups;
@@ -139,6 +141,7 @@ export default function Messages() {
   const { role, children, activeChild, childSelf, messages, sendMessage } = useStore();
   // In a linked family the other side is a real phone, so nothing is made up here.
   const linked = useLink().role !== null;
+  const now = useNow();
 
   const isChild = role === 'child';
   const me: Sender = isChild ? 'child' : 'parent';
@@ -232,7 +235,7 @@ export default function Messages() {
         ? { label: 'Device paused', dot: colors.warning }
         : child.online
           ? { label: `Online · at ${child.place}`, dot: colors.success }
-          : { label: `Last seen ${child.updatedAgo}`, dot: colors.textFaint };
+          : { label: `Last seen ${updatedAgoOf(child, now)}`, dot: colors.textFaint };
 
   return (
     <View style={[styles.root, { backgroundColor: colors.bg }]}>

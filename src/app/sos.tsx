@@ -41,7 +41,8 @@ const HINT: Record<Phase, string> = {
 const noop = () => {};
 
 export default function SOS() {
-  const { childSelf, sosActive, triggerSOS, clearSOS } = useStore();
+  // `sosMine`: this child's own SOS. Another child's SOS does not put this screen into its sent state.
+  const { childSelf, sosMine: sosActive, triggerSOS, clearSOS } = useStore();
 
   // Measured rather than read from the window: a modal sheet is shorter than the screen, and a page
   // rendered on the server has no window to ask.

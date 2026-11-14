@@ -9,7 +9,7 @@ import { LinkCard } from '@/components/child/LinkCard';
 import { Toast, useToast } from '@/components/child/Toast';
 import { ProgressRing, Text } from '@/components/ui';
 import { useLink } from '@/sync/link';
-import { useStore, fmtDuration, nowLabel, type ManagedApp } from '@/state/store';
+import { useStore, fmtDuration, nowLabel, timeOf, type ManagedApp } from '@/state/store';
 import { radius, shadow, spacing, useTheme } from '@/theme';
 
 type FeatherName = keyof typeof Feather.glyphMap;
@@ -26,7 +26,8 @@ const SOS_INK = '#B91C1C';
 
 export default function ChildHome() {
   const { colors } = useTheme();
-  const { childSelf, tasks, messages, checkIn, sosActive, clearSOS } = useStore();
+  // Only this child's own SOS shows here: in a family with two children the other one's is not theirs to clear.
+  const { childSelf, tasks, messages, checkIn, sosMine: sosActive, clearSOS, live } = useStore();
   const linkStatus = useLink().status;
   const toast = useToast();
 
@@ -56,7 +57,8 @@ export default function ChildHome() {
     if (checkedIn) return;
     checkIn();
     setCheckedIn(true);
-    toast.show({ title: `Checked in at ${childSelf.place}`, detail: `Your family can see it · ${nowLabel()}` });
+    // In a real family the phone does not know where it is, so the toast names no place.
+    toast.show({ title: live ? 'Checked in' : `Checked in at ${childSelf.place}`, detail: `Your family can see it · ${nowLabel()}` });
     checkTimer.current = setTimeout(() => {
       checkTimer.current = null;
       setCheckedIn(false);
@@ -214,7 +216,7 @@ export default function ChildHome() {
                 </Text>
                 {lastMessage && (
                   <Text variant="tiny" tone="faint">
-                    {lastMessage.time}
+                    {timeOf(lastMessage)}
                   </Text>
                 )}
               </View>

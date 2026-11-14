@@ -7,7 +7,7 @@ import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from '
 import { LinkCard } from '@/components/child/LinkCard';
 import { Toast, useToast } from '@/components/child/Toast';
 import { Card, IconBadge, Screen, SectionLabel, Text } from '@/components/ui';
-import { useStore, fmtDuration, type FamilyRequest } from '@/state/store';
+import { useStore, fmtDuration, agoOf, useNow, type FamilyRequest } from '@/state/store';
 import { radius, shadow, spacing, useTheme } from '@/theme';
 
 const QUICK = [15, 30, 60] as const;
@@ -195,6 +195,7 @@ function RequestRow({ request, isNew, divider }: { request: FamilyRequest; isNew
   // A new row slides in and stays tinted for a few seconds so it is easy to spot.
   const [fresh, setFresh] = useState(isNew);
   const appear = useSharedValue(isNew ? 0 : 1);
+  const asked = agoOf(request, useNow());
 
   useEffect(() => {
     if (!isNew) return;
@@ -219,7 +220,7 @@ function RequestRow({ request, isNew, divider }: { request: FamilyRequest; isNew
   return (
     <Animated.View
       accessible
-      accessibilityLabel={`${request.label}, asked ${request.ago}. ${STATUS[request.status].note}`}
+      accessibilityLabel={`${request.label}, asked ${asked}. ${STATUS[request.status].note}`}
       style={[
         styles.row,
         divider && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.hairline },
@@ -233,7 +234,7 @@ function RequestRow({ request, isNew, divider }: { request: FamilyRequest; isNew
         </Text>
         <View style={styles.rowDetail}>
           <Text variant="small" tone="muted" numberOfLines={1} style={styles.shrink}>
-            Asked {request.ago}
+            Asked {asked}
           </Text>
           {fresh && (
             <View style={[styles.newTag, { backgroundColor: colors.primary }]}>
