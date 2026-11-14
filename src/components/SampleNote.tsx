@@ -24,7 +24,7 @@ const TEXT: Record<Topic, { title: string; detail: string }> = {
   usage: {
     title: 'Example usage numbers',
     detail:
-      'This version of Haven does not measure screen time or app use on the phone. The usage shown here is an example. The limits you set are real and appear on your child’s phone.',
+      'This version of Haven does not measure screen time or app use, and does not read which apps are on a phone: the apps and usage shown here are examples. The limits you set are real and appear on your child’s phone.',
   },
   rules: {
     title: 'Rules are agreements',

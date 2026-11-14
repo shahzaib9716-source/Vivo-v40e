@@ -100,6 +100,11 @@ else saw the code on the parent's screen and claimed it first, the child's own p
    press Publish.
 3. Firebase console, Authentication, Sign-in method: enable **Email/Password** and **Anonymous**.
 
+Until those three steps are done, keep the database shut with
+[`firestore.lockdown.rules`](../firestore.lockdown.rules) (nobody can read or write anything).
+Publishing those same rules is also the emergency stop: it takes effect within about a minute and
+deletes nothing.
+
 Optional, after both phones are set up:
 
 - Authentication, Settings, User actions: switching off sign-up stops new accounts being created
@@ -107,6 +112,13 @@ Optional, after both phones are set up:
   creates its anonymous account at that moment. (Check that the option is offered on your plan.)
 - Google Cloud console, APIs and Services, Credentials: the browser key Firebase created can be
   restricted to the Identity Toolkit, Token Service and Cloud Firestore APIs.
+
+## The app and the server
+
+One app holds both the parent side and the child side. Once a phone is in a family, the app only
+opens the side that matches the role the server gave its account, and offers no way to switch.
+That is for the person using it. What protects the data is the server: a child's account is
+refused there whatever a modified app sends, and the tests below send exactly such requests.
 
 ## Tests
 
@@ -127,6 +139,16 @@ contact a real project. They cover
 
 `npm run test:sync` tests the app's sync logic, including 5,000 random histories with restarts,
 offline periods and killed apps, against a model of these same permissions.
+
+`npm run test:live` runs the real code of two or three phones against the Firestore and Auth
+emulators with these rules loaded: 66 scenarios, among them a child's phone whose saved data,
+sync records or role were tampered with (nothing it sends is accepted, and it ends up showing the
+real data again), a removed phone (its old sign-in is refused on every family path), and phones
+killed at awkward moments.
+
+`tests/ui/two-browsers.e2e.js` drives the screens themselves in two browsers: account, email
+confirmation, family, code, the matching four characters, approval, and that each phone only
+opens its own side.
 
 ## What the rules cannot do
 

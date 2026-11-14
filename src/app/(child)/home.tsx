@@ -73,7 +73,7 @@ export default function ChildHome() {
 
   const askForTime = () => (router.push as any)('/(child)/requests');
 
-  const appsHeading = paused ? 'Paused for now' : outOfTime ? 'Waiting for more time' : 'You can use now';
+  const appsHeading = live ? 'App rules your family set' : paused ? 'Paused for now' : outOfTime ? 'Waiting for more time' : 'You can use now';
 
   return (
     <View style={[styles.root, { backgroundColor: colors.bg }]}>
@@ -258,7 +258,15 @@ export default function ChildHome() {
             {appsHeading}
           </Text>
           <View style={[styles.appCard, { backgroundColor: colors.surface, borderColor: colors.border }, shadow(1)]}>
-            {(paused || outOfTime) && (
+            {live && (
+              <View style={[styles.appNote, { backgroundColor: colors.surfaceAlt }]}>
+                <Feather name="info" size={14} color={colors.textMuted} />
+                <Text variant="small" tone="muted" style={styles.flex}>
+                  These are example apps. This version of Haven does not look at which apps are on this phone, and it does not close them.
+                </Text>
+              </View>
+            )}
+            {(paused || outOfTime) && !live && (
               <View style={[styles.appNote, { backgroundColor: colors.surfaceAlt }]}>
                 <Feather name={paused ? 'moon' : 'clock'} size={14} color={colors.textMuted} />
                 <Text variant="small" tone="muted" style={styles.flex}>
