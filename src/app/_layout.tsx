@@ -73,7 +73,6 @@ function Screens({ scheme }: { scheme: 'light' | 'dark' }) {
       }}>
       <Stack.Screen name="index" options={{ animation: 'fade' }} />
       <Stack.Screen name="onboarding" options={{ animation: 'fade', gestureEnabled: false }} />
-      <Stack.Screen name="sos" options={{ animation: 'fade_from_bottom', presentation: 'modal' }} />
       <Stack.Screen name="messages" />
       <Stack.Screen name="transparency" />
       <Stack.Screen name="link-device" />
@@ -106,6 +105,7 @@ function Screens({ scheme }: { scheme: 'light' | 'dark' }) {
       {/* The child side. */}
       <Stack.Protected guard={childAllowed}>
         <Stack.Screen name="(child)" />
+        <Stack.Screen name="sos" options={{ animation: 'fade_from_bottom', presentation: 'modal' }} />
         <Stack.Screen name="unlock-request" />
       </Stack.Protected>
     </Stack>
