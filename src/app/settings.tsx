@@ -25,7 +25,9 @@ const EDIT_HIT_SLOP = { top: 14, bottom: 14, left: 12, right: 12 };
 export default function Settings() {
   const { colors } = useTheme();
   const { setRole, resetOnboarding, resetDemoData } = useStore();
-  const linked = useLink().role !== null;
+  const link = useLink();
+  // Also while the link is still being worked out at start: a reset then would be taken for edits.
+  const linked = link.role !== null || link.status === 'connecting';
 
   /** Pops back to the tabs first, so the replace swaps out the whole parent app, not just this screen. */
   const leaveTo = (href: string) => {
@@ -47,8 +49,13 @@ export default function Settings() {
   const [noAccount, setNoAccount] = useState(false);
 
   const signOut = () => {
-    // A parent-only or child-only build has no chooser to land on, and no account either.
-    if (isSingleSide) {
+    // TODO(v2-ui): a proper sign-out flow (confirm, show progress and failures) comes with the account screens.
+    if (link.account && !link.account.anonymous) {
+      // The device goes back to sample data; the family stays as it is on the server.
+      link.signOut().catch(() => {});
+      if (isSingleSide) return;
+    } else if (isSingleSide) {
+      // A parent-only or child-only build has no chooser to land on, and nobody is signed in.
       setNoAccount(true);
       return;
     }
@@ -110,23 +117,23 @@ export default function Settings() {
         <Row title="Require Face ID to open" icon="lock" iconColor={colors.primary} chevron={false} right={<Toggle value={biometric} onChange={setBiometric} />} />
         <Row title="Privacy & transparency" subtitle="What your child sees about sharing" icon="eye" iconColor={colors.success} onPress={() => (router.push as any)('/transparency?as=parent')} />
         <Row title="Data & export" subtitle="Download or delete your data" icon="database" iconColor={colors.textMuted} onPress={showDataNote} />
-        <Row
-          title="Reset demo data"
-          subtitle="Restore the starting sample data"
-          icon="rotate-ccw"
-          iconColor={colors.textMuted}
-          chevron={false}
-          onPress={reset === 'confirm' ? undefined : () => setReset('confirm')}
-        />
-        {reset === 'confirm' && (
+        {/* A linked device mirrors its family: putting the sample data back there would send it to the
+            family as if it were real. TODO(v2-ui): decide what, if anything, replaces this row when linked. */}
+        {!linked && (
+          <Row
+            title="Reset demo data"
+            subtitle="Restore the starting sample data"
+            icon="rotate-ccw"
+            iconColor={colors.textMuted}
+            chevron={false}
+            onPress={reset === 'confirm' ? undefined : () => setReset('confirm')}
+          />
+        )}
+        {!linked && reset === 'confirm' && (
           <View style={{ paddingBottom: spacing.lg }}>
             <InlineConfirm
               title="Reset demo data?"
-              detail={
-                linked
-                  ? 'Limits, requests, alerts, places, schedules, rewards and messages go back to how they started, on every linked device.'
-                  : 'Limits, requests, alerts, places, schedules, rewards and messages go back to how they started. The saved copy on this device is cleared too.'
-              }
+              detail="Limits, requests, alerts, places, schedules, rewards and messages go back to how they started. The saved copy on this device is cleared too."
               confirmLabel="Reset"
               onCancel={() => setReset('idle')}
               onConfirm={confirmReset}
@@ -159,8 +166,12 @@ export default function Settings() {
       {noAccount && (
         <InlineNote
           tone="neutral"
-          title="Demo: there is no account to sign out of"
-          detail={`This build has no accounts and no server, so ${APP_NAME} stays open on this device.`}
+          title={link.configured ? 'Nobody is signed in' : 'Demo: there is no account to sign out of'}
+          detail={
+            link.configured
+              ? `There is no parent account signed in on this device, so ${APP_NAME} stays open.`
+              : `This build has no accounts and no server, so ${APP_NAME} stays open on this device.`
+          }
           style={{ marginTop: spacing.md }}
         />
       )}

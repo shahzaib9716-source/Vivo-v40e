@@ -1,285 +1,659 @@
-import { getApps, initializeApp } from 'firebase/app';
+/**
+ * Everything that talks to Cloud Firestore (data layout v2, see firestore.rules).
+ *
+ * Three kinds of call:
+ * - actions a person waits for (create the family, make or claim a pairing code, approve, remove):
+ *   they resolve when the server has stored the change and reject with a LinkError otherwise. A
+ *   write the server has not answered within ACTION_TIMEOUT_MS is reported as "can't reach the
+ *   server" (SPEC 4.2 rule 9); see `acked` for what happens if it lands later.
+ * - listeners: the family, its members and devices, a pairing code, and the synced slices
+ *   (`listenPlan`, one per entry of schema.listenersFor).
+ * - the sync engine's writes (`executeWrite`): one document each, exactly as ./reconcile decided.
+ *
+ * No React here. Who is signed in comes from ./auth through the shared Firebase app.
+ */
 import {
   collection,
   connectFirestoreEmulator,
   deleteDoc,
-  deleteField,
   doc,
-  getDoc,
+  getDocFromServer,
   initializeFirestore,
+  limit as limitTo,
   onSnapshot,
+  orderBy,
+  query,
   runTransaction,
   serverTimestamp,
   setDoc,
   Timestamp,
   updateDoc,
-  type DocumentReference,
+  writeBatch,
+  type DocumentData,
+  type DocumentSnapshot,
   type Firestore,
 } from 'firebase/firestore';
 import { Platform } from 'react-native';
 
-import { FIREBASE_CONFIG, FIRESTORE_EMULATOR } from './config';
-import { mergeSlice } from './merge';
-import {
-  FAMILIES,
-  FAMILY_DOC_VERSION,
-  LinkError,
-  PAIRING,
-  PAIRING_CODE_ALPHABET,
-  PAIRING_CODE_LENGTH,
-  PAIRING_TTL_MS,
-  SYNCED_SLICES,
-  type MemberRecord,
-  type PairingCode,
-  type SyncedSlice,
-} from './types';
+import { makeChild, SEED_PLACES, SEED_SCHEDULES, SEED_TASKS } from '@/state/store';
+import { FIRESTORE_EMULATOR } from './config';
+import { firebaseApp } from './firebase';
+import { newId } from './ids';
+import type { Write } from './reconcile';
+import { millisOf, normaliseTimes, SCHEMA, type DocData, type ListenerPlan, type SyncCtx } from './schema';
+import { LinkError, OFFLINE_MESSAGE, PAIRING_TTL_MS, randomPairingCode, type LinkRole } from './types';
 
-/**
- * Everything that talks to Cloud Firestore. Each shared slice is stored as a JSON string in
- * `state.<slice>`: a string compares exactly, so the phones can tell "nothing changed" from
- * "changed" without depending on how Firestore orders the keys of a map.
- */
+// ---------------------------------------------------------------------------------------------
+// The database
+// ---------------------------------------------------------------------------------------------
 
-export type SliceJson = Partial<Record<SyncedSlice, string>>;
+let instance: Firestore | null = null;
 
-export interface FamilySnapshot {
-  exists: boolean;
-  /** True when the data came from the local cache, not the server (offline). */
-  fromCache: boolean;
-  state: SliceJson;
-  members: Record<string, MemberRecord>;
-}
-
-let db: Firestore | null = null;
-
-function getDb(): Firestore {
-  if (db) return db;
-  if (!FIREBASE_CONFIG) throw new LinkError('not-configured', 'Linking is not set up in this build.');
-  const app = getApps()[0] ?? initializeApp(FIREBASE_CONFIG);
-  db = initializeFirestore(app, {
+/** The Firestore instance, created on first use (SPEC 4.2 rule 10). Memory cache only. */
+export function db(): Firestore {
+  if (instance) return instance;
+  const created = initializeFirestore(firebaseApp(), {
     ignoreUndefinedProperties: true,
     // React Native has no WebSocket-based stream the SDK can use reliably; long polling works everywhere.
     experimentalForceLongPolling: Platform.OS !== 'web',
   });
-  if (FIRESTORE_EMULATOR) connectFirestoreEmulator(db, FIRESTORE_EMULATOR.host, FIRESTORE_EMULATOR.port);
-  return db;
+  if (FIRESTORE_EMULATOR) connectFirestoreEmulator(created, FIRESTORE_EMULATOR.host, FIRESTORE_EMULATOR.port);
+  instance = created;
+  return created;
 }
 
-const familyRef = (familyId: string): DocumentReference => doc(getDb(), FAMILIES, familyId);
+const SERVER_TIME = serverTimestamp();
+
+/**
+ * The value to store where the rules demand `== request.time`. Always the same object, so the
+ * engine can recognise it (`SyncCtx.serverTimestamp`).
+ */
+export function serverTime(): unknown {
+  return SERVER_TIME;
+}
+
+const familyPath = (familyId: string) => `families/${familyId}`;
+const memberPath = (familyId: string, uid: string) => `${familyPath(familyId)}/members/${uid}`;
+const devicePath = (familyId: string, deviceId: string) => `${familyPath(familyId)}/devices/${deviceId}`;
+const childPath = (familyId: string, childId: string) => `${familyPath(familyId)}/children/${childId}`;
+const pairingPath = (code: string) => `pairing/${code}`;
+const userPath = (uid: string) => `users/${uid}`;
+
+// ---------------------------------------------------------------------------------------------
+// Errors and waiting
+// ---------------------------------------------------------------------------------------------
+
+/** The SDK's error code without its prefix: 'permission-denied', 'unavailable', ... or ''. */
+export function errorCode(e: unknown): string {
+  const code = typeof e === 'object' && e !== null && 'code' in e ? String((e as { code: unknown }).code) : '';
+  return code.replace(/^firestore\//, '');
+}
+
+/** True when the server said no (as opposed to not being reachable). */
+export function isRefusal(e: unknown): boolean {
+  const code = errorCode(e);
+  return code === 'permission-denied' || code === 'not-found' || code === 'unauthenticated';
+}
 
 /** Turns any failure into a LinkError with a sentence for the person using the app. */
 export function toLinkError(e: unknown): LinkError {
   if (e instanceof LinkError) return e;
-  const code = typeof e === 'object' && e !== null && 'code' in e ? String((e as { code: unknown }).code) : '';
-  if (code.includes('permission-denied')) {
-    return new LinkError('permission', 'The server refused the request. The Firestore rules may not be published yet.');
-  }
-  if (code.includes('unavailable') || code.includes('deadline-exceeded') || code.includes('network') || code.includes('failed-precondition')) {
-    return new LinkError('network', "Can't reach the server. Check the internet connection and try again.");
-  }
-  return new LinkError('unknown', 'Something went wrong while linking. Please try again.');
+  const code = errorCode(e);
+  if (code === 'permission-denied') return new LinkError('permission', 'The server refused that: this account is not allowed to do it.');
+  if (code === 'unauthenticated') return new LinkError('not-signed-in', 'You were signed out. Sign in again.');
+  if (code === 'unavailable' || code === 'deadline-exceeded' || code === 'cancelled' || code.includes('network')) return new LinkError('network', OFFLINE_MESSAGE);
+  if (code === 'resource-exhausted') return new LinkError('network', 'The server is not taking more requests right now. Try again later.');
+  return new LinkError('unknown', 'Something went wrong while talking to the server. Please try again.');
 }
 
-function randomCode(): string {
-  let out = '';
-  for (let i = 0; i < PAIRING_CODE_LENGTH; i++) {
-    out += PAIRING_CODE_ALPHABET[Math.floor(Math.random() * PAIRING_CODE_ALPHABET.length)];
-  }
-  return out;
-}
+/** How long an action waits for the server's answer before it is reported as unreachable. */
+export const ACTION_TIMEOUT_MS = 12_000;
 
-export function randomId(length = 16): string {
-  const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
-  let out = '';
-  for (let i = 0; i < length; i++) out += alphabet[Math.floor(Math.random() * alphabet.length)];
-  return out;
-}
-
-function readState(data: Record<string, unknown> | undefined): SliceJson {
-  const raw = (data?.state ?? {}) as Record<string, unknown>;
-  const out: SliceJson = {};
-  for (const slice of SYNCED_SLICES) {
-    const value = raw[slice];
-    if (typeof value === 'string') out[slice] = value;
-  }
-  return out;
-}
-
-function readMembers(data: Record<string, unknown> | undefined): Record<string, MemberRecord> {
-  const raw = (data?.members ?? {}) as Record<string, unknown>;
-  const out: Record<string, MemberRecord> = {};
-  for (const [id, value] of Object.entries(raw)) {
-    if (!value || typeof value !== 'object') continue;
-    const m = value as Record<string, unknown>;
-    if (m.role !== 'parent' && m.role !== 'child') continue;
-    out[id] = {
-      role: m.role,
-      name: typeof m.name === 'string' ? m.name : 'Device',
-      platform: typeof m.platform === 'string' ? m.platform : 'unknown',
-      joinedAt: typeof m.joinedAt === 'number' ? m.joinedAt : 0,
-      lastSeenAt: typeof m.lastSeenAt === 'number' ? m.lastSeenAt : 0,
-    };
-  }
-  return out;
-}
-
-/** Creates a family seeded with this device's data. Returns the new family id. */
-export async function createFamily(state: SliceJson, deviceId: string, member: MemberRecord): Promise<string> {
-  try {
-    const ref = doc(collection(getDb(), FAMILIES));
-    await setDoc(ref, {
-      v: FAMILY_DOC_VERSION,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      state,
-      members: { [deviceId]: member },
-    });
-    return ref.id;
-  } catch (e) {
-    throw toLinkError(e);
-  }
-}
-
-/** Puts a fresh pairing code on offer for the family. A code that happens to be taken is retried. */
-export async function createPairing(familyId: string): Promise<PairingCode> {
-  let lastError: unknown = null;
-  for (let attempt = 0; attempt < 4; attempt++) {
-    const code = randomCode();
-    const expiresAt = Date.now() + PAIRING_TTL_MS;
-    try {
-      const ref = doc(getDb(), PAIRING, code);
-      // The rules allow creating a pairing document but never changing one, so a code that is
-      // already in use is refused and another one is tried.
-      await setDoc(ref, { familyId, createdAt: serverTimestamp(), expiresAt: Timestamp.fromMillis(expiresAt) });
-      return { code, expiresAt };
-    } catch (e) {
-      lastError = e;
-      const link = toLinkError(e);
-      if (link.code !== 'permission') throw link;
-    }
-  }
-  throw toLinkError(lastError);
-}
-
-export async function removePairing(code: string): Promise<void> {
-  try {
-    await deleteDoc(doc(getDb(), PAIRING, code));
-  } catch {
-    // Best effort: the code expires on its own.
-  }
-}
-
-/** Looks up a pairing code. Returns the family id it points to. */
-export async function redeemPairing(code: string): Promise<string> {
-  let snap;
-  try {
-    snap = await getDoc(doc(getDb(), PAIRING, code));
-  } catch (e) {
-    throw toLinkError(e);
-  }
-  if (!snap.exists()) throw new LinkError('code-not-found', "That code isn't right. Check it on the parent's phone and try again.");
-  const data = snap.data() as Record<string, unknown>;
-  const expires = data.expiresAt instanceof Timestamp ? data.expiresAt.toMillis() : 0;
-  if (expires < Date.now()) throw new LinkError('code-expired', "That code has expired. Ask for a new one on the parent's phone.");
-  if (typeof data.familyId !== 'string' || !data.familyId) {
-    throw new LinkError('code-not-found', "That code isn't right. Check it on the parent's phone and try again.");
-  }
-  return data.familyId;
-}
-
-/** Reads the family once, from the server. */
-export async function fetchFamily(familyId: string): Promise<FamilySnapshot> {
-  try {
-    const snap = await getDoc(familyRef(familyId));
-    const data = snap.data() as Record<string, unknown> | undefined;
-    return { exists: snap.exists(), fromCache: snap.metadata.fromCache, state: readState(data), members: readMembers(data) };
-  } catch (e) {
-    throw toLinkError(e);
-  }
-}
-
-export async function writeMember(familyId: string, deviceId: string, member: MemberRecord): Promise<void> {
-  try {
-    await updateDoc(familyRef(familyId), { [`members.${deviceId}`]: member, updatedAt: serverTimestamp() });
-  } catch (e) {
-    throw toLinkError(e);
-  }
-}
-
-export async function touchMember(familyId: string, deviceId: string): Promise<void> {
-  try {
-    await updateDoc(familyRef(familyId), { [`members.${deviceId}.lastSeenAt`]: Date.now() });
-  } catch {
-    // Presence is a nicety; a failure here is not worth reporting.
-  }
-}
-
-export async function removeMember(familyId: string, deviceId: string): Promise<void> {
-  try {
-    await updateDoc(familyRef(familyId), { [`members.${deviceId}`]: deleteField(), updatedAt: serverTimestamp() });
-  } catch {
-    // Best effort: this device forgets the family either way.
-  }
-}
-
-/** Listens to the family. Returns the function that stops listening. */
-export function watchFamily(
-  familyId: string,
-  onData: (snapshot: FamilySnapshot) => void,
-  onError: (error: LinkError) => void,
-): () => void {
-  try {
-    return onSnapshot(
-      familyRef(familyId),
-      { includeMetadataChanges: true },
-      (snap) => {
-        const data = snap.data() as Record<string, unknown> | undefined;
-        onData({ exists: snap.exists(), fromCache: snap.metadata.fromCache, state: readState(data), members: readMembers(data) });
+/**
+ * Waits for the server's answer to a write or read, at most ACTION_TIMEOUT_MS. The SDK itself
+ * never gives up on a write: without a connection it keeps it queued. So a write that times out
+ * here may still be stored later; `onLate` is called if that happens, to undo it or to take it in.
+ * Rejects with a LinkError ('network') on a timeout and with the SDK's error otherwise: pass it
+ * through `toLinkError` before showing it to anyone.
+ */
+export function acked<T>(work: Promise<T>, onLate?: (value: T) => void): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let done = false;
+    const timer = setTimeout(() => {
+      if (done) return;
+      done = true;
+      reject(new LinkError('network', OFFLINE_MESSAGE));
+    }, ACTION_TIMEOUT_MS);
+    work.then(
+      (value) => {
+        if (done) {
+          if (onLate) onLate(value);
+          return;
+        }
+        done = true;
+        clearTimeout(timer);
+        resolve(value);
       },
-      (e) => onError(toLinkError(e)),
+      (e: unknown) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        // The SDK's own error, so that callers can still tell a refusal from a missing document.
+        reject(e);
+      },
     );
-  } catch (e) {
-    onError(toLinkError(e));
-    return () => {};
+  });
+}
+
+// ---------------------------------------------------------------------------------------------
+// users/{uid}: which family an account belongs to
+// ---------------------------------------------------------------------------------------------
+
+export interface UserPointer {
+  familyId: string;
+  role: LinkRole;
+}
+
+/** Reads the pointer from the server. Null when the account has no family. */
+export async function readUserPointer(uid: string): Promise<UserPointer | null> {
+  const snap = await acked(getDocFromServer(doc(db(), userPath(uid))));
+  const data = snap.data();
+  if (!data || typeof data.familyId !== 'string' || (data.role !== 'parent' && data.role !== 'child')) return null;
+  return { familyId: data.familyId, role: data.role };
+}
+
+/** Allowed only once the member record exists with that role (firestore.rules, users). */
+export async function writeUserPointer(uid: string, pointer: UserPointer): Promise<void> {
+  await acked(setDoc(doc(db(), userPath(uid)), { familyId: pointer.familyId, role: pointer.role, updatedAt: SERVER_TIME }));
+}
+
+/** Allowed only once the member record is gone. */
+export async function deleteUserPointer(uid: string): Promise<void> {
+  await acked(deleteDoc(doc(db(), userPath(uid))));
+}
+
+// ---------------------------------------------------------------------------------------------
+// The family
+// ---------------------------------------------------------------------------------------------
+
+const ID_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+
+/** A random 20-character document id. */
+export function randomDocId(length = 20): string {
+  let out = '';
+  for (let i = 0; i < length; i++) out += ID_CHARS[Math.floor(Math.random() * ID_CHARS.length)];
+  return out;
+}
+
+/** firestore.rules allows 20 document lookups per batch, and every write in it costs at least one. */
+export const MAX_BATCH_WRITES = 20;
+
+type BatchWrite = { op: 'set'; path: string; data: DocumentData } | { op: 'update'; path: string; data: DocumentData } | { op: 'delete'; path: string };
+
+/** Commits the writes in batches of at most MAX_BATCH_WRITES, one after the other. */
+async function commitAll(writes: BatchWrite[]): Promise<void> {
+  for (let start = 0; start < writes.length; start += MAX_BATCH_WRITES) {
+    const batch = writeBatch(db());
+    for (const write of writes.slice(start, start + MAX_BATCH_WRITES)) {
+      const ref = doc(db(), write.path);
+      if (write.op === 'set') batch.set(ref, write.data);
+      else if (write.op === 'update') batch.update(ref, write.data);
+      else batch.delete(ref);
+    }
+    await acked(batch.commit());
   }
 }
 
 /**
- * Sends this device's changed slices. Inside a transaction, each one is merged three ways:
- * `base` (what both phones last agreed on), `local` (this phone now) and the server's value now.
- * Returns what was written, so the caller can adopt it.
+ * Batch 1 of creating a family (SPEC 3.1 step 2): the family, the founder's member record and the
+ * account's pointer, together or not at all. Refused unless the account's email address is
+ * confirmed and listed in `ownerEmails()` in firestore.rules, and the account has no family yet.
  */
-export async function pushSlices(
-  familyId: string,
-  deviceId: string,
-  changes: { slice: SyncedSlice; base: string | undefined; local: string }[],
-): Promise<SliceJson> {
-  const ref = familyRef(familyId);
-  try {
-    return await runTransaction(getDb(), async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists()) throw new LinkError('family-missing', 'This family no longer exists on the server.');
-      const remote = readState(snap.data() as Record<string, unknown>);
-      const written: SliceJson = {};
-      const update: Record<string, unknown> = { updatedAt: serverTimestamp(), [`members.${deviceId}.lastSeenAt`]: Date.now() };
-      for (const change of changes) {
-        const remoteJson = remote[change.slice];
-        let merged = change.local;
-        if (remoteJson !== undefined && remoteJson !== change.local) {
-          try {
-            const base = change.base === undefined ? undefined : JSON.parse(change.base);
-            merged = JSON.stringify(mergeSlice(base, JSON.parse(change.local), JSON.parse(remoteJson)));
-          } catch {
-            merged = change.local;
-          }
-        }
-        written[change.slice] = merged;
-        if (merged !== remoteJson) update[`state.${change.slice}`] = merged;
+export async function createFamilyBatch(input: { familyId: string; uid: string; familyName: string; memberName: string; platform: string }): Promise<void> {
+  const { familyId, uid } = input;
+  await commitAll([
+    { op: 'set', path: familyPath(familyId), data: { v: 2, owner: uid, name: input.familyName, createdAt: SERVER_TIME } },
+    {
+      op: 'set',
+      path: memberPath(familyId, uid),
+      data: { role: 'parent', childId: null, name: input.memberName, platform: input.platform, joinedAt: SERVER_TIME, addedBy: uid, code: null },
+    },
+    { op: 'set', path: userPath(uid), data: { familyId, role: 'parent', updatedAt: SERVER_TIME } },
+  ]);
+}
+
+/**
+ * Batch 2 (SPEC 3.1 step 3): what a new family starts with. One child (the sample numbers and app
+ * list, the name the parent typed, no device yet) and the sample places, schedules and tasks, each
+ * under its sample id with `ord` = its position. No sites, requests, alerts or messages.
+ * Every id is fixed by the input, so running it again writes the same documents; `isSeeded` tells
+ * whether it already went through.
+ */
+export async function seedFamilyBatch(input: { familyId: string; uid: string; childId: string; childName: string; childAge: number | null }): Promise<void> {
+  const ctx: SyncCtx = { familyId: input.familyId, uid: input.uid, role: 'parent', childId: null, serverTimestamp: SERVER_TIME };
+  const child = makeChild(input.childId, input.childName, input.childAge ?? undefined);
+  const writes: BatchWrite[] = [{ op: 'set', path: SCHEMA.children.docPath(input.familyId, child.id), data: SCHEMA.children.toDoc(child, ctx, { ord: 0 }) }];
+  SEED_PLACES.forEach((item, ord) => writes.push({ op: 'set', path: SCHEMA.places.docPath(input.familyId, item.id), data: SCHEMA.places.toDoc(item, ctx, { ord }) }));
+  SEED_SCHEDULES.forEach((item, ord) => writes.push({ op: 'set', path: SCHEMA.schedules.docPath(input.familyId, item.id), data: SCHEMA.schedules.toDoc(item, ctx, { ord }) }));
+  SEED_TASKS.forEach((item, ord) => writes.push({ op: 'set', path: SCHEMA.tasks.docPath(input.familyId, item.id), data: SCHEMA.tasks.toDoc(item, ctx, { ord }) }));
+  await commitAll(writes);
+}
+
+/** True when the seed child exists on the server: batch 2 is all or nothing, so then it is all there. */
+export async function isSeeded(familyId: string, childId: string): Promise<boolean> {
+  const snap = await acked(getDocFromServer(doc(db(), childPath(familyId, childId))));
+  return snap.exists();
+}
+
+export interface FamilyInfo {
+  name: string;
+  owner: string;
+}
+
+export interface SnapshotMeta {
+  /** True when the data did not come from the server (no connection, or not answered yet). */
+  fromCache: boolean;
+}
+
+type Stop = () => void;
+type OnError = (error: LinkError, refused: boolean) => void;
+
+const failWith = (onError: OnError) => (e: unknown) => onError(toLinkError(e), isRefusal(e));
+
+/** Listens to families/{fid}. `info` is null when the document does not exist. */
+export function listenFamily(familyId: string, onData: (info: FamilyInfo | null, meta: SnapshotMeta) => void, onError: OnError): Stop {
+  return onSnapshot(
+    doc(db(), familyPath(familyId)),
+    { includeMetadataChanges: true },
+    (snap) => {
+      const data = snap.data();
+      const info = data && typeof data.name === 'string' && typeof data.owner === 'string' ? { name: data.name, owner: data.owner } : null;
+      onData(info, { fromCache: snap.metadata.fromCache });
+    },
+    failWith(onError),
+  );
+}
+
+/** Parent: renames the family. */
+export async function renameFamily(familyId: string, name: string): Promise<void> {
+  await acked(updateDoc(doc(db(), familyPath(familyId)), { name }));
+}
+
+// ---------------------------------------------------------------------------------------------
+// Members and devices
+// ---------------------------------------------------------------------------------------------
+
+export interface MemberDoc {
+  uid: string;
+  role: LinkRole;
+  childId: string | null;
+  name: string;
+  platform: string;
+  /** Milliseconds. While the server's time is still on its way, this device's estimate of it. */
+  joinedAt: number;
+}
+
+export interface DeviceDoc {
+  id: string;
+  uid: string;
+  name: string;
+  platform: string;
+  lastSeenAt: number | null;
+}
+
+function toMember(uid: string, data: DocumentData | undefined): MemberDoc | null {
+  if (!data || (data.role !== 'parent' && data.role !== 'child')) return null;
+  return {
+    uid,
+    role: data.role,
+    childId: typeof data.childId === 'string' ? data.childId : null,
+    name: typeof data.name === 'string' ? data.name : 'Device',
+    platform: typeof data.platform === 'string' ? data.platform : 'unknown',
+    joinedAt: millisOf(data.joinedAt) ?? Date.now(),
+  };
+}
+
+/** Reads one member record from the server. Null when there is none. Rejects when the caller is not in the family. */
+export async function readMember(familyId: string, uid: string): Promise<MemberDoc | null> {
+  const snap = await acked(getDocFromServer(doc(db(), memberPath(familyId, uid))));
+  return toMember(uid, snap.data());
+}
+
+export function listenMembers(familyId: string, onData: (members: MemberDoc[], meta: SnapshotMeta) => void, onError: OnError): Stop {
+  return onSnapshot(
+    collection(db(), `${familyPath(familyId)}/members`),
+    { includeMetadataChanges: true },
+    (snap) => {
+      const members: MemberDoc[] = [];
+      for (const d of snap.docs) {
+        const member = toMember(d.id, d.data({ serverTimestamps: 'estimate' }));
+        if (member) members.push(member);
       }
-      tx.update(ref, update);
-      return written;
-    });
-  } catch (e) {
-    throw toLinkError(e);
+      onData(members, { fromCache: snap.metadata.fromCache });
+    },
+    failWith(onError),
+  );
+}
+
+export function listenDevices(familyId: string, onData: (devices: DeviceDoc[], meta: SnapshotMeta) => void, onError: OnError): Stop {
+  return onSnapshot(
+    collection(db(), `${familyPath(familyId)}/devices`),
+    { includeMetadataChanges: true },
+    (snap) => {
+      const devices: DeviceDoc[] = [];
+      for (const d of snap.docs) {
+        const data = d.data({ serverTimestamps: 'estimate' });
+        if (typeof data.uid !== 'string') continue;
+        devices.push({
+          id: d.id,
+          uid: data.uid,
+          name: typeof data.name === 'string' ? data.name : 'Device',
+          platform: typeof data.platform === 'string' ? data.platform : 'unknown',
+          lastSeenAt: millisOf(data.lastSeenAt),
+        });
+      }
+      onData(devices, { fromCache: snap.metadata.fromCache });
+    },
+    failWith(onError),
+  );
+}
+
+/** Parent: renames a member, or points a child's phone at another child profile. The role never changes. */
+export async function relabelMember(familyId: string, uid: string, change: { name?: string; childId?: string }): Promise<void> {
+  const fields: DocumentData = {};
+  if (change.name !== undefined) fields.name = change.name;
+  if (change.childId !== undefined) fields.childId = change.childId;
+  if (Object.keys(fields).length === 0) return;
+  await acked(updateDoc(doc(db(), memberPath(familyId, uid)), fields));
+}
+
+/**
+ * Parent: removes a member (never the founder) together with that account's "last seen" records.
+ * `deviceIds`: the ids of the devices documents whose `uid` is that account.
+ */
+export async function removeMember(familyId: string, uid: string, deviceIds: readonly string[]): Promise<void> {
+  await commitAll([{ op: 'delete', path: memberPath(familyId, uid) }, ...deviceIds.map((id): BatchWrite => ({ op: 'delete', path: devicePath(familyId, id) }))]);
+}
+
+/**
+ * A device leaves by itself (SPEC 3.3): its "last seen" record, its member record, then its
+ * pointer. Only the member record has to succeed; the other two are tidied up when possible.
+ * Stop listening before calling this: once the member record is gone every listener is refused.
+ */
+export async function leaveFamily(familyId: string, uid: string, deviceId: string): Promise<void> {
+  // Each on its own: deleting a document that is not there is refused by the rules, and must not
+  // take the member record's removal down with it.
+  await acked(deleteDoc(doc(db(), devicePath(familyId, deviceId)))).catch(() => {});
+  await acked(deleteDoc(doc(db(), memberPath(familyId, uid))));
+  await deleteUserPointer(uid).catch(() => {});
+}
+
+/** "Last seen" for this installed app. Not waited for: presence is a nicety and its failure is not reported. */
+export function writePresence(familyId: string, deviceId: string, device: { uid: string; name: string; platform: string }): void {
+  setDoc(doc(db(), devicePath(familyId, deviceId)), { uid: device.uid, name: device.name, platform: device.platform, lastSeenAt: SERVER_TIME }).catch(() => {});
+}
+
+/** A child device says goodbye in the parents' feed. Best effort: resolves either way. */
+export async function writeLeftAlert(familyId: string, uid: string, childId: string, childName: string): Promise<void> {
+  const first = childName.split(' ')[0] || 'A child';
+  const data = { kind: 'left', childId, icon: 'x-circle', color: '#F5A623', title: `${first}’s phone left the family`, body: 'It was unlinked on the phone itself.', unread: true, at: SERVER_TIME, by: uid };
+  await acked(setDoc(doc(db(), `${familyPath(familyId)}/alerts/${newId('n')}`), data)).catch(() => {});
+}
+
+// ---------------------------------------------------------------------------------------------
+// Pairing codes
+// ---------------------------------------------------------------------------------------------
+
+export interface PairingDoc {
+  code: string;
+  familyId: string;
+  role: LinkRole;
+  createdBy: string;
+  /** Milliseconds, by the clock of the phone that made the code. */
+  expiresAt: number;
+  claimedBy: string | null;
+  claimName: string | null;
+  claimPlatform: string | null;
+  approved: boolean;
+}
+
+function toPairing(snap: DocumentSnapshot): PairingDoc | null {
+  const data = snap.data();
+  if (!data || typeof data.familyId !== 'string' || (data.role !== 'parent' && data.role !== 'child')) return null;
+  return {
+    code: snap.id,
+    familyId: data.familyId,
+    role: data.role,
+    createdBy: typeof data.createdBy === 'string' ? data.createdBy : '',
+    expiresAt: millisOf(data.expiresAt) ?? 0,
+    claimedBy: typeof data.claimedBy === 'string' ? data.claimedBy : null,
+    claimName: typeof data.claimName === 'string' ? data.claimName : null,
+    claimPlatform: typeof data.claimPlatform === 'string' ? data.claimPlatform : null,
+    approved: data.approved === true,
+  };
+}
+
+/**
+ * Parent: puts a fresh code on offer for 15 minutes. A code that happens to exist already is
+ * refused by the rules (it would be a change to somebody's code), and another one is tried.
+ * If the server's answer comes after this has given up, the code is taken back.
+ */
+export async function createPairing(familyId: string, uid: string, role: LinkRole): Promise<{ code: string; role: LinkRole; expiresAt: number }> {
+  let last: unknown = null;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const code = randomPairingCode();
+    const expiresAt = Date.now() + PAIRING_TTL_MS;
+    const ref = doc(db(), pairingPath(code));
+    const data = {
+      familyId,
+      role,
+      createdBy: uid,
+      createdAt: SERVER_TIME,
+      expiresAt: Timestamp.fromMillis(expiresAt),
+      claimedBy: null,
+      claimName: null,
+      claimPlatform: null,
+      claimedAt: null,
+      approved: false,
+    };
+    try {
+      await acked(setDoc(ref, data), () => void deleteDoc(ref).catch(() => {}));
+      return { code, role, expiresAt };
+    } catch (e) {
+      last = e;
+      if (toLinkError(e).code !== 'permission') throw toLinkError(e);
+    }
   }
+  throw toLinkError(last);
+}
+
+/**
+ * Joining device: claims a code without being able to read it first. The rules accept the claim
+ * only for a code that exists, is unclaimed and has not run out; every other case is refused the
+ * same way, so a guess learns nothing. Rejects with 'invalid-code' then.
+ * If the server's answer comes after this has given up, the claim is withdrawn.
+ */
+export async function claimPairing(code: string, uid: string, name: string, platform: string): Promise<void> {
+  const ref = doc(db(), pairingPath(code));
+  try {
+    await acked(updateDoc(ref, { claimedBy: uid, claimName: name, claimPlatform: platform, claimedAt: SERVER_TIME }), () => void deleteDoc(ref).catch(() => {}));
+  } catch (e) {
+    const failure = toLinkError(e);
+    if (failure.code === 'permission' || errorCode(e) === 'not-found') throw new LinkError('invalid-code', 'That code is not valid or has expired. Ask for a new one.');
+    throw failure;
+  }
+}
+
+/**
+ * Listens to one pairing code: the parent who made it, or the device that claimed it. `pairing` is
+ * null when the document is gone. A device whose claim was declined is refused instead (the rules
+ * cannot show it a document that no longer exists): `onError` with `refused` true.
+ */
+export function listenPairing(code: string, onData: (pairing: PairingDoc | null, meta: SnapshotMeta) => void, onError: OnError): Stop {
+  return onSnapshot(
+    doc(db(), pairingPath(code)),
+    { includeMetadataChanges: true },
+    (snap) => onData(snap.exists() ? toPairing(snap) : null, { fromCache: snap.metadata.fromCache }),
+    failWith(onError),
+  );
+}
+
+/**
+ * Parent: approves the device that claimed the code (SPEC 3.2 step 3), in one batch:
+ * - `newChild`: creates that child profile, with the claiming phone as its device;
+ * - otherwise, for a child's phone, sets `deviceName` of the chosen child to the phone's name;
+ * - creates the member record of the claiming account (`childId` null for a parent code);
+ * - marks the code as used.
+ */
+export async function approvePairing(input: {
+  familyId: string;
+  /** The approving parent. */
+  uid: string;
+  pairing: PairingDoc;
+  /** The child the phone is enrolled as; null for a parent code. */
+  childId: string | null;
+  /** Set when `childId` is a child that does not exist yet: its name and, when known, its age. */
+  newChild?: { name: string; age?: number };
+}): Promise<void> {
+  const { familyId, uid, pairing, childId } = input;
+  if (!pairing.claimedBy || !pairing.claimName || !pairing.claimPlatform) throw new LinkError('no-claim', 'No device has used this code yet.');
+  const writes: BatchWrite[] = [];
+  if (pairing.role === 'child') {
+    if (!childId) throw new LinkError('invalid-input', 'Choose which child this phone belongs to.');
+    if (input.newChild) {
+      const ctx: SyncCtx = { familyId, uid, role: 'parent', childId: null, serverTimestamp: SERVER_TIME };
+      const child = { ...makeChild(childId, input.newChild.name, input.newChild.age), deviceName: pairing.claimName };
+      writes.push({ op: 'set', path: childPath(familyId, childId), data: SCHEMA.children.toDoc(child, ctx) });
+    } else {
+      writes.push({ op: 'update', path: childPath(familyId, childId), data: { deviceName: pairing.claimName } });
+    }
+  }
+  writes.push({
+    op: 'set',
+    path: memberPath(familyId, pairing.claimedBy),
+    data: {
+      role: pairing.role,
+      childId: pairing.role === 'child' ? childId : null,
+      name: pairing.claimName,
+      platform: pairing.claimPlatform,
+      joinedAt: SERVER_TIME,
+      addedBy: uid,
+      code: pairing.code,
+    },
+  });
+  writes.push({ op: 'update', path: pairingPath(pairing.code), data: { approved: true } });
+  await commitAll(writes);
+}
+
+/** Withdraws a code, declines a claim, cancels one's own claim, or tidies a used code away. */
+export async function deletePairing(code: string): Promise<void> {
+  await acked(deleteDoc(doc(db(), pairingPath(code))));
+}
+
+// ---------------------------------------------------------------------------------------------
+// The synced slices: listeners
+// ---------------------------------------------------------------------------------------------
+
+/** One document of a snapshot, as ./reconcile's `decodeSnapshot` and the `fromDoc` codecs take it. */
+export interface SnapshotDoc {
+  id: string;
+  /**
+   * The fields, with every time in milliseconds. A server time that is still on its way reads as
+   * null (the SDK's default), which is what the engine expects: "not known yet, keep the time this
+   * device has". An estimate would change once the server answered, and the engine compares times.
+   */
+  data: DocData;
+  /** `metadata.hasPendingWrites`: the document carries a write of this device the server has not confirmed. */
+  pending: boolean;
+}
+
+/**
+ * Attaches the listener for one entry of `schema.listenersFor`: a query (`orderBy`, then `limit`
+ * when bounded; single-field index only) or a single document. A single document arrives as a
+ * list of one, or an empty list when it does not exist.
+ * Metadata changes are included, so the listener also fires when a pending write is confirmed and
+ * when the connection comes or goes (`meta.fromCache`).
+ */
+export function listenPlan(plan: ListenerPlan, onData: (docs: SnapshotDoc[], meta: SnapshotMeta) => void, onError: OnError): Stop {
+  if (plan.kind === 'doc') {
+    return onSnapshot(
+      doc(db(), plan.path),
+      { includeMetadataChanges: true },
+      (snap) => {
+        const data = snap.data();
+        onData(data ? [{ id: snap.id, data: normaliseTimes(data), pending: snap.metadata.hasPendingWrites }] : [], { fromCache: snap.metadata.fromCache });
+      },
+      failWith(onError),
+    );
+  }
+  const base = collection(db(), plan.path);
+  const ordered = plan.orderBy ? query(base, orderBy(plan.orderBy, plan.dir ?? 'asc')) : query(base);
+  const bounded = plan.limit != null ? query(ordered, limitTo(plan.limit)) : ordered;
+  return onSnapshot(
+    bounded,
+    { includeMetadataChanges: true },
+    (snap) => {
+      onData(
+        snap.docs.map((d) => ({ id: d.id, data: normaliseTimes(d.data()), pending: d.metadata.hasPendingWrites })),
+        { fromCache: snap.metadata.fromCache },
+      );
+    },
+    failWith(onError),
+  );
+}
+
+/** Reads one document from the server. Null when it does not exist. Rejects when it cannot be read. */
+export async function fetchDoc(path: string): Promise<SnapshotDoc | null> {
+  const snap = await acked(getDocFromServer(doc(db(), path)));
+  const data = snap.data();
+  return data ? { id: snap.id, data: normaliseTimes(data), pending: false } : null;
+}
+
+// ---------------------------------------------------------------------------------------------
+// The synced slices: writes
+// ---------------------------------------------------------------------------------------------
+
+/** Thrown inside the transaction of a write with `expect` when the stored document has moved on. */
+class Stale extends Error {}
+
+/**
+ * Sends one write of the engine. The promise settles when the server has answered: resolved means
+ * stored, rejected means refused (by the rules, or because the document is not what the write
+ * expected). Without a connection a plain write stays queued in the SDK and the promise stays
+ * open; a write with `expect` is a transaction, which needs a connection and fails at once.
+ *
+ * create  setDoc on a new document
+ * update  updateDoc with only the changed fields (and the role's stamps)
+ * delete  deleteDoc
+ * set     setDoc of a whole single document (signals/sos, live/status); with `expect` only if the
+ *         stored document still has that `at` (see SetWrite in ./reconcile)
+ *
+ * The data already carries `serverTime()` where the rules want the server's time.
+ */
+export function executeWrite(write: Write): Promise<void> {
+  const ref = doc(db(), write.path);
+  if (write.op === 'create') return setDoc(ref, write.data as DocumentData);
+  if (write.op === 'update') return updateDoc(ref, write.fields as DocumentData);
+  if (write.op === 'delete') return deleteDoc(ref);
+  const expect = write.expect;
+  if (!expect) return setDoc(ref, write.data as DocumentData);
+  return runTransaction(
+    db(),
+    async (tx) => {
+      const snap = await tx.get(ref);
+      const stored = snap.data();
+      if (!stored || millisOf(stored.at) !== expect.at) throw new Stale('the document is not the one that was expected');
+      tx.set(ref, write.data as DocumentData);
+    },
+    { maxAttempts: 2 },
+  );
+}
+
+/** A sentence for a write that did not go through, shown briefly (LinkState.error). */
+export function refusalMessage(write: Write, e: unknown): string {
+  if (e instanceof Stale) return 'That SOS had already changed on another phone. Nothing was sent.';
+  const failure = toLinkError(e);
+  if (failure.code === 'network') return write.op === 'set' ? "That needs a connection and the server can't be reached. It was not sent." : failure.message;
+  if (failure.code === 'permission') return 'The server did not accept that change, so it was put back.';
+  return 'A change could not be saved, so it was put back.';
 }

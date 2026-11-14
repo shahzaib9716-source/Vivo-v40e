@@ -3,83 +3,98 @@ import { router } from 'expo-router';
 import { KeyboardAvoidingView, Platform, StyleSheet } from 'react-native';
 
 import { InlineNote } from '@/components/InlineNote';
-import { DeviceList, LinkFootnote, LinkStatusCard, Step } from '@/components/LinkParts';
+import { CheckCode, DeviceList, LinkFootnote, LinkStatusCard, Step, useLinkAction } from '@/components/LinkParts';
 import { InlineConfirm, TextField } from '@/components/RuleForm';
 import { Button, Card, Header, Row, Screen, SectionLabel, Text } from '@/components/ui';
-import { APP_VARIANT } from '@/config/variant';
+import { SIDE_HOME } from '@/config/variant';
 import { useStore } from '@/state/store';
 import { useLink } from '@/sync/link';
 import { formatPairingCode, normalisePairingCode, PAIRING_CODE_LENGTH, type LinkRole } from '@/sync/types';
 import { spacing, useTheme } from '@/theme';
 
-/** Joining a family with a code from the parent's phone. Mostly the child's screen. */
+/**
+ * Joining a family with a one-time code from a parent's phone.
+ *
+ * A child's phone needs nothing else: entering the code signs it in without an email address, and
+ * it is in the family once a parent has compared the 4-character check and approved it. A second
+ * parent uses the same screen, signed in to their own confirmed account. Which of the two a phone
+ * becomes is decided by the code, on the server, not by this screen.
+ */
 export default function LinkDevice() {
   const { colors } = useTheme();
   const link = useLink();
-  const { role } = useStore();
+  const { role, children } = useStore();
+  const act = useLinkAction();
   const [input, setInput] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
   const [justLinked, setJustLinked] = useState(false);
   const [confirmUnlink, setConfirmUnlink] = useState(false);
 
-  // The side this device joins as: a single-side app knows; the combined app uses the side in view.
-  const joinAs: LinkRole = (APP_VARIANT ?? role ?? 'child') === 'parent' ? 'parent' : 'child';
+  // Until the server has given this device a role, the wording follows the side that was chosen here.
+  const joinAs: LinkRole = link.role ?? (role === 'parent' ? 'parent' : 'child');
   const code = normalisePairingCode(input);
   const complete = code.length === PAIRING_CODE_LENGTH;
   const joined = link.role !== null;
+  const account = link.account && !link.account.anonymous ? link.account : null;
+  // A code for another parent is refused unless a confirmed parent account is signed in.
+  const needsAccount = joinAs === 'parent' && !joined && !link.pendingJoin && (account === null || !account.emailVerified);
+  const isOwner = link.members.some((m) => m.isThisAccount && m.isOwner);
+  const childName = (childId: string) => children.find((c) => c.id === childId)?.name.split(' ')[0] ?? null;
 
-  const join = async () => {
-    if (busy || !complete) return;
-    setBusy(true);
-    setProblem(null);
-    try {
-      await link.joinWithCode(code, joinAs);
+  // Resolves once the code has been claimed. The device is linked when a parent approves it.
+  const join = () => {
+    if (!complete) return;
+    act.run('join', () => link.joinWithCode(code), () => {
       setInput('');
       setJustLinked(true);
-    } catch (e) {
-      setProblem(e instanceof Error ? e.message : 'Something went wrong. Please try again.');
-    } finally {
-      setBusy(false);
-    }
+    });
   };
 
-  const unlink = async () => {
+  const cancelJoin = () => {
+    setJustLinked(false);
+    act.run('cancel', () => link.cancelJoin());
+  };
+
+  const unlink = () => {
     setConfirmUnlink(false);
     setJustLinked(false);
-    await link.unlink();
+    act.run('unlink', () => link.unlink());
   };
+
+  const done = () => {
+    if (router.canDismiss()) router.dismissAll();
+    (router.replace as any)(SIDE_HOME[joinAs]);
+  };
+
+  const problem = act.problem ? <InlineNote tone="neutral" icon="alert-circle" title="That didn't work" detail={act.problem} style={styles.gapTop} /> : null;
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Screen>
-        <Header back title="Family link" subtitle={joinAs === 'child' ? 'Connect this device to your family' : 'Join your family from this device'} />
+        <Header back title="Family link" subtitle={joinAs === 'child' ? 'Connect this phone to your family' : 'Join your family from this phone'} />
 
         <LinkStatusCard link={link} />
 
         {!link.configured ? (
-          <InlineNote
-            tone="neutral"
-            title="What this means"
-            detail="Both sides can still be shown on one phone with the “Demo: preview” row. Linking two phones needs a build with a server."
-          />
+          <InlineNote tone="neutral" title="What this means" detail="This copy of Haven was built without a server, so phones cannot be linked. It shows sample data only." />
         ) : joined ? (
           <>
             {justLinked ? (
               <InlineNote
                 tone="success"
+                icon="check-circle"
                 title="You're linked"
                 detail={
                   joinAs === 'child'
-                    ? 'This device now shows your family’s data. Requests, check-ins and SOS reach your parent’s phone.'
-                    : 'This device now shows your family’s data and stays in step with the others.'
+                    ? 'This phone now shows your family’s rules. Requests, check-ins, messages and SOS reach your parent’s phone.'
+                    : 'This phone now shows your family’s data and stays in step with the others.'
                 }
                 style={styles.gapBottom}
               />
             ) : null}
+            {justLinked ? <Button label="Done" icon="check" onPress={done} style={styles.gapBottom} /> : null}
 
-            <SectionLabel>Linked devices</SectionLabel>
-            <DeviceList devices={link.devices} />
+            <SectionLabel>In this family</SectionLabel>
+            <DeviceList devices={link.members} childName={childName} />
 
             {joinAs === 'child' ? (
               <Card padded={false} style={styles.group}>
@@ -93,19 +108,46 @@ export default function LinkDevice() {
               </Card>
             ) : null}
 
-            {justLinked ? <Button label="Done" icon="check" onPress={() => router.back()} style={styles.gapBottom} /> : null}
-
-            {confirmUnlink ? (
+            {isOwner ? (
+              <LinkFootnote>You created this family, so this account stays in it. To stop using it on this phone, sign out under “Parent account”.</LinkFootnote>
+            ) : confirmUnlink ? (
               <InlineConfirm
-                title="Unlink this device?"
-                detail="It keeps the data it has now, which stops updating. Your family is not told automatically."
+                title="Unlink this phone?"
+                detail={
+                  joinAs === 'child'
+                    ? 'This phone leaves the family and goes back to sample data. Your family sees that it left. To come back it needs a new code.'
+                    : 'This account leaves the family and this phone goes back to sample data. To come back it needs a new code.'
+                }
                 confirmLabel="Unlink"
                 onCancel={() => setConfirmUnlink(false)}
                 onConfirm={unlink}
               />
             ) : (
-              <Button label="Unlink this device" icon="x-circle" variant="ghost" onPress={() => setConfirmUnlink(true)} />
+              <Button label="Unlink this phone" icon="x-circle" variant="ghost" loading={act.busy === 'unlink'} onPress={() => setConfirmUnlink(true)} />
             )}
+            {problem}
+          </>
+        ) : link.pendingJoin ? (
+          <>
+            <Card style={styles.waiting}>
+              <Text variant="h3" center>
+                Waiting for a parent
+              </Text>
+              <CheckCode check={link.pendingJoin.check} caption="The parent’s phone shows the same 4 characters under “Devices & Pairing”. This phone is linked as soon as they approve." />
+            </Card>
+            <Button label="Cancel the request" icon="x-circle" variant="ghost" loading={act.busy === 'cancel'} onPress={cancelJoin} />
+            {problem}
+          </>
+        ) : needsAccount ? (
+          <>
+            <InlineNote
+              tone="neutral"
+              icon="user"
+              title={account ? 'Confirm your email first' : 'Sign in first'}
+              detail="A parent joins with their own account: sign in or create one, confirm the email address, then enter the code from the other parent."
+              style={styles.gapBottom}
+            />
+            <Button label={account ? 'Open my account' : 'Sign in or create an account'} icon="user" onPress={() => (router.push as any)('/account')} />
           </>
         ) : (
           <>
@@ -115,7 +157,7 @@ export default function LinkDevice() {
                 value={formatPairingCode(input)}
                 onChangeText={(text) => {
                   setInput(normalisePairingCode(text));
-                  setProblem(null);
+                  act.clearProblem();
                 }}
                 placeholder="XXXX-XXXX"
                 placeholderTextColor={colors.textFaint}
@@ -126,27 +168,28 @@ export default function LinkDevice() {
                 maxLength={PAIRING_CODE_LENGTH + 1}
                 returnKeyType="done"
                 onSubmitEditing={join}
-                invalid={problem !== null}
+                invalid={act.problem !== null}
                 accessibilityLabel="Pairing code"
                 style={styles.input}
               />
               <Text variant="small" tone="muted" center>
                 {PAIRING_CODE_LENGTH} letters and numbers from the parent's phone
               </Text>
-              <Button label="Link this device" icon="link" loading={busy} disabled={!complete} onPress={join} full />
+              <Button label={joinAs === 'child' ? 'Link this phone' : 'Join the family'} icon="link" loading={act.busy === 'join'} disabled={!complete} onPress={join} full />
             </Card>
-            {problem ? <InlineNote tone="neutral" icon="alert-circle" title="That didn't work" detail={problem} style={styles.gapBottom} /> : null}
+            {act.problem ? <InlineNote tone="neutral" icon="alert-circle" title="That didn't work" detail={act.problem} style={styles.gapBottom} /> : null}
 
             <SectionLabel>Where to find the code</SectionLabel>
             <Card padded={false} style={styles.group}>
               <Step n={1} text="On the parent's phone, open Haven" />
               <Step n={2} text="Family tab, then “Devices & Pairing”" />
-              <Step n={3} text="Tap “Create a link code” and read it out" last />
+              <Step n={3} text={joinAs === 'child' ? 'Tap “A child’s phone” and read the code out' : 'Tap “Another parent” and read the code out'} last />
             </Card>
 
             <LinkFootnote>
-              Linking replaces the sample data on this device with your family’s data. It shares what is listed under “What’s shared”
-              and nothing else.
+              {joinAs === 'child'
+                ? 'Linking replaces the sample data on this phone with your family’s. A parent has to approve this phone before anything is shared, and “What’s shared” lists exactly what that is.'
+                : 'Linking replaces the sample data on this phone with your family’s. The other parent has to approve you before anything is shared.'}
             </LinkFootnote>
           </>
         )}
@@ -159,6 +202,8 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   entry: { gap: spacing.md, marginBottom: spacing.lg },
   input: { textAlign: 'center', fontSize: 24, letterSpacing: 4, height: 60 },
+  waiting: { alignItems: 'center', gap: spacing.lg, paddingVertical: spacing.xl, marginBottom: spacing.lg },
   group: { paddingHorizontal: spacing.lg, marginBottom: spacing.xl },
   gapBottom: { marginBottom: spacing.lg },
+  gapTop: { marginTop: spacing.md },
 });

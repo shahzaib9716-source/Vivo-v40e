@@ -187,7 +187,7 @@ export default function ChildHome() {
           </View>
 
           {/* Not linked yet: this device is still showing sample data */}
-          {linkStatus === 'unlinked' ? (
+          {linkStatus === 'signed-out' || linkStatus === 'removed' ? (
             <LinkCard onPress={() => (router.push as any)('/link-device')} label="Link this device to your family" style={styles.gapLg}>
               <View style={[styles.family, { backgroundColor: colors.success }]}>
                 <Feather name="link" size={20} color="#FFFFFF" />

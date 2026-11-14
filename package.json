@@ -47,7 +47,8 @@
     "test:rules": "node --test --test-concurrency=1 --test-timeout=60000 tests/rules/*.test.mjs",
     "typecheck": "tsc --noEmit",
     "test:sync": "node --import ./tests/sync/register.mjs --test tests/sync/unit.test.mjs tests/sync/model.test.mjs",
-    "apk": "expo prebuild --platform android --clean && cd android && ./gradlew assembleRelease && echo 'OK: the APK is at android/app/build/outputs/apk/release/app-release.apk'"
+    "apk": "expo prebuild --platform android --clean && cd android && ./gradlew assembleRelease && echo 'OK: the APK is at android/app/build/outputs/apk/release/app-release.apk'",
+    "test:live": "node --test --test-concurrency=1 --test-timeout=400000 tests/sync/live/*.test.mjs"
   },
   "private": true
 }

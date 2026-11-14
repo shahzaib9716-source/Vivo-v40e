@@ -6,7 +6,7 @@ import Constants from 'expo-constants';
  * It comes from `firebase.config.json` in the project root (or the HAVEN_FIREBASE_CONFIG
  * environment variable) by way of app.config.js, which puts it in `extra.firebase`. These
  * values identify the Firebase project; they are not passwords. Access is decided by
- * firestore.rules.
+ * firestore.rules and by who is signed in.
  */
 export interface FirebaseWebConfig {
   apiKey: string;
@@ -30,9 +30,9 @@ function read(): FirebaseWebConfig | null {
   }
 }
 
-function readEmulator(): { host: string; port: number } | null {
+function readEmulator(key: 'firestoreEmulator' | 'authEmulator'): { host: string; port: number } | null {
   try {
-    const raw: unknown = Constants.expoConfig?.extra?.firestoreEmulator;
+    const raw: unknown = Constants.expoConfig?.extra?.[key];
     if (typeof raw !== 'string' || !raw.includes(':')) return null;
     const [host, port] = raw.split(':');
     const n = Number(port);
@@ -45,7 +45,10 @@ function readEmulator(): { host: string; port: number } | null {
 export const FIREBASE_CONFIG: FirebaseWebConfig | null = read();
 
 /** For local testing only: "host:port" of a Firestore emulator (HAVEN_FIRESTORE_EMULATOR). */
-export const FIRESTORE_EMULATOR = readEmulator();
+export const FIRESTORE_EMULATOR = readEmulator('firestoreEmulator');
+
+/** For local testing only: "host:port" of a Firebase Auth emulator (HAVEN_AUTH_EMULATOR). */
+export const AUTH_EMULATOR = readEmulator('authEmulator');
 
 /** True when this build can link devices. */
 export const isBackendConfigured = FIREBASE_CONFIG !== null;

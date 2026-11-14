@@ -1,16 +1,38 @@
-import { StyleSheet, View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 
 import { Card, IconBadge, Text } from '@/components/ui';
-import type { LinkedDevice, LinkState, LinkStatus } from '@/sync/types';
+import type { FamilyMember, LinkState, LinkStatus } from '@/sync/types';
 import { radius, spacing, useTheme } from '@/theme';
 
-/** Pieces shared by the two linking screens (parent: /pairing, child: /link-device). */
+/** Pieces shared by the account and linking screens (/account, /pairing, /link-device). */
 
-const PLATFORM: Record<string, string> = { android: 'Android', ios: 'iPhone', web: 'Browser' };
+export const PLATFORM: Record<string, string> = { android: 'Android', ios: 'iPhone', web: 'Browser' };
 
-function seen(device: LinkedDevice, now: number): string {
-  if (device.isThisDevice) return 'This device';
+/**
+ * Runs link actions for a screen: one at a time, with the failure kept as a sentence to show.
+ * (A promise chain rather than try/finally: these screens are built with the React Compiler.)
+ */
+export function useLinkAction() {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const run = (name: string, action: () => Promise<unknown>, done?: () => void) => {
+    if (busy) return;
+    setBusy(name);
+    setProblem(null);
+    action()
+      .then(() => done?.())
+      .catch((e: unknown) => setProblem(e instanceof Error && e.message ? e.message : 'Something went wrong. Please try again.'))
+      .then(() => setBusy(null));
+  };
+  return { busy, problem, run, clearProblem: () => setProblem(null) };
+}
+
+function seen(device: FamilyMember, now: number): string {
+  // A member is an account. A child's account lives on one phone; a parent's can be signed in on several.
+  if (device.isThisAccount) return device.role === 'child' ? 'This device' : 'You';
+  if (device.lastSeenAt == null) return 'Not seen yet';
   const minutes = Math.floor((now - device.lastSeenAt) / 60000);
   if (minutes < 2) return 'Active now';
   if (minutes < 60) return `Seen ${minutes} min ago`;
@@ -20,14 +42,21 @@ function seen(device: LinkedDevice, now: number): string {
 
 /** One sentence each for the top of a linking screen. */
 export function linkSummary(link: LinkState): { title: string; detail: string; tone: 'ok' | 'idle' | 'warn' } {
-  const others = Math.max(0, link.devices.length - 1);
+  const others = Math.max(0, link.members.length - 1);
   const text: Record<LinkStatus, { title: string; detail: string; tone: 'ok' | 'idle' | 'warn' }> = {
     unconfigured: {
       title: "Linking isn't set up in this build",
       detail: 'This copy was built without a server, so each app keeps its own data on its own phone.',
       tone: 'idle',
     },
-    unlinked: { title: 'Not linked yet', detail: 'This device keeps its own data until it joins a family.', tone: 'idle' },
+    'signed-out': { title: 'Not linked yet', detail: 'This device shows sample data until it joins a family.', tone: 'idle' },
+    'needs-family': { title: 'Signed in, no family yet', detail: 'This account has no family yet. Create one to link devices.', tone: 'idle' },
+    waiting: {
+      title: 'Waiting for a parent',
+      detail: link.pendingJoin ? `Ask a parent to approve this device. Both phones show the check ${link.pendingJoin.check}.` : 'Ask a parent to approve this device.',
+      tone: 'idle',
+    },
+    removed: { title: 'This device was removed', detail: 'A parent removed it from the family. It shows sample data again.', tone: 'warn' },
     connecting: { title: 'Connecting…', detail: 'Reaching your family’s data.', tone: 'idle' },
     linked: {
       title: others === 0 ? 'Family created' : `Linked with ${others} other ${others === 1 ? 'device' : 'devices'}`,
@@ -61,7 +90,11 @@ export function LinkStatusCard({ link }: { link: LinkState }) {
   );
 }
 
-export function DeviceList({ devices }: { devices: LinkedDevice[] }) {
+/**
+ * The members of the family. With `onRemove`, every member a parent may remove (anyone but this
+ * account and the person who created the family) gets a remove control.
+ */
+export function DeviceList({ devices, onRemove, childName }: { devices: FamilyMember[]; onRemove?: (member: FamilyMember) => void; childName?: (childId: string) => string | null }) {
   const { colors } = useTheme();
   const now = Date.now();
   if (devices.length === 0) return null;
@@ -69,7 +102,7 @@ export function DeviceList({ devices }: { devices: LinkedDevice[] }) {
     <Card padded={false} style={styles.list}>
       {devices.map((device, index) => (
         <View
-          key={device.id}
+          key={device.uid}
           accessible
           accessibilityLabel={`${device.name}, ${device.role}, ${PLATFORM[device.platform] ?? device.platform}, ${seen(device, now)}`}
           style={[styles.device, index > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.hairline }]}>
@@ -83,17 +116,55 @@ export function DeviceList({ devices }: { devices: LinkedDevice[] }) {
               {device.name}
             </Text>
             <Text variant="small" tone="muted" numberOfLines={1}>
-              {device.role === 'parent' ? 'Parent' : 'Child'} · {PLATFORM[device.platform] ?? device.platform}
+              {memberRole(device, childName)} · {PLATFORM[device.platform] ?? device.platform}
             </Text>
           </View>
-          <View style={[styles.pill, { backgroundColor: device.isThisDevice ? colors.primarySoft : colors.surfaceSunken }]}>
-            <Text variant="tiny" color={device.isThisDevice ? colors.primary : colors.textMuted}>
+          <View style={[styles.pill, { backgroundColor: device.isThisAccount ? colors.primarySoft : colors.surfaceSunken }]}>
+            <Text variant="tiny" color={device.isThisAccount ? colors.primary : colors.textMuted}>
               {seen(device, now)}
             </Text>
           </View>
+          {onRemove && !device.isThisAccount && !device.isOwner ? (
+            <Pressable
+              onPress={() => onRemove(device)}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel={`Remove ${device.name}`}
+              style={({ pressed }) => [styles.remove, pressed && { opacity: 0.6 }]}>
+              <Feather name="x" size={18} color={colors.textMuted} />
+            </Pressable>
+          ) : null}
         </View>
       ))}
     </Card>
+  );
+}
+
+function memberRole(member: FamilyMember, childName?: (childId: string) => string | null): string {
+  if (member.role === 'parent') return member.isOwner ? 'Parent · created the family' : 'Parent';
+  const name = member.childId && childName ? childName(member.childId) : null;
+  return name ? `${name}’s phone` : 'Child';
+}
+
+/**
+ * The four characters both phones show while a phone waits to be approved. They are the end of the
+ * joining phone's account id, so a different phone that used the code shows different characters.
+ */
+export function CheckCode({ check, caption }: { check: string; caption: string }) {
+  const { colors } = useTheme();
+  return (
+    <View accessible accessibilityLabel={`Check: ${check.split('').join(' ')}. ${caption}`} style={styles.checkWrap}>
+      <View style={styles.checkRow}>
+        {check.split('').map((ch, index) => (
+          <View key={index} style={[styles.checkCell, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+            <Text variant="h2">{ch}</Text>
+          </View>
+        ))}
+      </View>
+      <Text variant="small" tone="muted" center>
+        {caption}
+      </Text>
+    </View>
   );
 }
 
@@ -133,6 +204,10 @@ const styles = StyleSheet.create({
   list: { paddingHorizontal: spacing.lg, marginBottom: spacing.xl },
   device: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md },
   pill: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.pill },
+  remove: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  checkWrap: { alignItems: 'center', gap: spacing.sm },
+  checkRow: { flexDirection: 'row', gap: spacing.sm },
+  checkCell: { width: 48, height: 56, borderRadius: radius.md, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
   step: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md },
   stepNum: { width: 28, height: 28, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
   note: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg, paddingHorizontal: spacing.xs },
