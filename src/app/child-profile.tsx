@@ -45,7 +45,7 @@ function openLocationTab() {
 
 export default function ChildProfile() {
   const { colors } = useTheme();
-  const { activeChild, activeChildId, pauseDevice, resumeDevice, renameChild } = useStore();
+  const { activeChild, activeChildId, pauseDevice, resumeDevice, renameChild, live } = useStore();
 
   const scroll = useRef<ComponentRef<typeof ScrollView>>(null);
   /** The name being typed, or null while the rename editor is closed. */
@@ -96,6 +96,11 @@ export default function ChildProfile() {
   };
 
   const askUnpair = () => {
+    // In a real family, phones are removed under Devices & Pairing, where it really happens.
+    if (live) {
+      (router.push as any)('/pairing');
+      return;
+    }
     Keyboard.dismiss();
     setDraft(null);
     setUnpair('confirm');
@@ -123,11 +128,20 @@ export default function ChildProfile() {
             </Text>
           </View>
 
-          <View style={styles.tiles}>
-            <StatTile value={fmtDuration(activeChild.usedMin)} caption="Today" color={colors.primary} />
-            <StatTile value={`${activeChild.battery}%`} caption="Battery" color={activeChild.battery < 30 ? colors.danger : colors.success} />
-            <StatTile value={activeChild.online ? 'Online' : 'Offline'} caption={activeChild.place} color={colors.info} />
-          </View>
+          {live ? (
+            // A real family: what the phones really report. Use, battery and place are not read by this version.
+            <View style={styles.tiles}>
+              <StatTile value={fmtDuration(activeChild.limitMin)} caption="Daily limit" color={colors.primary} />
+              <StatTile value={activeChild.bedtime ? 'Paused' : 'Active'} caption="Screen time" color={activeChild.bedtime ? colors.warning : colors.success} />
+              <StatTile value={activeChild.deviceName ? 'Linked' : 'No phone'} caption={activeChild.deviceName || 'Link one under Devices'} color={colors.info} />
+            </View>
+          ) : (
+            <View style={styles.tiles}>
+              <StatTile value={fmtDuration(activeChild.usedMin)} caption="Today" color={colors.primary} />
+              <StatTile value={`${activeChild.battery}%`} caption="Battery" color={activeChild.battery < 30 ? colors.danger : colors.success} />
+              <StatTile value={activeChild.online ? 'Online' : 'Offline'} caption={activeChild.place} color={colors.info} />
+            </View>
+          )}
 
           <View style={styles.tiles}>
             {activeChild.bedtime ? (
@@ -149,7 +163,7 @@ export default function ChildProfile() {
             <Row title="Screen Time" subtitle={`Limit ${fmtDuration(activeChild.limitMin)}/day`} icon="clock" iconColor={categoryColors.screenTime} onPress={() => (router.push as any)('/screen-time')} />
             <Row title="App Limits" subtitle={`${activeChild.apps.length} apps`} icon="grid" iconColor={categoryColors.apps} onPress={() => (router.push as any)('/app-limits')} />
             <Row title="Schedules" subtitle="Bedtime & school" icon="calendar" iconColor={categoryColors.schedules} onPress={() => (router.push as any)('/schedules')} />
-            <Row title="Location" subtitle={activeChild.place} icon="map-pin" iconColor={categoryColors.location} onPress={openLocationTab} />
+            <Row title="Location" subtitle={live ? 'Example map · check-ins are real' : activeChild.place} icon="map-pin" iconColor={categoryColors.location} onPress={openLocationTab} />
           </Card>
 
           <SectionLabel>Device</SectionLabel>
@@ -209,7 +223,7 @@ export default function ChildProfile() {
                 />
               </View>
             ) : (
-              <Row title="Unpair device" subtitle={activeChild.deviceName} icon="trash-2" danger chevron={false} onPress={askUnpair} />
+              <Row title={live ? 'Remove this phone' : 'Unpair device'} subtitle={live ? 'Under Devices & Pairing' : activeChild.deviceName} icon="trash-2" danger chevron={live} onPress={askUnpair} />
             )}
           </Card>
 

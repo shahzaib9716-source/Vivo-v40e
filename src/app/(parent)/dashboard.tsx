@@ -184,7 +184,8 @@ export default function Dashboard() {
                   style={({ pressed }) => [styles.kid, pressed && styles.pressed]}>
                   <View style={[styles.kidAvatar, active && { borderColor: colors.primary }]}>
                     <Avatar name={c.name} size={56} />
-                    {c.online && <View style={[styles.online, { borderColor: colors.bg }]} />}
+                    {/* "Online" is only known in the sample data: nothing reports it in a real family. */}
+                    {c.online && !live && <View style={[styles.online, { borderColor: colors.bg }]} />}
                   </View>
                   <Text variant="smallStrong" tone={active ? 'default' : 'muted'}>
                     {c.name.split(' ')[0]}
@@ -250,7 +251,7 @@ export default function Dashboard() {
                 {activeChild.bedtime ? (
                   <HeroBtn icon="play" label="Resume" onPress={() => resumeDevice(activeChildId)} />
                 ) : (
-                  <HeroBtn icon="pause" label="Pause device" onPress={() => pauseDevice(activeChildId)} />
+                  <HeroBtn icon="pause" label={live ? 'Pause screen time' : 'Pause device'} onPress={() => pauseDevice(activeChildId)} />
                 )}
                 <HeroBtn icon="plus-circle" label="Add 30 min" onPress={() => grantBonus(activeChildId, 30)} />
               </View>

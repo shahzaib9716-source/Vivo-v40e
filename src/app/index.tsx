@@ -25,6 +25,8 @@ export default function Welcome() {
   // before offering a choice, so a linked phone never shows the chooser first.
   const undecided = link.configured && link.status === 'connecting' && side === null;
   const [waited, setWaited] = useState(false);
+  /** Set by the chooser: it does its own navigation, so the redirect below must not run as well. */
+  const [chosen, setChosen] = useState(false);
   useEffect(() => {
     if (!undecided) return;
     const timer = setTimeout(() => setWaited(true), 2500);
@@ -41,7 +43,7 @@ export default function Welcome() {
     return <Redirect href={'/onboarding' as any} />;
   }
 
-  if (side) {
+  if (side && !chosen) {
     return <Redirect href={SIDE_HOME[side] as any} />;
   }
 
@@ -49,6 +51,7 @@ export default function Welcome() {
   // step is the real setup (a parent's account, or a code on a child's phone); both can be skipped
   // to look around with sample data.
   const go = (next: AppSide) => {
+    setChosen(true);
     setRole(next);
     (router.replace as any)(SIDE_HOME[next]);
     if (link.configured) (router.push as any)(next === 'parent' ? '/account' : '/link-device');

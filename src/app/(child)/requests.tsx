@@ -33,7 +33,7 @@ function statusTint(colors: Colors, status: Status) {
 
 export default function ChildRequests() {
   const { colors } = useTheme();
-  const { childSelf, requests, requestExtraTime } = useStore();
+  const { childSelf, requests, requestExtraTime, live } = useStore();
   const toast = useToast();
 
   const mine = requests.filter((r) => r.childId === childSelf.id);
@@ -101,9 +101,11 @@ export default function ChildRequests() {
       <Text variant="small" tone="muted" style={styles.tilesNote}>
         {childSelf.bedtime
           ? 'Your device is paused right now.'
-          : left > 0
-            ? `You have ${fmtDuration(left)} left today.`
-            : "You've used all your time for today."}{' '}
+          : live
+            ? `Your limit is ${fmtDuration(childSelf.limitMin)} a day.`
+            : left > 0
+              ? `You have ${fmtDuration(left)} left today.`
+              : "You've used all your time for today."}{' '}
         Your family decides on every request.
       </Text>
 

@@ -227,7 +227,14 @@ export default function Messages() {
     };
   }, []);
 
-  const status = typing
+  // In a real family nothing reports who is online or where: only what the phones really sent.
+  const status = linked
+    ? isChild
+      ? { label: 'Your family', dot: colors.textFaint }
+      : child.checkInAt != null
+        ? { label: `Checked in ${updatedAgoOf(child, now)}`, dot: colors.success }
+        : { label: child.bedtime ? 'Screen time paused' : 'No check-in yet', dot: colors.textFaint }
+    : typing
     ? { label: 'typing…', dot: colors.success }
     : isChild
       ? { label: 'Online now', dot: colors.success }

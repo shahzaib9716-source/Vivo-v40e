@@ -213,7 +213,7 @@ export default function Pairing() {
                 ) : (
                   <>
                     <Step n={2} text="Choose “I’m a parent” and create their own account" />
-                    <Step n={3} text="Tap “Join with a code from the other parent”" last />
+                    <Step n={3} text="Tap “Join with a parent’s code”" last />
                   </>
                 )}
               </Card>

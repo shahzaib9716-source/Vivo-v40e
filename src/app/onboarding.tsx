@@ -694,9 +694,9 @@ function TransparencyArt({ index, progress, accent }: ArtProps) {
               </Text>
             </View>
           </View>
-          <ShareRow icon="clock" label="Screen time" shared />
-          <ShareRow icon="map-pin" label="Location" shared />
-          <ShareRow icon="message-circle" label="Messages" shared={false} />
+          <ShareRow icon="send" label="Requests" shared />
+          <ShareRow icon="check-circle" label="Check-ins" shared />
+          <ShareRow icon="message-circle" label="Other chats" shared={false} />
         </View>
       </Drift>
 

@@ -72,7 +72,8 @@ export default function LinkDevice() {
       <Screen>
         <Header back title="Family link" subtitle={joinAs === 'child' ? 'Connect this phone to your family' : 'Join your family from this phone'} />
 
-        <LinkStatusCard link={link} />
+        {/* While waiting, the card below says the same thing with the check: one is enough. */}
+        {link.pendingJoin && !joined ? null : <LinkStatusCard link={link} />}
 
         {!link.configured ? (
           <InlineNote tone="neutral" title="What this means" detail="This copy of Haven was built without a server, so phones cannot be linked. It shows sample data only." />

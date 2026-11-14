@@ -184,7 +184,7 @@ export default function AccountScreen() {
                   accessibilityLabel="Email"
                 />
               </Field>
-              <Field label="Password" hint={mode === 'Create account' ? `At least ${MIN_PASSWORD} characters. Use one you do not use anywhere else.` : undefined}>
+              <Field label="Password" hint={mode === 'Create account' ? `${MIN_PASSWORD} characters or more` : undefined}>
                 <View style={styles.passwordRow}>
                   <TextField
                     value={password}
@@ -225,7 +225,7 @@ export default function AccountScreen() {
             <LinkFootnote>
               {mode === 'Sign in'
                 ? 'Signing in on a new phone brings your family with it: the same children, rules and messages, on Android or iPhone.'
-                : 'One account per parent. You will get an email with a link to confirm the address before the family can be created.'}
+                : 'One account per parent, with a password you do not use anywhere else. You will get an email with a link to confirm the address before the family can be created.'}
             </LinkFootnote>
           </>
         ) : stage === 'confirm' ? (
@@ -253,7 +253,7 @@ export default function AccountScreen() {
               <Field label="Family name">
                 <TextField value={familyName} onChangeText={setFamilyName} placeholder="Our family" maxLength={60} autoCapitalize="words" returnKeyType="next" accessibilityLabel="Family name" />
               </Field>
-              <Field label="Your child’s first name" hint="You can add more children later, when you link their phones.">
+              <Field label="Your child’s first name">
                 <TextField value={childName} onChangeText={setChildName} placeholder="First name" maxLength={60} autoCapitalize="words" returnKeyType="next" accessibilityLabel="Child’s first name" />
               </Field>
               <Field label="Age (optional)" error={ageOk ? undefined : 'Enter a whole number from 0 to 25.'}>
@@ -262,9 +262,10 @@ export default function AccountScreen() {
               <Button label="Create family" icon="home" loading={act.busy === 'create'} disabled={!familyOk || (act.busy !== null && act.busy !== 'create')} onPress={createFamily} full />
             </Card>
             {problem}
+            <LinkFootnote>More children can be added later, when you link their phones. Only the account that owns this family’s Haven setup can create it; a second parent joins with a code instead.</LinkFootnote>
             <SectionLabel style={styles.sectionGap}>Already have a family?</SectionLabel>
             <Card padded={false} style={styles.group}>
-              <Row title="Join with a code from the other parent" subtitle="They create it under “Devices & Pairing”" icon="key" iconColor={colors.info} onPress={() => (router.push as any)('/link-device')} />
+              <Row title="Join with a parent’s code" subtitle="The other parent makes it under “Devices & Pairing”" icon="key" iconColor={colors.info} onPress={() => (router.push as any)('/link-device')} />
             </Card>
             <Button label="Use a different account" icon="log-out" variant="ghost" loading={act.busy === 'signout'} onPress={signOut} />
           </>
