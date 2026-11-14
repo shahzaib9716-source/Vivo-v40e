@@ -12,7 +12,8 @@ const brand = {
   accent: '#FF7A59',
   success: '#16B981',
   warning: '#F59E0B',
-  danger: '#FB4A4A',
+  // Deep enough for white text on a filled red button or tag (4.8:1).
+  danger: '#DC2626',
   info: '#3B9EFF',
 };
 

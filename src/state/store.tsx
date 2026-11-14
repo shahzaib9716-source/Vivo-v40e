@@ -250,6 +250,8 @@ interface Store {
   ready: boolean;
   completeOnboarding: () => void;
   resetOnboarding: () => void;
+  /** Puts every piece of demo data back to its starting state. Keeps the onboarding flag. */
+  resetDemoData: () => void;
 }
 
 const Ctx = createContext<Store | null>(null);
@@ -412,6 +414,20 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
     AsyncStorage.removeItem(ONBOARDED_KEY).catch(() => {});
   }, []);
 
+  const resetDemoData = useCallback(() => {
+    setKids(initialChildren);
+    setActiveChildId('c1');
+    setRequests(initialRequests);
+    setAlerts(initialAlerts);
+    setPlaces(initialPlaces);
+    setTasks(initialTasks);
+    setSchedules(initialSchedules);
+    setMessages(initialMessages);
+    setSites(initialSites);
+    setSosActive(false);
+    resolvedIds.current = new Set();
+  }, []);
+
   const activeChild = kids.find((c) => c.id === activeChildId) ?? kids[0];
   const childSelf = kids[0];
   const points = tasks.filter((t) => t.done).reduce((s, t) => s + t.points, 0);
@@ -424,14 +440,14 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
       resolveRequest, toggleTask, requestExtraTime, markAlertsRead, togglePlaceAlert,
       addPlace, removePlace, schedules, toggleSchedule, addSchedule, removeSchedule,
       messages, sendMessage, sites, addSite, removeSite, renameChild, requestUnlock,
-      checkIn, sosActive, triggerSOS, clearSOS, hasOnboarded, ready, completeOnboarding, resetOnboarding,
+      checkIn, sosActive, triggerSOS, clearSOS, hasOnboarded, ready, completeOnboarding, resetOnboarding, resetDemoData,
     }),
     [role, kids, activeChildId, activeChild, childSelf, requests, alerts, places, tasks, points,
       adjustLimit, grantBonus, toggleApp, setAppLimit, pauseDevice, resumeDevice, resolveRequest,
       toggleTask, requestExtraTime, markAlertsRead, togglePlaceAlert,
       addPlace, removePlace, schedules, toggleSchedule, addSchedule, removeSchedule,
       messages, sendMessage, sites, addSite, removeSite, renameChild, requestUnlock,
-      checkIn, sosActive, triggerSOS, clearSOS, hasOnboarded, ready, completeOnboarding, resetOnboarding],
+      checkIn, sosActive, triggerSOS, clearSOS, hasOnboarded, ready, completeOnboarding, resetOnboarding, resetDemoData],
   );
 
   return <Ctx.Provider value={value}>{node}</Ctx.Provider>;

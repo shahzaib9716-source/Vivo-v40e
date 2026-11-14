@@ -42,11 +42,13 @@ export function Button({
   accessibilityLabel,
   accessibilityHint,
 }: Props) {
-  const { colors } = useTheme();
+  const { colors, mode } = useTheme();
   const inactive = !!disabled || !!loading;
 
   const bg: Record<Variant, string> = {
-    primary: colors.primary,
+    // The dark theme's primary is lightened for text and icons; a filled button keeps the deeper
+    // violet so its white label stays at 5.7:1.
+    primary: mode === 'dark' ? '#5B51E0' : colors.primary,
     secondary: colors.surfaceAlt,
     ghost: 'transparent',
     danger: colors.danger,
