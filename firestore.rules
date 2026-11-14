@@ -1,67 +1,523 @@
 rules_version = '2';
 
-// Security rules for Haven's family link. Paste this whole file into
-// Firebase console > Firestore Database > Rules, then press Publish.
+// Haven: Firestore security rules (data layout v2).
 //
-// There are no user accounts in this build. A family id is a long random string that works as
-// the key to that family's data, and a pairing code is a short-lived way to hand that key to
-// another phone. So: anyone who knows a family id can read and change that family; nobody can
-// list families or codes to find one. That is acceptable for a demo with made-up data. A real
-// product needs sign-in and rules that check who is asking.
+// Who can do what is decided here, on the server, not in the app:
+//   * Nothing is readable or writable without Firebase Authentication.
+//   * A family's data is visible only to accounts that have a member record in that family.
+//   * A member is a "parent" or a "child". The role is written by a parent when a device is
+//     enrolled and can never be changed afterwards.
+//   * A device joins with a one-time pairing code that a parent creates. The device claims the
+//     code, a parent approves the claim, and only then does the device become a member.
+//   * A child device can read its own child's records and the family rules that apply to it. It
+//     can ask for time, check in, raise or clear its own SOS, send chat messages as itself and
+//     tick tasks. It cannot change limits, rules, membership or anyone else's records.
+//
+// Layout
+//   users/{uid}                                  which family this account belongs to
+//   pairing/{code}                               one-time pairing codes
+//   families/{fid}                               the family
+//   families/{fid}/members/{uid}                 one record per enrolled account (role lives here)
+//   families/{fid}/devices/{deviceId}            "last seen" per installed app
+//   families/{fid}/children/{cid}                a child's profile, limits and app rules (parent-owned)
+//   families/{fid}/children/{cid}/live/status    what the child's device reports (check-in time)
+//   families/{fid}/children/{cid}/requests/{id}  requests from that child
+//   families/{fid}/children/{cid}/messages/{id}  chat between the parents and that child
+//   families/{fid}/alerts/{id}                   the parents' activity feed
+//   families/{fid}/places|schedules|sites|tasks/{id}   family rules (parent-owned)
+//   families/{fid}/signals/sos                   the SOS flag
+//
+// See docs/SECURITY.md for the reasoning, the tests and how to publish this file.
+
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Each shared slice is stored as a JSON string.
-    function sliceOk(state, key) {
-      return !(key in state) || (state[key] is string && state[key].size() < 250000);
+    // ------------------------------------------------------------------------------------------
+    // EDIT BEFORE PUBLISHING: the email addresses that may create a family in this project.
+    // Lower case, exactly as typed when signing up. Everyone else can only join by pairing code.
+    // ------------------------------------------------------------------------------------------
+    function ownerEmails() {
+      return ['owner@example.com'];
     }
 
-    function stateOk(state) {
-      return state is map
-        && state.keys().hasOnly(['children', 'requests', 'alerts', 'places', 'tasks', 'schedules', 'messages', 'sites', 'sosActive'])
-        && sliceOk(state, 'children') && sliceOk(state, 'requests') && sliceOk(state, 'alerts')
-        && sliceOk(state, 'places') && sliceOk(state, 'tasks') && sliceOk(state, 'schedules')
-        && sliceOk(state, 'messages') && sliceOk(state, 'sites') && sliceOk(state, 'sosActive');
+    // ---- Identity ----------------------------------------------------------------------------
+
+    function signedIn() {
+      return request.auth != null;
     }
 
-    function familyOk(data) {
-      return data.keys().hasOnly(['v', 'createdAt', 'updatedAt', 'state', 'members'])
-        && data.v == 1
-        && data.createdAt is timestamp
-        && data.updatedAt is timestamp
-        && stateOk(data.state)
-        && data.members is map
-        && data.members.size() <= 20;
+    function isAnonymous() {
+      return request.auth.token.firebase.sign_in_provider == 'anonymous';
     }
 
-    match /families/{familyId} {
-      allow get: if true;
+    // A real account whose email address has been confirmed.
+    function hasVerifiedEmail() {
+      return signedIn() && !isAnonymous() && request.auth.token.email_verified == true;
+    }
+
+    function mayCreateFamily() {
+      return hasVerifiedEmail() && request.auth.token.email in ownerEmails();
+    }
+
+    // ---- Membership --------------------------------------------------------------------------
+
+    function familyPath(fid) {
+      return /databases/$(database)/documents/families/$(fid);
+    }
+
+    function memberPath(fid, uid) {
+      return /databases/$(database)/documents/families/$(fid)/members/$(uid);
+    }
+
+    function isMember(fid) {
+      return signedIn() && exists(memberPath(fid, request.auth.uid));
+    }
+
+    function myRecord(fid) {
+      return get(memberPath(fid, request.auth.uid)).data;
+    }
+
+    function isParent(fid) {
+      return isMember(fid) && myRecord(fid).role == 'parent';
+    }
+
+    function isChild(fid) {
+      return isMember(fid) && myRecord(fid).role == 'child';
+    }
+
+    // The device enrolled as this particular child.
+    function isChildOf(fid, cid) {
+      return isChild(fid) && myRecord(fid).childId == cid;
+    }
+
+    function childExists(fid, cid) {
+      return exists(/databases/$(database)/documents/families/$(fid)/children/$(cid));
+    }
+
+    // ---- Small helpers -----------------------------------------------------------------------
+
+    function idOk(id) {
+      return id.matches('^[A-Za-z0-9_-]{1,40}$');
+    }
+
+    function text(value, max) {
+      return value is string && value.size() <= max;
+    }
+
+    function nonEmptyText(value, max) {
+      return value is string && value.size() > 0 && value.size() <= max;
+    }
+
+    function platformOk(value) {
+      return value in ['android', 'ios', 'web'];
+    }
+
+    // Only these fields differ between the stored document and the incoming one.
+    function onlyChanged(fields) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
+    }
+
+    // ---- users/{uid}: which family an account belongs to --------------------------------------
+    // Written by the account itself, and only ever pointing at a family that lists it as a member
+    // with that role (now, or once the same batch has been applied).
+
+    match /users/{uid} {
+      allow get: if signedIn() && request.auth.uid == uid;
       allow list: if false;
-      allow create: if familyOk(request.resource.data)
-        && request.resource.data.createdAt == request.time;
-      allow update: if familyOk(request.resource.data)
-        && request.resource.data.createdAt == resource.data.createdAt;
-      allow delete: if false;
+
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['familyId', 'role', 'updatedAt'])
+        && request.resource.data.keys().hasAll(['familyId', 'role', 'updatedAt'])
+        && request.resource.data.familyId is string && idOk(request.resource.data.familyId)
+        && request.resource.data.updatedAt == request.time
+        && existsAfter(memberPath(request.resource.data.familyId, uid))
+        && getAfter(memberPath(request.resource.data.familyId, uid)).data.role == request.resource.data.role;
+
+      // The pointer can be removed only once the account is no longer in that family.
+      allow delete: if signedIn() && request.auth.uid == uid
+        && !existsAfter(memberPath(resource.data.familyId, uid));
     }
+
+    // ---- pairing/{code}: one-time pairing codes -------------------------------------------------
+    // create : a parent of the family, for at most 15 minutes
+    // claim  : any signed-in device that knows the code, once, before it expires
+    // approve: a parent of the family, in the same batch that creates the member record
+    // Codes cannot be listed, and can be read only by the family's parents and by the device that
+    // claimed them. A wrong guess reveals nothing: the claim is simply refused.
 
     match /pairing/{code} {
-      allow get: if true;
+      allow get: if signedIn()
+        && (resource.data.claimedBy == request.auth.uid || isParent(resource.data.familyId));
       allow list: if false;
-      // A code is 8 characters, points at a family that exists, and lasts 20 minutes at most.
+
       allow create: if code.matches('^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{8}$')
-        && request.resource.data.keys().hasOnly(['familyId', 'createdAt', 'expiresAt'])
+        && request.resource.data.keys().hasOnly(
+             ['familyId', 'role', 'createdBy', 'createdAt', 'expiresAt', 'claimedBy', 'claimName', 'claimPlatform', 'claimedAt', 'approved'])
+        && request.resource.data.keys().hasAll(
+             ['familyId', 'role', 'createdBy', 'createdAt', 'expiresAt', 'claimedBy', 'claimName', 'claimPlatform', 'claimedAt', 'approved'])
         && request.resource.data.familyId is string
-        && request.resource.data.familyId.size() <= 64
+        && isParent(request.resource.data.familyId)
+        && request.resource.data.role in ['child', 'parent']
+        && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.createdAt == request.time
         && request.resource.data.expiresAt is timestamp
         && request.resource.data.expiresAt > request.time
-        && request.resource.data.expiresAt <= request.time + duration.value(20, 'm')
-        && exists(/databases/$(database)/documents/families/$(request.resource.data.familyId));
-      // A code is never changed, so a code that is taken cannot be pointed somewhere else.
-      allow update: if false;
-      allow delete: if true;
+        && request.resource.data.expiresAt <= request.time + duration.value(15, 'm')
+        && request.resource.data.claimedBy == null
+        && request.resource.data.claimName == null
+        && request.resource.data.claimPlatform == null
+        && request.resource.data.claimedAt == null
+        && request.resource.data.approved == false;
+
+      // Claim. The first check fails for a code that does not exist, so guessing learns nothing.
+      allow update: if signedIn()
+        && resource.data.claimedBy == null
+        && resource.data.approved == false
+        && request.time < resource.data.expiresAt
+        && onlyChanged(['claimedBy', 'claimName', 'claimPlatform', 'claimedAt'])
+        && request.resource.data.claimedBy == request.auth.uid
+        && nonEmptyText(request.resource.data.claimName, 40)
+        && platformOk(request.resource.data.claimPlatform)
+        && request.resource.data.claimedAt == request.time
+        && !exists(memberPath(resource.data.familyId, request.auth.uid))
+        // A code for another parent needs a real, confirmed account. A child device signs in anonymously.
+        && (resource.data.role == 'child' || hasVerifiedEmail());
+
+      // Approve. Uses the code up, and is only valid together with the matching member record.
+      allow update: if isParent(resource.data.familyId)
+        && resource.data.claimedBy != null
+        && resource.data.approved == false
+        && request.time < resource.data.expiresAt + duration.value(15, 'm')
+        && onlyChanged(['approved'])
+        && request.resource.data.approved == true
+        && existsAfter(memberPath(resource.data.familyId, resource.data.claimedBy))
+        && getAfter(memberPath(resource.data.familyId, resource.data.claimedBy)).data.code == code;
+
+      // Withdraw or decline a code, or tidy it away after use.
+      allow delete: if signedIn()
+        && (resource.data.claimedBy == request.auth.uid || isParent(resource.data.familyId));
     }
 
+    // ---- families/{fid} -----------------------------------------------------------------------
+
+    match /families/{fid} {
+      allow get: if isMember(fid);
+      allow list: if false;
+
+      // Created by an allowed, verified account, together with its own member record and its
+      // users/{uid} pointer. One family per account.
+      allow create: if mayCreateFamily()
+        && idOk(fid)
+        && request.resource.data.keys().hasOnly(['v', 'owner', 'name', 'createdAt'])
+        && request.resource.data.keys().hasAll(['v', 'owner', 'name', 'createdAt'])
+        && request.resource.data.v == 2
+        && request.resource.data.owner == request.auth.uid
+        && nonEmptyText(request.resource.data.name, 60)
+        && request.resource.data.createdAt == request.time
+        && !exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.familyId == fid
+        && getAfter(memberPath(fid, request.auth.uid)).data.role == 'parent';
+
+      allow update: if isParent(fid)
+        && onlyChanged(['name'])
+        && nonEmptyText(request.resource.data.name, 60);
+
+      allow delete: if false;
+
+      // ---- members/{uid}: who is in the family, and as what ---------------------------------
+
+      function memberShapeOk(data) {
+        return data.keys().hasOnly(['role', 'childId', 'name', 'platform', 'joinedAt', 'addedBy', 'code'])
+          && data.keys().hasAll(['role', 'childId', 'name', 'platform', 'joinedAt', 'addedBy', 'code'])
+          && data.role in ['parent', 'child']
+          && nonEmptyText(data.name, 40)
+          && platformOk(data.platform);
+      }
+
+      // The pairing code that enrols `uid` with this member record: claimed by that very account,
+      // for this family and this role, not used before, and used up by this same batch.
+      function enrolmentOk(uid, data) {
+        let codePath = /databases/$(database)/documents/pairing/$(data.code);
+        let pairing = get(codePath).data;
+        return data.code is string
+          && pairing.familyId == fid
+          && pairing.claimedBy == uid
+          && pairing.role == data.role
+          && pairing.claimName == data.name
+          && pairing.claimPlatform == data.platform
+          && pairing.approved == false
+          && request.time < pairing.expiresAt + duration.value(15, 'm')
+          && getAfter(codePath).data.approved == true;
+      }
+
+      match /members/{uid} {
+        allow read: if isMember(fid);
+
+        // The founder's own record, in the batch that creates the family.
+        allow create: if signedIn() && request.auth.uid == uid
+          && !exists(familyPath(fid))
+          && getAfter(familyPath(fid)).data.owner == uid
+          && memberShapeOk(request.resource.data)
+          && request.resource.data.role == 'parent'
+          && request.resource.data.childId == null
+          && request.resource.data.code == null
+          && request.resource.data.addedBy == uid
+          && request.resource.data.joinedAt == request.time;
+
+        // Enrolment: a parent approves the device that claimed a pairing code.
+        allow create: if isParent(fid)
+          && request.auth.uid != uid
+          && memberShapeOk(request.resource.data)
+          && request.resource.data.addedBy == request.auth.uid
+          && request.resource.data.joinedAt == request.time
+          && enrolmentOk(uid, request.resource.data)
+          && (request.resource.data.role == 'parent'
+                ? request.resource.data.childId == null
+                : (request.resource.data.childId is string
+                    && existsAfter(/databases/$(database)/documents/families/$(fid)/children/$(request.resource.data.childId))));
+
+        // A parent may relabel a member or point a child device at another child profile.
+        // The role, and how the member got in, never change.
+        allow update: if isParent(fid)
+          && onlyChanged(['name', 'childId'])
+          && nonEmptyText(request.resource.data.name, 40)
+          && (resource.data.role == 'parent'
+                ? request.resource.data.childId == null
+                : (request.resource.data.childId is string && childExists(fid, request.resource.data.childId)));
+
+        // A parent removes a device, or a device leaves by itself. The founder always stays.
+        allow delete: if signedIn()
+          && uid != get(familyPath(fid)).data.owner
+          && (isParent(fid) || request.auth.uid == uid);
+      }
+
+      // ---- devices/{deviceId}: "last seen" per installed app --------------------------------
+
+      match /devices/{deviceId} {
+        allow read: if isMember(fid);
+
+        allow create, update: if isMember(fid)
+          && idOk(deviceId)
+          && (resource == null || resource.data.uid == request.auth.uid)
+          && request.resource.data.keys().hasOnly(['uid', 'name', 'platform', 'lastSeenAt'])
+          && request.resource.data.keys().hasAll(['uid', 'name', 'platform', 'lastSeenAt'])
+          && request.resource.data.uid == request.auth.uid
+          && nonEmptyText(request.resource.data.name, 40)
+          && platformOk(request.resource.data.platform)
+          && request.resource.data.lastSeenAt == request.time;
+
+        allow delete: if isParent(fid) || (signedIn() && resource.data.uid == request.auth.uid);
+      }
+
+      // ---- children/{cid}: profile, limits and app rules. Parent-owned. ----------------------
+
+      function childShapeOk(data) {
+        return data.keys().hasOnly(
+                 ['name', 'age', 'deviceName', 'battery', 'online', 'bedtime', 'usedMin', 'limitMin', 'place', 'placeIcon', 'apps', 'weekly', 'ord'])
+          && data.keys().hasAll(
+                 ['name', 'age', 'deviceName', 'battery', 'online', 'bedtime', 'usedMin', 'limitMin', 'place', 'placeIcon', 'apps', 'weekly', 'ord'])
+          && nonEmptyText(data.name, 60)
+          && data.age is number && data.age >= 0 && data.age <= 25
+          && text(data.deviceName, 60)
+          && data.battery is number && data.battery >= 0 && data.battery <= 100
+          && data.online is bool
+          && data.bedtime is bool
+          && data.usedMin is number && data.usedMin >= 0 && data.usedMin <= 1440
+          && data.limitMin is number && data.limitMin >= 0 && data.limitMin <= 1440
+          && text(data.place, 60)
+          && text(data.placeIcon, 40)
+          && data.apps is list && data.apps.size() <= 60
+          && data.weekly is list && data.weekly.size() == 7
+          && data.ord is number;
+      }
+
+      match /children/{cid} {
+        allow get: if isParent(fid) || isChildOf(fid, cid);
+        allow list: if isParent(fid);
+        allow create: if isParent(fid) && idOk(cid) && childShapeOk(request.resource.data);
+        allow update: if isParent(fid) && childShapeOk(request.resource.data);
+        allow delete: if false;
+
+        // What the child's own device reports. Today: the time of its last check-in.
+        match /live/{docId} {
+          allow read: if isParent(fid) || isChildOf(fid, cid);
+          allow create, update: if docId == 'status'
+            && isChildOf(fid, cid)
+            && request.resource.data.keys().hasOnly(['checkInAt', 'by'])
+            && request.resource.data.keys().hasAll(['checkInAt', 'by'])
+            && request.resource.data.checkInAt == request.time
+            && request.resource.data.by == request.auth.uid;
+          allow delete: if false;
+        }
+
+        // Requests: the child asks, a parent answers once.
+        match /requests/{rid} {
+          allow read: if isParent(fid) || isChildOf(fid, cid);
+
+          allow create: if isChildOf(fid, cid)
+            && idOk(rid)
+            && request.resource.data.keys().hasOnly(['kind', 'label', 'detail', 'minutes', 'appId', 'status', 'at', 'by'])
+            && request.resource.data.keys().hasAll(['kind', 'label', 'detail', 'status', 'at', 'by'])
+            && request.resource.data.kind in ['extra_time', 'unlock_app', 'bedtime']
+            && nonEmptyText(request.resource.data.label, 80)
+            && text(request.resource.data.detail, 200)
+            && (!('minutes' in request.resource.data)
+                  || (request.resource.data.minutes is int && request.resource.data.minutes > 0 && request.resource.data.minutes <= 240))
+            && (!('appId' in request.resource.data) || nonEmptyText(request.resource.data.appId, 40))
+            && request.resource.data.status == 'pending'
+            && request.resource.data.at == request.time
+            && request.resource.data.by == request.auth.uid;
+
+          allow update: if isParent(fid)
+            && resource.data.status == 'pending'
+            && onlyChanged(['status', 'resolvedBy', 'resolvedAt'])
+            && request.resource.data.status in ['approved', 'denied']
+            && request.resource.data.resolvedBy == request.auth.uid
+            && request.resource.data.resolvedAt == request.time;
+
+          allow delete: if isParent(fid);
+        }
+
+        // Chat. A message is written once, as yourself, and never edited or removed.
+        match /messages/{mid} {
+          allow read: if isParent(fid) || isChildOf(fid, cid);
+
+          allow create: if idOk(mid)
+            && request.resource.data.keys().hasOnly(['from', 'text', 'at', 'by'])
+            && request.resource.data.keys().hasAll(['from', 'text', 'at', 'by'])
+            && nonEmptyText(request.resource.data.text, 2000)
+            && request.resource.data.at == request.time
+            && request.resource.data.by == request.auth.uid
+            && ((request.resource.data.from == 'parent' && isParent(fid) && childExists(fid, cid))
+                 || (request.resource.data.from == 'child' && isChildOf(fid, cid)));
+
+          allow update, delete: if false;
+        }
+      }
+
+      // ---- alerts/{id}: the parents' activity feed --------------------------------------------
+      // A child device adds entries about itself (check-in, SOS, a request, leaving the family)
+      // but cannot read the feed. Parents read it and mark entries as read.
+
+      function alertShapeOk(data) {
+        return data.keys().hasOnly(['kind', 'childId', 'icon', 'color', 'title', 'body', 'unread', 'at', 'by'])
+          && data.keys().hasAll(['kind', 'childId', 'icon', 'color', 'title', 'body', 'unread', 'at', 'by'])
+          && nonEmptyText(data.kind, 20)
+          && (data.childId == null || (data.childId is string && idOk(data.childId)))
+          && text(data.icon, 40)
+          && data.color is string && data.color.matches('^#[0-9A-Fa-f]{6}$')
+          && nonEmptyText(data.title, 120)
+          && text(data.body, 240)
+          && data.unread is bool;
+      }
+
+      match /alerts/{aid} {
+        allow read: if isParent(fid);
+
+        allow create: if idOk(aid)
+          && alertShapeOk(request.resource.data)
+          && request.resource.data.unread == true
+          && request.resource.data.at == request.time
+          && request.resource.data.by == request.auth.uid
+          && (isParent(fid)
+               || (isChild(fid)
+                    && request.resource.data.childId == myRecord(fid).childId
+                    && request.resource.data.kind in ['checkin', 'sos', 'request', 'left']));
+
+        allow update: if isParent(fid)
+          && onlyChanged(['unread'])
+          && request.resource.data.unread == false;
+
+        allow delete: if isParent(fid);
+      }
+
+      // ---- Family rules: places, schedules, sites. Parent-owned, readable by the family. ------
+
+      match /places/{id} {
+        allow read: if isMember(fid);
+        allow create, update: if isParent(fid) && idOk(id)
+          && request.resource.data.keys().hasOnly(['name', 'icon', 'radius', 'arrive', 'leave', 'ord'])
+          && request.resource.data.keys().hasAll(['name', 'icon', 'radius', 'arrive', 'leave', 'ord'])
+          && nonEmptyText(request.resource.data.name, 60)
+          && text(request.resource.data.icon, 40)
+          && request.resource.data.radius is number && request.resource.data.radius > 0 && request.resource.data.radius <= 100000
+          && request.resource.data.arrive is bool
+          && request.resource.data.leave is bool
+          && request.resource.data.ord is number;
+        allow delete: if isParent(fid);
+      }
+
+      match /schedules/{id} {
+        allow read: if isMember(fid);
+        allow create, update: if isParent(fid) && idOk(id)
+          && request.resource.data.keys().hasOnly(['name', 'icon', 'color', 'start', 'end', 'days', 'on', 'ord'])
+          && request.resource.data.keys().hasAll(['name', 'icon', 'color', 'start', 'end', 'days', 'on', 'ord'])
+          && nonEmptyText(request.resource.data.name, 60)
+          && text(request.resource.data.icon, 40)
+          && request.resource.data.color is string && request.resource.data.color.matches('^#[0-9A-Fa-f]{6}$')
+          && nonEmptyText(request.resource.data.start, 12)
+          && nonEmptyText(request.resource.data.end, 12)
+          && request.resource.data.days is list && request.resource.data.days.size() == 7
+          && request.resource.data.on is bool
+          && request.resource.data.ord is number;
+        allow delete: if isParent(fid);
+      }
+
+      match /sites/{id} {
+        allow read: if isMember(fid);
+        allow create, update: if isParent(fid) && idOk(id)
+          && request.resource.data.keys().hasOnly(['host', 'list', 'ord'])
+          && request.resource.data.keys().hasAll(['host', 'list', 'ord'])
+          && nonEmptyText(request.resource.data.host, 253)
+          && request.resource.data.list in ['blocked', 'allowed']
+          && request.resource.data.ord is number;
+        allow delete: if isParent(fid);
+      }
+
+      // ---- tasks/{id}: a parent defines them, a child may only tick them ----------------------
+
+      match /tasks/{id} {
+        allow read: if isMember(fid);
+        allow create, update: if isParent(fid) && idOk(id)
+          && request.resource.data.keys().hasOnly(['title', 'points', 'done', 'ord'])
+          && request.resource.data.keys().hasAll(['title', 'points', 'done', 'ord'])
+          && nonEmptyText(request.resource.data.title, 80)
+          && request.resource.data.points is int && request.resource.data.points >= 0 && request.resource.data.points <= 1000
+          && request.resource.data.done is bool
+          && request.resource.data.ord is number;
+        allow update: if isChild(fid)
+          && onlyChanged(['done'])
+          && request.resource.data.done is bool;
+        allow delete: if isParent(fid);
+      }
+
+      // ---- signals/sos: the SOS flag -----------------------------------------------------------
+      // A child raises it for itself and may clear its own. A parent may only clear it.
+
+      match /signals/{signal} {
+        allow read: if isMember(fid);
+
+        allow create, update: if signal == 'sos'
+          && request.resource.data.keys().hasOnly(['active', 'childId', 'by', 'at'])
+          && request.resource.data.keys().hasAll(['active', 'childId', 'by', 'at'])
+          && request.resource.data.active is bool
+          && request.resource.data.by == request.auth.uid
+          && request.resource.data.at == request.time
+          && ((isParent(fid)
+                 && request.resource.data.active == false
+                 && (resource == null ? request.resource.data.childId == null : request.resource.data.childId == resource.data.childId))
+               || (isChild(fid)
+                    && request.resource.data.childId == myRecord(fid).childId
+                    && (request.resource.data.active == true
+                          || resource == null
+                          || resource.data.active == false
+                          || resource.data.childId == myRecord(fid).childId)));
+
+        allow delete: if false;
+      }
+    }
+
+    // Everything not named above is closed.
     match /{document=**} {
       allow read, write: if false;
     }
