@@ -7,6 +7,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { APP_NAME } from '@/config/variant';
 import { StoreProvider } from '@/state/store';
+import { LinkProvider } from '@/sync/link';
 import { palette } from '@/theme';
 
 export default function RootLayout() {
@@ -25,6 +26,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <StoreProvider>
+          <LinkProvider>
           <ThemeProvider value={navTheme}>
             <Stack
               screenOptions={{
@@ -38,6 +40,7 @@ export default function RootLayout() {
             </Stack>
             <StatusBar style="auto" />
           </ThemeProvider>
+          </LinkProvider>
         </StoreProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

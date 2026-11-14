@@ -74,8 +74,46 @@ function withSplash(plugins = [], change) {
   return plugins.map((plugin) => (isSplash(plugin) ? [name, change((Array.isArray(plugin) && plugin[1]) || {})] : plugin));
 }
 
+const fs = require('fs');
+const path = require('path');
+
+const FIREBASE_KEYS = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'];
+
+/**
+ * The backend that links two phones (see docs/BACKEND.md). The Firebase web config is read from
+ * the HAVEN_FIREBASE_CONFIG environment variable (a JSON string) or from firebase.config.json
+ * next to this file. With neither, the build has no backend and linking is switched off.
+ * HAVEN_FIRESTORE_EMULATOR ("host:port") points the app at a local Firestore emulator for tests.
+ */
+function readFirebaseConfig() {
+  let raw = null;
+  if (process.env.HAVEN_FIREBASE_CONFIG) {
+    raw = JSON.parse(process.env.HAVEN_FIREBASE_CONFIG);
+  } else {
+    const file = path.join(__dirname, 'firebase.config.json');
+    if (fs.existsSync(file)) raw = JSON.parse(fs.readFileSync(file, 'utf8'));
+  }
+  if (!raw || typeof raw !== 'object') return null;
+  for (const key of ['apiKey', 'projectId', 'appId']) {
+    if (typeof raw[key] !== 'string' || !raw[key]) {
+      throw new Error(`The Firebase config is missing "${key}". Copy the whole firebaseConfig object from the Firebase console.`);
+    }
+  }
+  return Object.fromEntries(FIREBASE_KEYS.filter((key) => typeof raw[key] === 'string').map((key) => [key, raw[key]]));
+}
+
+/** Adds the backend settings to `extra`, for every variant. */
+function withBackend(config) {
+  const firebase = readFirebaseConfig();
+  const firestoreEmulator = process.env.HAVEN_FIRESTORE_EMULATOR || null;
+  if (!firebase && !firestoreEmulator) return config;
+  return { ...config, extra: { ...config.extra, firebase, firestoreEmulator } };
+}
+
 /** @param {import('expo/config').ConfigContext} context */
-module.exports = ({ config }) => {
+module.exports = ({ config }) => withBackend(applyVariant(config));
+
+function applyVariant(config) {
   const variant = process.env.APP_VARIANT;
 
   // Unset (or empty): the combined build, exactly as app.json describes it.
