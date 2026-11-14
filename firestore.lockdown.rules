@@ -1,0 +1,13 @@
+// Emergency rules: nobody can read or write anything.
+//
+// Publish these (Firebase console, Firestore Database, Rules) to shut the database at once, for
+// example while investigating something odd or before the real rules are in place. No data is
+// deleted. The apps show "offline" or a refusal until firestore.rules is published again.
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

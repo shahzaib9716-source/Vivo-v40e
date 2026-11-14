@@ -1,3 +1,4 @@
+import Constants from 'expo-constants';
 import { useState } from 'react';
 import { router } from 'expo-router';
 import { Pressable, View } from 'react-native';
@@ -161,7 +162,7 @@ export default function Settings() {
         <Row title="Terms & privacy policy" icon="file-text" iconColor={colors.textMuted} onPress={() => setDemo('terms')} />
         <Row title="Replay introduction" subtitle="See the welcome tour again" icon="play-circle" iconColor={colors.primary} onPress={replayIntro} />
         <Row title="What this version does" subtitle="On this phone, and what it leaves out" icon="list" iconColor={colors.success} onPress={() => (router.push as any)('/about-version')} />
-        <Row title="Version" subtitle={`${APP_NAME} 1.0.0`} icon="info" iconColor={colors.textMuted} chevron={false} />
+        <Row title="Version" subtitle={`${APP_NAME} ${Constants.expoConfig?.version ?? ''}`.trim()} icon="info" iconColor={colors.textMuted} chevron={false} />
       </Card>
       {note(['help', 'terms'])}
 
