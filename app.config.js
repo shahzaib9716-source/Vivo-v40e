@@ -107,7 +107,20 @@ function withBackend(config) {
   const firebase = readFirebaseConfig();
   const firestoreEmulator = process.env.HAVEN_FIRESTORE_EMULATOR || null;
   if (!firebase && !firestoreEmulator) return config;
-  return { ...config, extra: { ...config.extra, firebase, firestoreEmulator } };
+  const next = { ...config, extra: { ...config.extra, firebase, firestoreEmulator } };
+  // A local emulator speaks plain HTTP, which Android refuses by default. Allow it in test
+  // builds that name an emulator, and only in those.
+  return firestoreEmulator ? withCleartext(next) : next;
+}
+
+/** Test builds only: lets the Android app reach a local Firestore emulator over plain HTTP. */
+function withCleartext(config) {
+  const name = 'expo-build-properties';
+  const isIt = (plugin) => plugin === name || (Array.isArray(plugin) && plugin[0] === name);
+  const plugins = config.plugins ?? [];
+  const patch = (props) => ({ ...props, android: { ...props.android, usesCleartextTraffic: true } });
+  if (!plugins.some(isIt)) return { ...config, plugins: [...plugins, [name, patch({})]] };
+  return { ...config, plugins: plugins.map((plugin) => (isIt(plugin) ? [name, patch((Array.isArray(plugin) && plugin[1]) || {})] : plugin)) };
 }
 
 /** @param {import('expo/config').ConfigContext} context */
