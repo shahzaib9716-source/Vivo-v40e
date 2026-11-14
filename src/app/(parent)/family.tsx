@@ -5,12 +5,16 @@ import { Feather } from '@expo/vector-icons';
 
 import { Avatar, Card, IconBadge, Row, Screen, SectionLabel, Text } from '@/components/ui';
 import { APP_VARIANT, NO_SERVER_NOTE, SIDE_HOME } from '@/config/variant';
+import { linkSummary } from '@/components/LinkParts';
+import { useLink } from '@/sync/link';
 import { useStore } from '@/state/store';
 import { categoryColors, radius, shadow, spacing, useTheme } from '@/theme';
 
 export default function Family() {
   const { colors } = useTheme();
   const { children, activeChild, setActiveChildId, setRole } = useStore();
+  const link = useLink();
+  const previewNote = link.configured ? 'Opens the other side on this phone. To use two phones, link them under “Devices & Pairing”.' : NO_SERVER_NOTE;
 
   // "/messages" opens the conversation with the child the parent is currently viewing.
   const chatName = activeChild.name.split(' ')[0];
@@ -91,7 +95,7 @@ export default function Family() {
 
       <SectionLabel>Account</SectionLabel>
       <Card padded={false} style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.xl }}>
-        <Row title="Devices & Pairing" subtitle="Manage linked devices" icon="smartphone" iconColor={colors.info} onPress={() => (router.push as any)('/pairing')} />
+        <Row title="Devices & Pairing" subtitle={linkSummary(link).title} icon="smartphone" iconColor={colors.info} badge={link.role ? 'LINKED' : undefined} badgeColor={colors.success} onPress={() => (router.push as any)('/pairing')} />
         <Row title="Settings" subtitle="App, privacy and account" icon="settings" iconColor={colors.textMuted} onPress={() => (router.push as any)('/settings')} />
         <Row title="Subscription" subtitle="Free plan · see Premium" icon="credit-card" iconColor={categoryColors.rewards} onPress={() => (router.push as any)('/subscription')} />
         <Row title="Help & Support" subtitle="Guides and contact" icon="help-circle" iconColor={colors.success} onPress={() => (router.push as any)('/settings')} />
@@ -99,13 +103,13 @@ export default function Family() {
 
       {APP_VARIANT === 'parent' ? (
         // The Haven app: there is no child app to reach, so preview it here.
-        <DemoSideRow icon="smartphone" title="Demo: preview the child app on this device" detail={NO_SERVER_NOTE} onPress={openChildSide} />
+        <DemoSideRow icon="smartphone" title="Demo: preview the child app on this device" detail={previewNote} onPress={openChildSide} />
       ) : APP_VARIANT === 'child' ? (
         // The Haven Kids app, previewing the parent side: this is the way back.
         <DemoSideRow
           icon="corner-up-left"
           title="Demo: back to the child app"
-          detail="You are previewing the parent app inside Haven Kids. This demo build has no server linking two phones."
+          detail="You are previewing the parent app inside Haven Kids."
           onPress={openChildSide}
         />
       ) : (

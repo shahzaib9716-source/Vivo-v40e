@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinkCard } from '@/components/child/LinkCard';
 import { Toast, useToast } from '@/components/child/Toast';
 import { ProgressRing, Text } from '@/components/ui';
+import { useLink } from '@/sync/link';
 import { useStore, fmtDuration, nowLabel, type ManagedApp } from '@/state/store';
 import { radius, shadow, spacing, useTheme } from '@/theme';
 
@@ -26,6 +27,7 @@ const SOS_INK = '#B91C1C';
 export default function ChildHome() {
   const { colors } = useTheme();
   const { childSelf, tasks, messages, checkIn, sosActive, clearSOS } = useStore();
+  const linkStatus = useLink().status;
   const toast = useToast();
 
   const firstName = childSelf.name.split(' ')[0];
@@ -181,6 +183,21 @@ export default function ChildHome() {
             />
             <QuickAction icon="alert-circle" label="SOS" color={colors.danger} onPress={() => (router.push as any)('/sos')} />
           </View>
+
+          {/* Not linked yet: this device is still showing sample data */}
+          {linkStatus === 'unlinked' ? (
+            <LinkCard onPress={() => (router.push as any)('/link-device')} label="Link this device to your family" style={styles.gapLg}>
+              <View style={[styles.family, { backgroundColor: colors.success }]}>
+                <Feather name="link" size={20} color="#FFFFFF" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text variant="title">Link to your family</Text>
+                <Text variant="small" tone="muted">
+                  Enter the code from your parent's phone
+                </Text>
+              </View>
+            </LinkCard>
+          ) : null}
 
           {/* Family chat */}
           <LinkCard

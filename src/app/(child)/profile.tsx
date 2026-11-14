@@ -5,6 +5,8 @@ import { Feather } from '@expo/vector-icons';
 
 import { Avatar, Card, IconBadge, Row, Screen, SectionLabel, Text } from '@/components/ui';
 import { APP_VARIANT, NO_SERVER_NOTE, SIDE_HOME } from '@/config/variant';
+import { linkSummary } from '@/components/LinkParts';
+import { useLink } from '@/sync/link';
 import { useStore, fmtDuration } from '@/state/store';
 import { radius, shadow, spacing, useTheme } from '@/theme';
 
@@ -26,6 +28,8 @@ const HELP = [
 export default function ChildProfileTab() {
   const { colors } = useTheme();
   const { childSelf, setRole, sosActive } = useStore();
+  const link = useLink();
+  const previewNote = link.configured ? 'Opens the other side on this phone. To use two phones, link them under “Family link”.' : NO_SERVER_NOTE;
   const [helpOpen, setHelpOpen] = useState(false);
 
   const left = Math.max(0, childSelf.limitMin - childSelf.usedMin);
@@ -106,6 +110,15 @@ export default function ChildProfileTab() {
       <SectionLabel>About Haven</SectionLabel>
       <Card padded={false} style={styles.group}>
         <Row
+          title="Family link"
+          subtitle={linkSummary(link).title}
+          icon="link"
+          iconColor={colors.primary}
+          badge={link.role ? 'LINKED' : undefined}
+          badgeColor={colors.success}
+          onPress={() => (router.push as any)('/link-device')}
+        />
+        <Row
           title="What's shared with my family"
           subtitle="See everything Haven shares"
           icon="eye"
@@ -137,13 +150,13 @@ export default function ChildProfileTab() {
 
       {APP_VARIANT === 'child' ? (
         // The Haven Kids app: there is no parent app to reach, so preview it here.
-        <DemoSideRow icon="users" title="Demo: preview the parent app on this device" detail={NO_SERVER_NOTE} onPress={openParentSide} />
+        <DemoSideRow icon="users" title="Demo: preview the parent app on this device" detail={previewNote} onPress={openParentSide} />
       ) : APP_VARIANT === 'parent' ? (
         // The Haven app, previewing the child side: this is the way back.
         <DemoSideRow
           icon="corner-up-left"
           title="Demo: back to the parent app"
-          detail="You are previewing the child app inside Haven. This demo build has no server linking two phones."
+          detail="You are previewing the child app inside Haven."
           onPress={openParentSide}
         />
       ) : (

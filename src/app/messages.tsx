@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ChatBubble, TypingBubble, bubbleTint, type BubblePosition, type BubbleTone } from '@/components/ChatBubble';
 import { Avatar, Text } from '@/components/ui';
+import { useLink } from '@/sync/link';
 import { useStore, type ChatMessage } from '@/state/store';
 import { radius, spacing, useTheme } from '@/theme';
 
@@ -136,6 +137,8 @@ export default function Messages() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
   const { role, children, activeChild, childSelf, messages, sendMessage } = useStore();
+  // In a linked family the other side is a real phone, so nothing is made up here.
+  const linked = useLink().role !== null;
 
   const isChild = role === 'child';
   const me: Sender = isChild ? 'child' : 'parent';
@@ -178,6 +181,7 @@ export default function Messages() {
     const text = raw.trim();
     if (!text) return;
     sendMessage(childId, me, text);
+    if (linked) return;
 
     // One canned answer per message at most. Sending again before it arrives restarts the wait,
     // so a quick burst of messages still gets a single reply.
@@ -275,10 +279,10 @@ export default function Messages() {
             settled.current = true;
           }}>
           {thread.length === 0 ? (
-            <ThreadIntro empty isChild={isChild} firstName={firstName} tint={tint} />
+            <ThreadIntro empty isChild={isChild} firstName={firstName} tint={tint} linked={linked} />
           ) : (
             <>
-              <ThreadIntro isChild={isChild} firstName={firstName} tint={tint} />
+              <ThreadIntro isChild={isChild} firstName={firstName} tint={tint} linked={linked} />
               <View style={styles.spacer} />
               <View style={[styles.day, { backgroundColor: colors.surfaceAlt }]}>
                 <Text variant="tiny" tone="muted">
@@ -339,7 +343,7 @@ function ParentsAvatar({ size }: { size: number }) {
 }
 
 /** Opens every thread: says who can see it, and that this build fakes the other side's replies. */
-function ThreadIntro({ empty, isChild, firstName, tint }: { empty?: boolean; isChild: boolean; firstName: string; tint: Tint }) {
+function ThreadIntro({ empty, isChild, firstName, tint, linked }: { empty?: boolean; isChild: boolean; firstName: string; tint: Tint; linked: boolean }) {
   const { colors } = useTheme();
   const them = isChild ? PARENTS_NAME : firstName;
   const body = empty
@@ -362,7 +366,7 @@ function ThreadIntro({ empty, isChild, firstName, tint }: { empty?: boolean; isC
       <View style={[styles.demo, { backgroundColor: colors.surfaceAlt }]}>
         <Feather name="info" size={12} color={colors.textMuted} />
         <Text variant="tiny" tone="muted">
-          Demo build: replies are simulated on this device
+          {linked ? 'Linked: messages go to the other phone' : 'Demo build: replies are simulated on this device'}
         </Text>
       </View>
     </View>

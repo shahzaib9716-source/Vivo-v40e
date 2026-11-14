@@ -1,113 +1,152 @@
-import { useState } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { useEffect, useState } from 'react';
+import { router } from 'expo-router';
+import { StyleSheet, View } from 'react-native';
 
 import { InlineNote } from '@/components/InlineNote';
-import { Button, Card, Header, Screen, Text } from '@/components/ui';
+import { DeviceList, LinkFootnote, LinkStatusCard, Step } from '@/components/LinkParts';
+import { InlineConfirm } from '@/components/RuleForm';
+import { Button, Card, Header, Screen, SectionLabel, Text } from '@/components/ui';
+import { useLink } from '@/sync/link';
+import { formatPairingCode } from '@/sync/types';
 import { radius, spacing, useTheme } from '@/theme';
 
-const PAIRING_CODE = '4KQ-7PX';
-
-// Deterministic decorative grid (not a scannable code) for the demo.
-const SIZE = 11;
-function patternCell(r: number, c: number) {
-  if ((r < 3 && c < 3) || (r < 3 && c > SIZE - 4) || (r > SIZE - 4 && c < 3)) {
-    const inner = (r === 0 || r === 2 || c === 0 || c === 2) || (r > SIZE - 4 && (r === SIZE - 1 || r === SIZE - 3 || c === 0 || c === 2)) || (c > SIZE - 4 && (c === SIZE - 1 || c === SIZE - 3 || r === 0 || r === 2));
-    return inner;
-  }
-  return (r * 7 + c * 13 + r * c) % 3 === 0;
+/** "14:05" */
+function clock(ms: number) {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 }
 
+/** The parent's side of linking: create a code, see who is linked, unlink. */
 export default function Pairing() {
   const { colors } = useTheme();
-  const [linkCopied, setLinkCopied] = useState(false);
-  const cells = [];
-  for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) cells.push({ r, c, on: patternCell(r, c) });
+  const link = useLink();
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [confirmUnlink, setConfirmUnlink] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+
+  const code = link.pairingCode;
+
+  // Count the code down while it is on screen.
+  useEffect(() => {
+    if (!code) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [code]);
+
+  const makeCode = async () => {
+    if (busy) return;
+    setBusy(true);
+    setProblem(null);
+    try {
+      await link.createPairingCode();
+      setNow(Date.now());
+    } catch (e) {
+      setProblem(e instanceof Error ? e.message : 'Something went wrong. Please try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const unlink = async () => {
+    setConfirmUnlink(false);
+    await link.unlink();
+  };
+
+  const joined = link.role !== null;
+  const canCreate = link.configured && link.status !== 'connecting';
 
   return (
     <Screen>
-      <Header back title="Pair a device" subtitle="Link your child's phone or tablet" />
+      <Header back title="Devices & Pairing" subtitle="Link your child's phone to yours" />
 
-      <Card style={{ alignItems: 'center', paddingVertical: spacing.xl, marginBottom: spacing.xl }}>
-        {/* Decorative pattern on a white tile, like a printed code, in both colour modes. */}
-        <View aria-hidden style={[styles.qr, { backgroundColor: '#FFFFFF' }]}>
-          <View style={styles.grid}>
-            {cells.map((cell, i) => (
-              <View
-                key={i}
-                style={{
-                  width: `${100 / SIZE}%`,
-                  aspectRatio: 1,
-                  backgroundColor: cell.on ? '#17161F' : 'transparent',
-                  borderRadius: 2,
-                }}
-              />
-            ))}
-          </View>
-        </View>
-        <Text variant="small" tone="muted" style={{ marginTop: spacing.lg }}>
-          Scan with the child's device, or enter the code
-        </Text>
-        <View
-          accessible
-          accessibilityLabel={`Pairing code: ${PAIRING_CODE.replace('-', '').split('').join(' ')}`}
-          style={[styles.code, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
-          <Text variant="h2" selectable style={{ letterSpacing: 6 }}>
-            {PAIRING_CODE}
-          </Text>
-        </View>
-        <Text variant="tiny" tone="faint" center style={{ marginTop: spacing.sm }}>
-          Demo code — the pattern above is decoration and cannot be scanned.
-        </Text>
-      </Card>
+      <LinkStatusCard link={link} />
 
-      <Text variant="h3" style={{ marginBottom: spacing.md }}>
-        How to set up
-      </Text>
-      <Card padded={false} style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.xl }}>
-        <Step n={1} text="Install Haven on your child's device" />
-        <Step n={2} text="Open Haven and choose “This is my child's device”" />
-        <Step n={3} text="Scan this code or enter it to link" />
-        <Step n={4} text="Confirm together what Haven will share" last />
-      </Card>
-
-      <Button
-        label={linkCopied ? 'Copy invite link again' : 'Share invite link'}
-        icon={linkCopied ? 'copy' : 'share-2'}
-        variant="secondary"
-        onPress={() => setLinkCopied(true)}
-      />
-      {linkCopied && (
+      {!link.configured ? (
         <InlineNote
-          tone="success"
-          title="Link copied"
-          detail="Demo only: no real invite link was created or sent."
-          style={{ marginTop: spacing.md }}
+          tone="neutral"
+          title="What this means"
+          detail="You can still show both sides on one phone with the “Demo: preview” row on the Family tab. To link two phones, build the app with a Firebase project (see docs/BACKEND.md)."
         />
+      ) : (
+        <>
+          {code ? (
+            <Card style={styles.codeCard}>
+              <Text variant="small" tone="muted">
+                Enter this code in Haven Kids
+              </Text>
+              <View
+                accessible
+                accessibilityLabel={`Pairing code: ${code.code.split('').join(' ')}`}
+                style={[styles.code, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+                <Text variant="h1" selectable style={styles.codeText}>
+                  {formatPairingCode(code.code)}
+                </Text>
+              </View>
+              <Text variant="small" tone="muted">
+                Works once · expires in {clock(code.expiresAt - now)}
+              </Text>
+            </Card>
+          ) : null}
+
+          <Button
+            label={code ? 'Create a new code' : joined ? 'Add another device' : 'Create a link code'}
+            icon={code ? 'refresh-cw' : 'plus'}
+            variant={code ? 'secondary' : 'primary'}
+            loading={busy}
+            disabled={!canCreate}
+            onPress={makeCode}
+          />
+          {problem ? <InlineNote tone="neutral" icon="alert-circle" title="That didn't work" detail={problem} style={styles.gapTop} /> : null}
+
+          <SectionLabel style={styles.sectionGap}>On your child's phone</SectionLabel>
+          <Card padded={false} style={styles.steps}>
+            <Step n={1} text="Install and open Haven Kids" />
+            <Step n={2} text="Go to the Me tab and tap “Family link”" />
+            <Step n={3} text="Enter the code shown here" last />
+          </Card>
+
+          {joined ? (
+            <>
+              <SectionLabel>Linked devices</SectionLabel>
+              <DeviceList devices={link.devices} />
+
+              {confirmUnlink ? (
+                <InlineConfirm
+                  title="Unlink this device?"
+                  detail="It keeps the data it has now, which stops updating. The other devices stay linked."
+                  confirmLabel="Unlink"
+                  onCancel={() => setConfirmUnlink(false)}
+                  onConfirm={unlink}
+                />
+              ) : (
+                <Button label="Unlink this device" icon="x-circle" variant="ghost" onPress={() => setConfirmUnlink(true)} />
+              )}
+            </>
+          ) : (
+            <Button
+              label="I have a code from another parent"
+              icon="log-in"
+              variant="ghost"
+              onPress={() => (router.push as any)('/link-device')}
+            />
+          )}
+
+          <LinkFootnote>
+            Linked phones share the family’s data through a server and update while both apps are open. This build does not send
+            notifications to a closed app, and it has no accounts: the code is what connects the phones.
+          </LinkFootnote>
+        </>
       )}
     </Screen>
   );
 }
 
-function Step({ n, text, last }: { n: number; text: string; last?: boolean }) {
-  const { colors } = useTheme();
-  return (
-    <View style={[styles.step, !last && { borderBottomColor: colors.hairline, borderBottomWidth: StyleSheet.hairlineWidth }]}>
-      <View style={[styles.stepNum, { backgroundColor: colors.primarySoft }]}>
-        <Text variant="smallStrong" color={colors.primary}>
-          {n}
-        </Text>
-      </View>
-      <Text variant="body" style={{ flex: 1 }}>
-        {text}
-      </Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  qr: { width: 200, height: 200, borderRadius: radius.lg, padding: 14 },
-  grid: { flex: 1, flexDirection: 'row', flexWrap: 'wrap' },
-  code: { marginTop: spacing.lg, paddingHorizontal: spacing.xl, paddingVertical: spacing.md, borderRadius: radius.md, borderWidth: StyleSheet.hairlineWidth },
-  step: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md },
-  stepNum: { width: 28, height: 28, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
+  codeCard: { alignItems: 'center', gap: spacing.md, paddingVertical: spacing.xl, marginBottom: spacing.lg },
+  code: { paddingHorizontal: spacing.xl, paddingVertical: spacing.md, borderRadius: radius.md, borderWidth: StyleSheet.hairlineWidth },
+  codeText: { letterSpacing: 4 },
+  gapTop: { marginTop: spacing.md },
+  sectionGap: { marginTop: spacing.xl },
+  steps: { paddingHorizontal: spacing.lg, marginBottom: spacing.xl },
 });

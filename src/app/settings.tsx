@@ -6,6 +6,7 @@ import { InlineNote } from '@/components/InlineNote';
 import { InlineConfirm } from '@/components/RuleForm';
 import { Avatar, Card, Header, Row, Screen, SectionLabel, Text, Toggle } from '@/components/ui';
 import { APP_NAME, isSingleSide } from '@/config/variant';
+import { useLink } from '@/sync/link';
 import { useStore } from '@/state/store';
 import { spacing, useTheme } from '@/theme';
 
@@ -24,6 +25,7 @@ const EDIT_HIT_SLOP = { top: 14, bottom: 14, left: 12, right: 12 };
 export default function Settings() {
   const { colors } = useTheme();
   const { setRole, resetOnboarding, resetDemoData } = useStore();
+  const linked = useLink().role !== null;
 
   /** Pops back to the tabs first, so the replace swaps out the whole parent app, not just this screen. */
   const leaveTo = (href: string) => {
@@ -120,7 +122,11 @@ export default function Settings() {
           <View style={{ paddingBottom: spacing.lg }}>
             <InlineConfirm
               title="Reset demo data?"
-              detail="Limits, requests, alerts, places, schedules, rewards and messages go back to how they started. The saved copy on this device is cleared too."
+              detail={
+                linked
+                  ? 'Limits, requests, alerts, places, schedules, rewards and messages go back to how they started, on every linked device.'
+                  : 'Limits, requests, alerts, places, schedules, rewards and messages go back to how they started. The saved copy on this device is cleared too.'
+              }
               confirmLabel="Reset"
               onCancel={() => setReset('idle')}
               onConfirm={confirmReset}
