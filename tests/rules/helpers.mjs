@@ -41,7 +41,9 @@ import {
 
 // ---- Emulator ---------------------------------------------------------------------------------
 
-export const PROJECT_ID = 'demo-haven-rules';
+// HAVEN_RULES_PROJECT runs a file against another emulator project (rules and data are kept per
+// project id), so that one file can be worked on while the suite runs elsewhere.
+export const PROJECT_ID = process.env.HAVEN_RULES_PROJECT || 'demo-haven-rules';
 // The rules under test. HAVEN_RULES_FILE points the suite at another file, which is how one
 // checks that the tests notice a weakened rule (see tests/rules/README.md).
 export const RULES_PATH = process.env.HAVEN_RULES_FILE || fileURLToPath(new URL('../../firestore.rules', import.meta.url));
