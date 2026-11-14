@@ -56,11 +56,22 @@ npm run apk:child    # Haven Kids
 
 Each command sets `APP_VARIANT` for every step, regenerates the `android/` folder, builds a release APK and checks that the variant is inside it. The APK is written to `android/app/build/outputs/apk/release/app-release.apk`, so copy it somewhere before building the other one.
 
-You need the Android SDK (platform 36, build tools 37, NDK 27.1; Gradle fetches missing pieces if the licences are accepted), `ANDROID_HOME` pointing at it, and JDK 17 installed (JDK 21 can be the default, but the React Native Gradle plugin asks for a Java 17 toolchain). The first build compiles native code and takes a while.
+Native builds compile against and target **Android 17 (API 37)**; the minimum is Android 7.0 (API 24). This is set in `app.json` through the `expo-build-properties` plugin.
+
+You need the Android SDK (platform 37, build tools 37, NDK 27.1; Gradle fetches missing pieces if the licences are accepted), `ANDROID_HOME` pointing at it, and JDK 17 installed (JDK 21 can be the default, but the React Native Gradle plugin asks for a Java 17 toolchain). The first build compiles native code and takes a while.
 
 Building by hand works too, but `APP_VARIANT` must be set for **both** `expo prebuild` and the Gradle build. If it is missing for Gradle, the APK has the right name and icon but shows the chooser.
 
-The release build is signed with the debug keystore. That is fine for installing the APK directly on a phone for a demo. It is not a build for the Play Store.
+The APK that Gradle writes is signed with the debug keystore. That installs, but for handing the app to other people sign it with your own key, which also lets later versions install over earlier ones:
+
+```bash
+apksigner sign --ks your-release.jks --ks-key-alias your-alias --min-sdk-version 24 \
+  --v2-signing-enabled true --v3-signing-enabled true --out signed.apk app-release.apk
+```
+
+Keep the keystore and its password out of the repository. This is still a sideload build; a Play Store release would be an app bundle with Play App Signing.
+
+**Checked on:** both apps were installed and run on an Android 17 (API 37) emulator: each opens straight into its side, taps work, and a change survives closing and reopening the app. They have not been run on a physical phone from this repository's build machine.
 
 To make a smaller APK for one kind of phone, add for example `-PreactNativeArchitectures=arm64-v8a` to the Gradle command.
 
