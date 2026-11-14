@@ -1,16 +1,42 @@
 # Haven
 
-A family-safety app with a parent side and a child side, built with React Native and Expo (SDK 58, Expo Router, TypeScript). One codebase builds a combined app and two separate Android apps: **Haven** for parents and **Haven Kids** for children. The repository is named `Vivo-v40e`; the app is called Haven.
+A family-safety app for a parent and a child, built with React Native and Expo (SDK 58, Expo Router, TypeScript). **One app, one codebase, two platforms (Android and iOS), two roles.** The repository is named `Vivo-v40e`; the app is called Haven.
 
-Haven is transparent by design: the child can always open a screen that lists exactly what is shared with the family and what is not.
+Haven is transparent by design: the child can always open a screen that lists exactly what is shared with the family and what is not, and nothing in the app runs in secret.
 
 <p>
   <img src="docs/screenshots/sheet-parent.png" alt="Haven, parent side" width="100%">
-  <img src="docs/screenshots/sheet-child.png" alt="Haven Kids, child side" width="100%">
-  <img src="docs/screenshots/sheet-dark.png" alt="Dark mode" width="100%">
+  <img src="docs/screenshots/sheet-child.png" alt="Haven, child side" width="100%">
 </p>
 
-A five-minute walkthrough for presenting it is in [docs/DEMO.md](docs/DEMO.md).
+## How it works
+
+- The same app is installed on every phone. On first start you choose **"I'm a parent"** or **"This is my child's device"**.
+- A **parent** signs in with an email address and a password, confirms the address, and creates the family. Signing in on another phone, Android or iPhone, brings the family with it.
+- A **child's phone** needs no account. It enters a one-time code from the parent's phone, both phones show the same four characters, and the parent approves it.
+- From then on the role is fixed **by the server**. A child's phone cannot open the parent side, and whatever a modified app sends, the server refuses what a child may not do (`firestore.rules`).
+- Until a phone is in a family it shows sample data, so the app can be looked at without an account.
+
+| Document | What it covers |
+|---|---|
+| [docs/SECURITY.md](docs/SECURITY.md) | What the security rules guarantee, how to publish them, their limits |
+| [docs/RELEASE.md](docs/RELEASE.md) | Building for Android and iPhone with EAS, installing, over-the-air updates |
+| [docs/BACKEND.md](docs/BACKEND.md) | The Firebase project, the data layout, how syncing works |
+| [docs/DEMO.md](docs/DEMO.md) | A walkthrough with the sample data |
+
+## What works between two linked phones
+
+Rules and limits set by the parent, requests for more time or to unlock an app and their answers, check-ins, a chat, tasks and rewards, SOS, removing a phone. Changes made without a connection are kept and sent when it is back; a restart keeps everything.
+
+## What this version does not do
+
+Said plainly, because it matters for a safety app:
+
+- It does **not read a phone's location**, **measure screen time or app use**, or **lock the phone or block apps**. Limits and blocked apps are agreements that both phones show. Usage numbers, maps and battery levels on the parent's screens are examples and are marked as such in a linked family.
+- It does **not send notifications to a closed app**. An SOS, a request or a message appears on the other phone when Haven is open there.
+- Calls, messages in other apps, social apps, browsing and video history, and keyword alerts are labelled preview screens with made-up rows. Nothing reads them from a device, on purpose.
+
+Each of the first two needs native modules and system permissions that differ between Android and iOS; `src/platform/capabilities.ts` is where that difference is described, and "What this version does" in the app shows it to both parent and child.
 
 ## Run it
 
@@ -19,76 +45,38 @@ npm install
 npx expo start
 ```
 
-Scan the QR code with the **Expo Go** app, or press `w` to open it in the browser. This runs the combined app, which starts with a chooser for the parent or the child side. If Metro runs out of memory on a long session, start it with `NODE_OPTIONS=--max-old-space-size=8192`.
+Press `w` for the browser, or open it in a development build. `firebase.config.json` holds the Firebase project's public client settings; with it the app talks to that project. Without the file the app runs with sample data only.
 
-## What is in it
+## Build
 
-**First run:** a four-slide introduction. It is remembered; Settings has "Replay introduction".
+EAS builds for both platforms and over-the-air updates: see [docs/RELEASE.md](docs/RELEASE.md).
 
-**Parent:** dashboard with a screen-time ring per child, approve or decline requests, pause a device, add time; screen-time limits; per-app limits and blocking; web and content filter with editable blocked and allowed site lists; schedules and bedtime (add, toggle, remove); routines; location with places and geofences (add, remove, arrival and departure alerts); location history; reports by day, week and month; rewards and tasks; family chat; notifications; settings; subscription; device pairing.
-
-**Child:** time left and allowed apps; ask for more time; ask to unlock an app; check in; rewards; family chat; "What's shared"; press-and-hold SOS that alerts the parent side.
-
-**Preview only:** calls, messages, social apps, browsing history, video history and keyword alerts are labelled preview screens with made-up sample rows. Nothing reads real data from a device.
-
-**Data:** everything is demo data saved on the device, so changes survive a restart. Settings has "Reset demo data" to put it back to the start. There is no backend and no account.
-
-## Two apps from one codebase
-
-The environment variable `APP_VARIANT` chooses what is built (see `app.config.js`):
-
-| `APP_VARIANT` | App name | Android package | Opens with |
-|---|---|---|---|
-| not set | Haven | `com.haven.familysafety` | the parent / child chooser |
-| `parent` | Haven | `com.haven.familysafety.parent` | the parent dashboard |
-| `child` | Haven Kids | `com.haven.familysafety.kids` | the child home |
-
-The three packages are different, so all three can be installed on one phone. Haven Kids has its own coral icon and splash screen.
-
-**The two apps do not talk to each other.** There is no server in this build, so an SOS sent from Haven Kids on one phone does not reach Haven on another phone; each installed app keeps its own demo data. To show the whole loop on one phone, each single-side app has a labelled row that opens the other side on the same device: "Demo: preview the child app on this device" on the parent's Family tab, and "Demo: preview the parent app on this device" on the child's Me tab.
-
-## Building the Android APKs
+A local Android APK:
 
 ```bash
-npm run apk:parent   # Haven
-npm run apk:child    # Haven Kids
+npm run apk     # expo prebuild, then gradle assembleRelease
 ```
 
-Each command sets `APP_VARIANT` for every step, regenerates the `android/` folder, builds a release APK and checks that the variant is inside it. The APK is written to `android/app/build/outputs/apk/release/app-release.apk`, so copy it somewhere before building the other one.
+It compiles against and targets **Android 17 (API 37)**; the minimum is Android 7.0 (API 24). You need the Android SDK (platform 37, build tools 37, NDK 27.1), `ANDROID_HOME`, and JDK 17. The APK is in `android/app/build/outputs/apk/release/`, signed with the debug key: sign it with your own key before handing it on, and keep that key, because Android only installs a later version over an earlier one when both have the same signature.
 
-Native builds compile against and target **Android 17 (API 37)**; the minimum is Android 7.0 (API 24). This is set in `app.json` through the `expo-build-properties` plugin.
-
-You need the Android SDK (platform 37, build tools 37, NDK 27.1; Gradle fetches missing pieces if the licences are accepted), `ANDROID_HOME` pointing at it, and JDK 17 installed (JDK 21 can be the default, but the React Native Gradle plugin asks for a Java 17 toolchain). The first build compiles native code and takes a while.
-
-Building by hand works too, but `APP_VARIANT` must be set for **both** `expo prebuild` and the Gradle build. If it is missing for Gradle, the APK has the right name and icon but shows the chooser.
-
-The APK that Gradle writes is signed with the debug keystore. That installs, but for handing the app to other people sign it with your own key, which also lets later versions install over earlier ones:
+## Tests
 
 ```bash
-apksigner sign --ks your-release.jks --ks-key-alias your-alias --min-sdk-version 24 \
-  --v2-signing-enabled true --v3-signing-enabled true --out signed.apk app-release.apk
+npx tsc --noEmit      # types
+npm run test:sync     # the sync logic: unit cases and 5,000 random histories
+npm run test:rules    # the security rules, request by request (Firestore emulator)
+npm run test:live     # two phones' real code against the Firestore and Auth emulators
+node tests/ui/two-browsers.e2e.js <web export>   # the screens, in two browsers
 ```
 
-Keep the keystore and its password out of the repository. This is still a sideload build; a Play Store release would be an app bundle with Play App Signing.
-
-**Checked on:** both apps were installed and run on an Android 17 (API 37) emulator: each opens straight into its side, taps work, and a change survives closing and reopening the app. They have not been run on a physical phone from this repository's build machine.
-
-To make a smaller APK for one kind of phone, add for example `-PreactNativeArchitectures=arm64-v8a` to the Gradle command.
-
-## Checks
-
-```bash
-npx tsc --noEmit   # typecheck
-```
+None of them contact the real Firebase project. How to start the emulators is in each folder's README.
 
 ## Structure
 
-- `src/app/` — screens (every file is a route). `(parent)/` and `(child)/` are the two tab apps; the other files are screens pushed on top.
-- `src/app/feature/[key].tsx` — the preview screens and the approval settings.
-- `src/components/ui/` — the shared UI kit (Text, Card, Button, Row, Toggle, ProgressRing and so on).
-- `src/state/store.tsx` — demo data and every action the screens call; `persist.ts` and `storage.ts` save and load it.
-- `src/config/variant.ts` — which app this build is.
-- `src/theme/index.ts` — colours for light and dark, spacing, radius, type scale.
-- `app.config.js` — applies `APP_VARIANT` to `app.json`.
-- `assets/images/` — app icon, Android adaptive icon, splash art, favicon; `child/` holds the Haven Kids set.
-- `docs/` — the demo script and screenshots.
+- `src/app/` — screens (every file is a route). `(parent)/` and `(child)/` are the two tab sides; `_layout.tsx` closes each side to the other role; `account.tsx`, `pairing.tsx` and `link-device.tsx` are setup and linking.
+- `src/sync/` — the link between phones: `auth.ts` (accounts), `remote.ts` (Cloud Firestore), `controller.ts` (who is signed in, pairing, status), `engine.ts`, `reconcile.ts` and `schema.ts` (what is sent and how conflicts are settled).
+- `src/state/` — the app's data and every action the screens call, saved on the device.
+- `src/platform/capabilities.ts` — what each operating system allows and what this build does.
+- `src/components/`, `src/theme/` — the UI kit, colours for light and dark.
+- `firestore.rules` — the security rules. `tests/` — the suites above.
+- `app.json`, `app.config.js`, `eas.json` — app, build and update configuration.

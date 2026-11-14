@@ -39,13 +39,18 @@ function readFirebaseConfig() {
   return Object.fromEntries(FIREBASE_KEYS.filter((key) => typeof raw[key] === 'string').map((key) => [key, raw[key]]));
 }
 
-/** Adds the backend settings to `extra`, for every variant. */
+/** Adds the backend settings to `extra`. */
 function withBackend(config) {
   const firebase = readFirebaseConfig();
   const firestoreEmulator = process.env.HAVEN_FIRESTORE_EMULATOR || null;
   const authEmulator = process.env.HAVEN_AUTH_EMULATOR || null;
   if (!firebase && !firestoreEmulator && !authEmulator) return config;
-  const next = { ...config, extra: { ...config.extra, firebase, firestoreEmulator, authEmulator } };
+  // Only what is set: a release build's config names no emulator at all.
+  const extra = { ...config.extra };
+  if (firebase) extra.firebase = firebase;
+  if (firestoreEmulator) extra.firestoreEmulator = firestoreEmulator;
+  if (authEmulator) extra.authEmulator = authEmulator;
+  const next = { ...config, extra };
   // Local emulators speak plain HTTP, which Android refuses by default. Allow it to their host
   // in test builds that name an emulator, and only in those.
   const hosts = [...new Set([firestoreEmulator, authEmulator].filter(Boolean).map((value) => value.replace(/:\d+$/, '')))];
