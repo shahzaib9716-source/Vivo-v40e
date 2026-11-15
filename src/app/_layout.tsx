@@ -52,8 +52,10 @@ export default function RootLayout() {
  */
 function Screens({ scheme }: { scheme: 'light' | 'dark' }) {
   const link = useLink();
-  const { role, setRole } = useStore();
-  const serverRole = link.role;
+  const { role, setRole, linkedRoleAtStart } = useStore();
+  // While the link layer is still reading this device's record at start, the role saved with it
+  // stands in, so a deep link opened at a cold start cannot show the other side for a moment.
+  const serverRole = link.role ?? (link.status === 'connecting' ? linkedRoleAtStart : null);
 
   // Keep the saved side in step with the server's, so screens that read the side agree with it and
   // the device stays on that side if it later leaves the family.

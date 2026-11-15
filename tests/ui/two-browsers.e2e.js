@@ -210,7 +210,7 @@ const text = (page) => page.evaluate(() => {
     check('parent: Approve is off until the 4 characters are typed', await approveBtn.isDisabled());
     const wrong = s.offer.claim.check === 'AAAA' ? 'BBBB' : 'AAAA';
     await L(parent, 'The 4 characters shown on the other phone').fill(wrong);
-    await T(parent, 'These do not match. If that phone shows other characters, someone else used the code: decline it.').waitFor({ timeout: 10000 });
+    await T(parent, 'These do not match. Check them again on the other phone. If it really shows other characters, someone else used the code: decline it.').waitFor({ timeout: 10000 });
     check('parent: wrong characters keep Approve off and say why', await approveBtn.isDisabled());
     await L(parent, 'The 4 characters shown on the other phone').fill(cs.pendingJoin.check.toLowerCase());
     await T(parent, 'They match. Approve if this is the phone you expect.').waitFor({ timeout: 10000 });

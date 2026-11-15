@@ -136,10 +136,12 @@ export default function ChildHome() {
                 <Feather name="moon" size={30} color="#FFFFFF" />
               </View>
               <Text variant="h2" color="#FFFFFF" center style={styles.heroTitle}>
-                Your device is paused
+                {live ? 'Time for a screen break' : 'Your device is paused'}
               </Text>
               <Text variant="small" color="rgba(255,255,255,0.85)" center style={styles.heroBody}>
-                Apps are resting for now. You can still check in, message your family or send an SOS.
+                {live
+                  ? 'Your family asked for a break from screens for now. You can still check in, message your family or send an SOS.'
+                  : 'Apps are resting for now. You can still check in, message your family or send an SOS.'}
               </Text>
               <View style={styles.heroChip}>
                 <Feather name="clock" size={13} color="#FFFFFF" />

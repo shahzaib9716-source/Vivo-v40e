@@ -51,7 +51,7 @@ export default function ChildProfileTab() {
           <View style={[styles.paused, { backgroundColor: colors.primarySoft }]}>
             <Feather name="pause" size={13} color={colors.primary} />
             <Text variant="smallStrong" color={colors.primary}>
-              Device paused
+              {live ? 'Screen-time break' : 'Device paused'}
             </Text>
           </View>
         )}

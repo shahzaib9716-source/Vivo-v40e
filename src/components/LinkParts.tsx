@@ -66,10 +66,17 @@ export function linkSummary(link: LinkState): { title: string; detail: string; t
           : 'Changes on one phone reach the others while the apps are open.',
       tone: 'ok',
     },
-    offline: { title: 'Linked, but offline', detail: link.error ?? 'Changes are kept and sent when the connection is back.', tone: 'warn' },
+    offline:
+      link.role === null
+        ? { title: "Can't reach the server", detail: 'Haven needs a connection to finish setting up. This updates by itself when it is back.', tone: 'warn' }
+        : { title: 'Linked, but offline', detail: link.error ?? 'Changes are kept and sent when the connection is back.', tone: 'warn' },
     error: { title: 'There is a problem with the link', detail: link.error ?? 'Try again in a moment.', tone: 'warn' },
   };
-  return text[link.status];
+  const summary = text[link.status];
+  // Why something just ended or was refused (a declined request, a refused change): said here,
+  // whatever the status, so it is not lost when the screen moves on.
+  if (link.error && link.status !== 'offline' && link.status !== 'error') return { ...summary, detail: link.error };
+  return summary;
 }
 
 export function LinkStatusCard({ link }: { link: LinkState }) {

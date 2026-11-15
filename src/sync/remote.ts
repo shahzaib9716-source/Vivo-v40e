@@ -383,6 +383,11 @@ export async function removeMember(familyId: string, uid: string, deviceIds: rea
   }
 }
 
+/** A removed device tidies away its own "last seen" record (the rules allow exactly that). */
+export async function deleteOwnDevice(familyId: string, deviceId: string): Promise<void> {
+  await acked(deleteDoc(doc(db(), devicePath(familyId, deviceId))));
+}
+
 /**
  * A device leaves by itself (SPEC 3.3): its "last seen" record, its member record, then its
  * pointer. Only the member record has to succeed; the other two are tidied up when possible.

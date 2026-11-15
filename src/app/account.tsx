@@ -65,7 +65,9 @@ export default function AccountScreen() {
     : link.pendingJoin ? 'waiting'
     : account === null ? (link.status === 'connecting' || link.status === 'offline' ? 'starting' : 'sign-in')
     : !account.emailVerified ? 'confirm'
-    : link.status === 'needs-family' ? 'family'
+    // A parent removed from a family by another parent stays signed in: the next step is the same
+    // as for an account without a family (a code from a parent, or a family of their own).
+    : link.status === 'needs-family' || link.status === 'removed' ? 'family'
     : 'looking';
 
   const leave = (href: string) => {
@@ -247,7 +249,11 @@ export default function AccountScreen() {
           </>
         ) : stage === 'family' ? (
           <>
-            <InlineNote tone="success" icon="check-circle" title="You’re signed in" detail={`${account?.email} is confirmed. One more step: your family.`} style={styles.gapBottom} />
+            {link.status === 'removed' ? (
+              <InlineNote tone="neutral" icon="user-x" title="You were removed from the family" detail="Another parent removed this account. To come back, ask them for a new code and join with it below." style={styles.gapBottom} />
+            ) : (
+              <InlineNote tone="success" icon="check-circle" title="You’re signed in" detail={`${account?.email} is confirmed. One more step: your family.`} style={styles.gapBottom} />
+            )}
             <SectionLabel>Create your family</SectionLabel>
             <Card style={styles.form}>
               <Field label="Family name">

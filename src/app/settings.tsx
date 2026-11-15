@@ -25,7 +25,7 @@ const EDIT_HIT_SLOP = { top: 14, bottom: 14, left: 12, right: 12 };
 
 export default function Settings() {
   const { colors } = useTheme();
-  const { setRole, resetOnboarding, resetDemoData } = useStore();
+  const { setRole, resetOnboarding, resetDemoData, live } = useStore();
   const link = useLink();
   // Also while the link is still being worked out at start: a reset then would be taken for edits.
   const linked = link.role !== null || link.status === 'connecting';
@@ -114,13 +114,28 @@ export default function Settings() {
 
       <SectionLabel>Notifications</SectionLabel>
       <Card padded={false} style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.xl }}>
-        <Row title="Push notifications" icon="bell" iconColor={colors.accent} chevron={false} right={<Toggle value={push} onChange={setPush} />} />
-        <Row title="Weekly email digest" icon="mail" iconColor={colors.info} chevron={false} right={<Toggle value={emailDigest} onChange={setEmailDigest} />} />
+        {live ? (
+          // A real family: these switches would promise what this version does not do.
+          <Row
+            title="Not in this version"
+            subtitle="Alerts show while Haven is open. No notifications to a closed app, no email digest."
+            icon="bell-off"
+            iconColor={colors.textMuted}
+            onPress={() => (router.push as any)('/about-version')}
+          />
+        ) : (
+          <>
+            <Row title="Push notifications" icon="bell" iconColor={colors.accent} chevron={false} right={<Toggle value={push} onChange={setPush} />} />
+            <Row title="Weekly email digest" icon="mail" iconColor={colors.info} chevron={false} right={<Toggle value={emailDigest} onChange={setEmailDigest} />} />
+          </>
+        )}
       </Card>
 
       <SectionLabel>Privacy & security</SectionLabel>
       <Card padded={false} style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.xl }}>
-        <Row title="Require Face ID to open" icon="lock" iconColor={colors.primary} chevron={false} right={<Toggle value={biometric} onChange={setBiometric} />} />
+        {live ? null : (
+          <Row title="Require Face ID to open" icon="lock" iconColor={colors.primary} chevron={false} right={<Toggle value={biometric} onChange={setBiometric} />} />
+        )}
         <Row title="Privacy & transparency" subtitle="What your child sees about sharing" icon="eye" iconColor={colors.success} onPress={() => (router.push as any)('/transparency?as=parent')} />
         <Row title="Data & export" subtitle="Download or delete your data" icon="database" iconColor={colors.textMuted} onPress={showDataNote} />
         {/* A device in a family shows the family's data, so there is no sample data to put back. */}
@@ -193,7 +208,7 @@ export default function Settings() {
       {signOutProblem ? <InlineNote tone="neutral" icon="alert-circle" title="That didn't work" detail={signOutProblem} style={{ marginTop: spacing.md }} /> : null}
 
       <Text variant="tiny" tone="faint" center style={{ marginTop: spacing.lg }}>
-        The switches on this screen are examples: they are not saved and change nothing on the phone.
+        {live ? 'Protect this phone with its own screen lock: anyone holding it unlocked can use Haven as you.' : 'The switches on this screen are examples: they are not saved and change nothing on the phone.'}
       </Text>
     </Screen>
   );

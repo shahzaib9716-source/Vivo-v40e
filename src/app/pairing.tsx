@@ -8,7 +8,7 @@ import { Field, InlineConfirm, TextField } from '@/components/RuleForm';
 import { Button, Card, Chip, Header, Row, Screen, SectionLabel, Text } from '@/components/ui';
 import { useStore } from '@/state/store';
 import { useLink } from '@/sync/link';
-import { formatPairingCode, type FamilyMember, type LinkRole } from '@/sync/types';
+import { formatPairingCode, sameCheck, type FamilyMember, type LinkRole } from '@/sync/types';
 import { radius, spacing, useTheme } from '@/theme';
 
 /** "14:05" */
@@ -79,9 +79,8 @@ export default function Pairing() {
   // The parent types the four characters the joining phone shows. If someone else saw the code
   // and used it first, their phone shows different characters, and Approve stays off. (The server
   // cannot check that a person compared them; this makes the comparison a step that has to be done.)
-  const checkTyped = typedCheck.trim().toUpperCase();
-  const checkMatches = claim !== null && checkTyped === claim.check.toUpperCase();
-  const checkWrong = claim !== null && checkTyped.length === claim.check.length && !checkMatches;
+  const checkMatches = claim !== null && sameCheck(typedCheck, claim.check);
+  const checkWrong = claim !== null && typedCheck.trim().length === claim.check.length && !checkMatches;
   const canApprove = claim !== null && target !== undefined && checkMatches;
 
   const approve = () => {
@@ -163,7 +162,7 @@ export default function Pairing() {
               </Text>
               <Field
                 label="Type the 4 characters shown on the other phone"
-                error={checkWrong ? 'These do not match. If that phone shows other characters, someone else used the code: decline it.' : undefined}>
+                error={checkWrong ? 'These do not match. Check them again on the other phone. If it really shows other characters, someone else used the code: decline it.' : undefined}>
                 <TextField
                   value={typedCheck}
                   onChangeText={(text) => setTypedCheck(text.replace(/[^0-9A-Za-z]/g, '').slice(0, claim.check.length))}

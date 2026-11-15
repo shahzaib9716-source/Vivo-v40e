@@ -496,6 +496,13 @@ interface Store {
   setSelfChildId: (id: string | null) => void;
   /** Link layer: true while this device is in a real family. */
   setLive: (live: boolean) => void;
+  /**
+   * The role this device had in its family according to its saved link record, read before the
+   * first frame. Only for the moment at start before the link layer has read the same record:
+   * src/app/_layout.tsx closes the other side with it, so a deep link opened at a cold start never
+   * shows the wrong side. null once the device leaves its family.
+   */
+  linkedRoleAtStart: 'parent' | 'child' | null;
 }
 
 const Ctx = createContext<Store | null>(null);
@@ -526,9 +533,11 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
   const [selfChildId, setSelfChildId] = useState<string | null>(null);
   const [live, setLiveState] = useState(false);
   const liveRef = useRef(false);
+  const [linkedRoleAtStart, setLinkedRoleAtStart] = useState<'parent' | 'child' | null>(null);
   const setLive = useCallback((next: boolean) => {
     liveRef.current = next;
     setLiveState(next);
+    if (!next) setLinkedRoleAtStart(null);
   }, []);
   /** The link layer's record. It is state so that it commits, and is saved, together with the slices. */
   const [syncRecord, setSyncRecord] = useState<unknown>(undefined);
@@ -573,6 +582,7 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
       if (linkedFamily && !(linkedFamily.pendingSeed && !linkedFamily.pendingSeed.familyStored)) {
         liveRef.current = true;
         setLiveState(true);
+        setLinkedRoleAtStart(linkedFamily.role);
         setSelfChildId(linkedFamily.role === 'child' ? linkedFamily.childId : null);
       }
       // A side picked before this read came back wins over the saved one.
@@ -860,6 +870,7 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
   }, []);
 
   const wipeToSample = useCallback(() => {
+    setLinkedRoleAtStart(null);
     // Drop any save that is still waiting, so the old data cannot be written back after this.
     if (saveTimer.current != null) {
       clearTimeout(saveTimer.current);
@@ -946,7 +957,7 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
       messages, sendMessage, sites, addSite, removeSite, renameChild, addChild, requestUnlock,
       checkIn, sosActive, sosChildId, sosChild, sosMine, triggerSOS, clearSOS, live,
       hasOnboarded, ready, completeOnboarding, resetOnboarding, resetDemoData, wipeToSample,
-      syncSnapshot: snapshot, applyRemote, readSyncRecord, setSelfChildId, setLive,
+      syncSnapshot: snapshot, applyRemote, readSyncRecord, setSelfChildId, setLive, linkedRoleAtStart,
     }),
     [role, kids, activeChildId, activeChild, childSelf, requests, alerts, places, tasks, points,
       adjustLimit, grantBonus, toggleApp, setAppLimit, pauseDevice, resumeDevice, resolveRequest,
@@ -955,7 +966,7 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
       messages, sendMessage, sites, addSite, removeSite, renameChild, addChild, requestUnlock,
       checkIn, sosActive, sosChildId, sosChild, sosMine, triggerSOS, clearSOS, live,
       hasOnboarded, ready, completeOnboarding, resetOnboarding, resetDemoData, wipeToSample,
-      snapshot, applyRemote, readSyncRecord, setRole, setLive],
+      snapshot, applyRemote, readSyncRecord, setRole, setLive, linkedRoleAtStart],
   );
 
   // The app is mounted only once the saved state is in place. Reading takes a few milliseconds, and

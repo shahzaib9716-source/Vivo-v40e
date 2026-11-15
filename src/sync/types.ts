@@ -160,6 +160,17 @@ export function pairingCheck(uid: string): string {
   return uid.slice(-PAIRING_CHECK_LENGTH).toUpperCase();
 }
 
+/**
+ * True when what a parent typed is the check, reading characters that look alike as the same:
+ * account ids can contain 0 and O, 1, I and L, which are easy to mix up when read off a screen.
+ * Folding them costs almost nothing: a phone that is not the right one still differs in the
+ * other characters, or in the remaining ones at least most of the time.
+ */
+export function sameCheck(typed: string, check: string): boolean {
+  const fold = (s: string) => s.trim().toUpperCase().replace(/O/g, '0').replace(/[IL]/g, '1');
+  return typed.trim().length === check.length && fold(typed) === fold(check);
+}
+
 // ---------------------------------------------------------------------------------------------
 // What this device remembers about its link (AsyncStorage)
 // ---------------------------------------------------------------------------------------------

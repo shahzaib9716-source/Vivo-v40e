@@ -74,6 +74,12 @@ export interface StoreHost {
 
 const OFFLINE_NOTE = 'No connection right now. Changes are kept on this device and sent when it is back.';
 const DECLINED = 'The request was declined or has expired.';
+const WITHDRAWN = 'A parent approved this phone and then removed it again. Ask for a new code.';
+/** Taking in an approval that failed is tried again after this long, doubling up to a minute. */
+const JOIN_RETRY_MS = 2000;
+const JOIN_RETRY_MAX_MS = 60_000;
+/** The join's deadline passed before the server had answered: check again this often. */
+const JOIN_RECHECK_MS = 15_000;
 const NOTICE_MS = 6000;
 const PRESENCE_EVERY_MS = 60_000;
 /**
@@ -120,6 +126,12 @@ interface CodeWatch {
   pairing: remote.PairingDoc | null;
   /** Join only: the approval is being taken in. */
   completing: boolean;
+  /** Join only: true once the server itself (not this device's cache) has answered the listener. */
+  serverSeen?: boolean;
+  /** Join only: failed attempts at taking in the approval, and when the next one is due. */
+  failures?: number;
+  retryAt?: number;
+  retryTimer?: ReturnType<typeof setTimeout> | null;
 }
 
 type Lookup = 'idle' | 'checking' | 'none' | 'failed';
@@ -267,6 +279,8 @@ export class LinkController {
     this.active = active;
     if (!active || !this.alive) return;
     if (this.lookup === 'failed') this.lookup = 'idle';
+    // A join whose approval could not be taken in yet: try again now rather than after the wait.
+    if (this.joinWatch) this.joinWatch.retryAt = 0;
     this.createRetryDue = true;
     const s = this.session;
     if (s) {
@@ -687,6 +701,9 @@ export class LinkController {
     this.wipeLocal();
     // Shown at once: the tidying below talks to the server and may take a while on a bad connection.
     this.emit();
+    // Its own "last seen" record too: the parent's tidy-up may not have reached the server, and a
+    // record left under this install's id would block this phone's presence if it is paired again.
+    await remote.deleteOwnDevice(s.familyId, this.deviceId).catch(() => {});
     if (anonymous) {
       // The pointer leads nowhere any more, and once the account is gone nobody could remove it.
       await remote.deleteUserPointer(s.uid).catch(() => {});
@@ -768,8 +785,9 @@ export class LinkController {
   private ensureJoin(pending: PendingJoin): void {
     const current = this.joinWatch;
     if (current && current.code === pending.code) {
-      // Approved, but taking it in failed (no connection at that moment): try again.
-      if (current.pairing?.approved && !current.completing) void this.completeJoin(current, current.pairing);
+      // Approved, but taking it in failed (no connection at that moment): try again once it is due.
+      // Not straight away: `completeJoin` ends with `decide`, which would bring us back here at once.
+      if (current.pairing?.approved && !current.completing && Date.now() >= (current.retryAt ?? 0)) void this.completeJoin(current, current.pairing);
       return;
     }
     this.stopJoin();
@@ -779,7 +797,18 @@ export class LinkController {
       if (watch.timer != null) clearTimeout(watch.timer);
       watch.timer = setTimeout(() => {
         if (this.joinWatch !== watch || watch.completing) return;
-        // Nobody answered while the claim could still be approved: withdraw it.
+        // Approved while this phone was away: take it in, never withdraw it.
+        if (watch.pairing?.approved) {
+          void this.completeJoin(watch, watch.pairing);
+          return;
+        }
+        // The deadline passed while the app was closed or asleep, and the server has not answered
+        // yet: what it holds may be an approval. Ask again shortly instead of ending the wait.
+        if (!watch.serverSeen) {
+          watch.timer = setTimeout(() => arm(expiresAt), JOIN_RECHECK_MS);
+          return;
+        }
+        // The server says nobody approved while the claim could still be approved: withdraw it.
         void remote.deletePairing(watch.code).catch(() => {});
         void this.joinEnded(DECLINED);
       }, Math.max(0, expiresAt + PAIRING_APPROVE_GRACE_MS - Date.now()) + 250);
@@ -788,6 +817,7 @@ export class LinkController {
       pending.code,
       (pairing, meta) => {
         if (this.joinWatch !== watch || watch.completing) return;
+        if (!meta.fromCache) watch.serverSeen = true;
         if (!pairing) {
           if (!meta.fromCache) void this.joinEnded(DECLINED);
           return;
@@ -818,6 +848,7 @@ export class LinkController {
     if (!watch) return;
     watch.stop();
     if (watch.timer != null) clearTimeout(watch.timer);
+    if (watch.retryTimer != null) clearTimeout(watch.retryTimer);
   }
 
   /** SPEC 3.2 step 4: a parent approved. The link record first, then syncing, then tidying up. */
@@ -842,9 +873,26 @@ export class LinkController {
       this.stopJoin();
       // The used code is tidied away by the session that starts now (`tidyCode`): the record
       // remembers it, so a device that is killed at this point still removes it on its next start.
-    } catch {
-      // Not reachable right now: the listener is still attached and the next snapshot tries again.
+    } catch (e) {
       watch.completing = false;
+      if (remote.isRefusal(e)) {
+        // The pairing says approved, but the server refuses this account its member record: a
+        // parent removed it again before this phone took the approval in. Retrying cannot help.
+        this.hold -= 1;
+        void remote.deletePairing(watch.code).catch(() => {});
+        await this.joinEnded(WITHDRAWN);
+        return;
+      }
+      // Not reachable right now (or the approval has not arrived yet): try again later, waiting
+      // longer each time, and sooner if a new snapshot arrives or the app comes to the foreground.
+      watch.failures = (watch.failures ?? 0) + 1;
+      const wait = Math.min(JOIN_RETRY_MAX_MS, JOIN_RETRY_MS * 2 ** (watch.failures - 1));
+      watch.retryAt = Date.now() + wait;
+      if (watch.retryTimer != null) clearTimeout(watch.retryTimer);
+      watch.retryTimer = setTimeout(() => {
+        watch.retryTimer = null;
+        if (this.joinWatch === watch) this.decide();
+      }, wait);
     }
     this.hold -= 1;
     this.decide();

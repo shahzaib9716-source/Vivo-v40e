@@ -75,7 +75,12 @@ test('the parent removes the child’s phone: it shows "removed", the sample dat
   assert.deepEqual(c.link.members, []);
   assert.equal(c.store.live, false);
   assertNoFamilyDataOnDisk(child, [joined.uid]);
-  assert.deepEqual(writesIn(await child.fx(true)).filter((w) => w.state !== 'failed').map((w) => `${w.op} ${w.path}`), [`delete users/${joined.uid}`], 'all it still wrote was the removal of its own pointer');
+  // All it still wrote: the removal of its own pointer, and of its own "last seen" record when the
+  // parent's tidy-up had not removed that first (whichever reaches the server first wins; the
+  // other is refused because the document is gone).
+  const removedWrites = writesIn(await child.fx(true)).filter((w) => w.state !== 'failed').map((w) => `${w.op} ${w.path}`);
+  assert.ok(removedWrites.includes(`delete users/${joined.uid}`), 'it removed its own pointer');
+  assert.deepEqual(removedWrites.filter((w) => w !== `delete users/${joined.uid}` && !new RegExp(`^delete (families/[^/]+/)?devices/${deviceId}$`).test(w)), [], 'and nothing else but its own "last seen" record');
 
   // The server: gone from the family, and that phone's credentials are refused from now on.
   assert.equal(await server.doc(`${F}/members/${joined.uid}`), null);
