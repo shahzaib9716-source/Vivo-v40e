@@ -616,7 +616,7 @@ function SafetyArt({ index, progress, accent }: ArtProps) {
         <View style={[styles.pill, styles.pillSmall, { backgroundColor: colors.surface, borderColor: colors.border }, shadow(2)]}>
           <View style={[styles.liveDot, { backgroundColor: colors.success }]} />
           <Text variant="tiny" tone="muted">
-            Updated 2m ago
+            Checked in 2m ago
           </Text>
         </View>
       </Drift>
@@ -628,10 +628,10 @@ function SafetyArt({ index, progress, accent }: ArtProps) {
           </View>
           <View style={styles.flex}>
             <Text variant="smallStrong" numberOfLines={1}>
-              Mia arrived at School
+              Mia checked in
             </Text>
             <Text variant="tiny" tone="faint" numberOfLines={1}>
-              Place alert · 8:42 AM
+              Check-in · 8:42 AM
             </Text>
           </View>
           <MaterialCommunityIcons name="school" size={18} color={accent} />

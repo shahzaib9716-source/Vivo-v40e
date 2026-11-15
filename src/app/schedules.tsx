@@ -64,7 +64,7 @@ export default function Schedules() {
   return (
     <Screen>
       <Header back title="Schedules & Bedtime" subtitle="When the device winds down" />
-      <SampleNote about="rules" />
+      <SampleNote about="saved" />
 
       {schedules.length === 0 ? (
         <Card style={styles.empty}>

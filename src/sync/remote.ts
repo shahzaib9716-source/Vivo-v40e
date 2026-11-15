@@ -502,6 +502,21 @@ export async function claimPairing(code: string, uid: string, name: string, plat
  * null when the document is gone. A device whose claim was declined is refused instead (the rules
  * cannot show it a document that no longer exists): `onError` with `refused` true.
  */
+/**
+ * The pairing document as the server holds it now (never this device's cache). Rejects when the
+ * server cannot be reached; a refusal means the document is gone (the rules cannot show a device a
+ * code that no longer exists), and resolves to null like a missing one.
+ */
+export async function readPairingFromServer(code: string): Promise<PairingDoc | null> {
+  try {
+    const snap = await acked(getDocFromServer(doc(db(), pairingPath(code))));
+    return snap.exists() ? toPairing(snap) : null;
+  } catch (e) {
+    if (isRefusal(e)) return null;
+    throw e;
+  }
+}
+
 export function listenPairing(code: string, onData: (pairing: PairingDoc | null, meta: SnapshotMeta) => void, onError: OnError): Stop {
   return onSnapshot(
     doc(db(), pairingPath(code)),

@@ -31,7 +31,7 @@ const siteCount = (n: number) => (n === 0 ? 'No sites yet' : plural(n, 'site', '
 
 export default function WebFilter() {
   const { colors } = useTheme();
-  const { sites } = useStore();
+  const { sites, live } = useStore();
   const [cats, setCats] = useState(INITIAL);
   const [safeSearch, setSafeSearch] = useState(true);
   const [safeMode, setSafeMode] = useState(true);
@@ -44,21 +44,23 @@ export default function WebFilter() {
   return (
     <Screen>
       <Header back title="Web & Content Filter" />
-      <SampleNote about="rules" />
+      <SampleNote about="demo" />
 
       <Card style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.xl }}>
         <IconBadge name="shield" color={colors.success} size={48} />
         <View style={{ flex: 1 }}>
-          <Text variant="title">Protection is on</Text>
+          <Text variant="title">{live ? 'Your family’s web rules' : 'Protection is on'}</Text>
           <Text variant="small" tone="muted">
             {plural(blockedCount, 'category', 'categories')} and {plural(blockedSites, 'site', 'sites')} blocked
           </Text>
         </View>
-        <View style={[styles.pill, { backgroundColor: colors.successSoft }]}>
-          <Text variant="tiny" color={colors.success}>
-            ACTIVE
-          </Text>
-        </View>
+        {live ? null : (
+          <View style={[styles.pill, { backgroundColor: colors.successSoft }]}>
+            <Text variant="tiny" color={colors.success}>
+              ACTIVE
+            </Text>
+          </View>
+        )}
       </Card>
 
       <SectionLabel>Safety</SectionLabel>

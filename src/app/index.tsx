@@ -95,7 +95,7 @@ export default function Welcome() {
           <Entrance delay={200}>
             <RoleCard
               title="I'm a parent"
-              subtitle="Manage limits, see activity and locations across your family."
+              subtitle="Agree limits, answer requests and get check-ins and SOS from your child."
               icon="users"
               color={colors.primary}
               onPress={() => go('parent')}

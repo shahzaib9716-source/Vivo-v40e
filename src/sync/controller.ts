@@ -126,8 +126,6 @@ interface CodeWatch {
   pairing: remote.PairingDoc | null;
   /** Join only: the approval is being taken in. */
   completing: boolean;
-  /** Join only: true once the server itself (not this device's cache) has answered the listener. */
-  serverSeen?: boolean;
   /** Join only: failed attempts at taking in the approval, and when the next one is due. */
   failures?: number;
   retryAt?: number;
@@ -797,27 +795,36 @@ export class LinkController {
       if (watch.timer != null) clearTimeout(watch.timer);
       watch.timer = setTimeout(() => {
         if (this.joinWatch !== watch || watch.completing) return;
-        // Approved while this phone was away: take it in, never withdraw it.
+        // Approved, as far as this phone knows: take it in, never withdraw it.
         if (watch.pairing?.approved) {
           void this.completeJoin(watch, watch.pairing);
           return;
         }
-        // The deadline passed while the app was closed or asleep, and the server has not answered
-        // yet: what it holds may be an approval. Ask again shortly instead of ending the wait.
-        if (!watch.serverSeen) {
-          watch.timer = setTimeout(() => arm(expiresAt), JOIN_RECHECK_MS);
-          return;
-        }
-        // The server says nobody approved while the claim could still be approved: withdraw it.
-        void remote.deletePairing(watch.code).catch(() => {});
-        void this.joinEnded(DECLINED);
+        // The deadline passed. What this phone last heard may be from before it was closed or
+        // asleep, and a parent may have approved since, so ask the server itself before ending.
+        remote.readPairingFromServer(watch.code).then(
+          (now) => {
+            if (this.joinWatch !== watch || watch.completing) return;
+            if (now?.approved) {
+              watch.pairing = now;
+              void this.completeJoin(watch, now);
+              return;
+            }
+            // The server says nobody approved in time (or the code is gone): withdraw the claim.
+            void remote.deletePairing(watch.code).catch(() => {});
+            void this.joinEnded(DECLINED);
+          },
+          () => {
+            // No answer from the server: nothing is known. Ask again shortly.
+            if (this.joinWatch === watch) watch.timer = setTimeout(() => arm(expiresAt), JOIN_RECHECK_MS);
+          },
+        );
       }, Math.max(0, expiresAt + PAIRING_APPROVE_GRACE_MS - Date.now()) + 250);
     };
     watch.stop = remote.listenPairing(
       pending.code,
       (pairing, meta) => {
         if (this.joinWatch !== watch || watch.completing) return;
-        if (!meta.fromCache) watch.serverSeen = true;
         if (!pairing) {
           if (!meta.fromCache) void this.joinEnded(DECLINED);
           return;
@@ -1080,6 +1087,11 @@ export class LinkController {
         const hadFamily = this.record?.family != null;
         const offer = this.offer;
         if (offer && !offer.claim) void remote.deletePairing(offer.code).catch(() => {});
+        // This phone's "last seen" record goes while the account can still remove it: left behind,
+        // it would refuse the presence of the next account on this phone. Skipped offline, so that
+        // signing out never waits for a connection.
+        const s = this.session;
+        if (s && s.status?.connection === 'online') await remote.deleteOwnDevice(s.familyId, this.deviceId).catch(() => {});
         this.stopOffer();
         this.stopSession();
         // The record first: a kill from here on finds a device that is simply not linked.

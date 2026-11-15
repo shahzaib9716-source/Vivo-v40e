@@ -42,7 +42,7 @@ const noop = () => {};
 
 export default function SOS() {
   // `sosMine`: this child's own SOS. Another child's SOS does not put this screen into its sent state.
-  const { childSelf, sosMine: sosActive, triggerSOS, clearSOS, live } = useStore();
+  const { sosMine: sosActive, triggerSOS, clearSOS, live } = useStore();
 
   // Measured rather than read from the window: a modal sheet is shorter than the screen, and a page
   // rendered on the server has no window to ask.
@@ -78,7 +78,11 @@ export default function SOS() {
     sentAt.current = Date.now();
     triggerSOS();
     setSent(true);
-    if (Platform.OS === 'ios') AccessibilityInfo.announceForAccessibility('SOS sent. Your family has been alerted.');
+    if (Platform.OS === 'ios') {
+      AccessibilityInfo.announceForAccessibility(
+        live ? 'SOS sent to your family. They see it when Haven is open on their phone.' : 'This phone is not linked to a family. The SOS was not sent to anyone.',
+      );
+    }
   };
 
   const safe = () => {
@@ -114,7 +118,7 @@ export default function SOS() {
           {endedByFamily ? (
             <EndedPanel onClose={close} onMessage={openMessages} />
           ) : showSent ? (
-            <SentPanel place={childSelf.place} live={live} onSafe={safe} onMessage={openMessages} />
+            <SentPanel live={live} onSafe={safe} onMessage={openMessages} />
           ) : (
             <HoldPanel compact={compact} live={live} onSend={send} onMessage={openMessages} />
           )}
@@ -238,7 +242,7 @@ function HoldPanel({ compact, live, onSend, onMessage }: { compact: boolean; liv
         <Text variant="body" color={WHITE} center style={styles.lead}>
           {live
             ? 'This shows an SOS alert in your family’s Haven app. It does not share your location or call anyone. If you are in danger, call the emergency number.'
-            : 'This alerts your family right away and shares your live location with them.'}
+            : 'This phone is not linked to a family, so an SOS here is only a sample and reaches nobody. If you are in danger, call the emergency number.'}
         </Text>
 
         <Pressable
@@ -326,7 +330,7 @@ function EndedPanel({ onClose, onMessage }: { onClose: () => void; onMessage: ()
 }
 
 /** The green screen, shown once the SOS is out. */
-function SentPanel({ place, live, onSafe, onMessage }: { place: string; live: boolean; onSafe: () => void; onMessage: () => void }) {
+function SentPanel({ live, onSafe, onMessage }: { live: boolean; onSafe: () => void; onMessage: () => void }) {
   const pop = useSharedValue(0);
 
   useEffect(() => {
@@ -345,12 +349,12 @@ function SentPanel({ place, live, onSafe, onMessage }: { place: string; live: bo
           <Feather name="check" size={52} color={WHITE} />
         </Animated.View>
         <Text variant="h1" color={WHITE} center style={styles.sentTitle}>
-          SOS sent
+          {live ? 'SOS sent' : 'Sample SOS'}
         </Text>
         <Text variant="body" color={WHITE} center style={styles.lead}>
           {live
             ? 'Your family sees this as soon as Haven is open on their phone. If you are in danger, call them or the emergency number now.'
-            : "Your family has been alerted and can see your live location. Stay where you are if it's safe."}
+            : 'Sample only: this phone is not linked to a family, so nobody was told. If you are in danger, call the emergency number now.'}
         </Text>
         {live ? (
           <View style={styles.chip}>
@@ -361,9 +365,9 @@ function SentPanel({ place, live, onSafe, onMessage }: { place: string; live: bo
           </View>
         ) : (
           <View style={styles.chip}>
-            <Feather name="map-pin" size={13} color={WHITE} />
+            <Feather name="info" size={13} color={WHITE} />
             <Text variant="smallStrong" color={WHITE}>
-              Sharing your location near {place}
+              Not linked: not sent, no location shared
             </Text>
           </View>
         )}

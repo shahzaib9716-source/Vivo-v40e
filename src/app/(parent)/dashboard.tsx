@@ -256,7 +256,7 @@ export default function Dashboard() {
                 ) : (
                   <HeroBtn icon="pause" label={live ? 'Pause screen time' : 'Pause device'} onPress={() => pauseDevice(activeChildId)} />
                 )}
-                <HeroBtn icon="plus-circle" label="Add 30 min" onPress={() => grantBonus(activeChildId, 30)} />
+                <HeroBtn icon="plus-circle" label={live ? 'Limit +30 min' : 'Add 30 min'} onPress={() => grantBonus(activeChildId, 30)} />
               </View>
             </LinearGradient>
           </View>
@@ -302,6 +302,11 @@ export default function Dashboard() {
               actionLabel={pending.length > REQUEST_PREVIEW ? (showAllRequests ? 'Show less' : `Show all ${pending.length}`) : undefined}
               onAction={() => setShowAllRequests((all) => !all)}
             />
+            {live && pending.some((r) => r.kind === 'extra_time') ? (
+              <Text variant="small" tone="muted" style={{ marginBottom: spacing.sm }}>
+                Approving extra time raises the daily limit by that much, until you lower it again.
+              </Text>
+            ) : null}
             {pending.length === 0 ? (
               <View style={[styles.caughtUp, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <View style={[styles.caughtUpIcon, { backgroundColor: colors.successSoft }]}>

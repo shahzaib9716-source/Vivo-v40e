@@ -145,9 +145,9 @@ export default function ChildProfile() {
 
           <View style={styles.tiles}>
             {activeChild.bedtime ? (
-              <Button label="Resume device" icon="play" style={styles.flex} onPress={() => resumeDevice(activeChildId)} />
+              <Button label={live ? 'End the break' : 'Resume device'} icon="play" style={styles.flex} onPress={() => resumeDevice(activeChildId)} />
             ) : (
-              <Button label="Pause device" icon="pause" variant="secondary" style={styles.flex} onPress={() => pauseDevice(activeChildId)} />
+              <Button label={live ? 'Screen-time break' : 'Pause device'} icon="pause" variant="secondary" style={styles.flex} onPress={() => pauseDevice(activeChildId)} />
             )}
             <Button
               label="Message"

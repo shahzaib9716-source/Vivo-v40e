@@ -8,6 +8,7 @@ import { IconButton, TextField, type TextFieldRef } from '@/components/RuleForm'
 import { Button, Card, Header, IconBadge, Row, Screen, SectionLabel, Text } from '@/components/ui';
 import { useStore, type SiteRule } from '@/state/store';
 import { radius, spacing, useTheme } from '@/theme';
+import { SampleNote } from '@/components/SampleNote';
 
 type ListKind = SiteRule['list'];
 
@@ -30,6 +31,20 @@ const COPY: Record<
     emptyBody: 'Add an address above and it keeps opening, even when its category is blocked.',
     note: 'Category filters and Safe Search still apply to every other site.',
     other: 'Blocked sites',
+  },
+};
+
+/** A real family: the lists are saved and shared with the parents, but nothing filters the web. */
+const LIVE_COPY: Record<ListKind, { subtitle: string; emptyBody: string; note: string }> = {
+  blocked: {
+    subtitle: 'Sites your family agreed not to use',
+    emptyBody: 'Add an address above to save it in your family’s list.',
+    note: 'This version of Haven does not filter the web: the list is an agreement, not a block.',
+  },
+  allowed: {
+    subtitle: 'Sites your family agreed are fine',
+    emptyBody: 'Add an address above to save it in your family’s list.',
+    note: 'This version of Haven does not filter the web: the list is an agreement.',
   },
 };
 
@@ -56,11 +71,11 @@ const countLabel = (n: number) => `${n} ${n === 1 ? 'site' : 'sites'}`;
 export default function SiteList() {
   const { colors } = useTheme();
   const params = useLocalSearchParams();
-  const { sites, addSite, removeSite } = useStore();
+  const { sites, addSite, removeSite, live } = useStore();
 
   const rawList = params.list as string | string[] | undefined;
   const list: ListKind = (Array.isArray(rawList) ? rawList[0] : rawList) === 'allowed' ? 'allowed' : 'blocked';
-  const copy = COPY[list];
+  const copy = live ? { ...COPY[list], ...LIVE_COPY[list] } : COPY[list];
   const tint = list === 'blocked' ? colors.danger : colors.success;
   const rowIcon = list === 'blocked' ? 'slash' : 'check';
 
@@ -142,6 +157,7 @@ export default function SiteList() {
     <KeyboardAvoidingView behavior="padding" style={[styles.flex, { backgroundColor: colors.bg }]}>
       <Screen>
         <Header back title={copy.title} subtitle={copy.subtitle} />
+        <SampleNote about="saved" />
 
         <SectionLabel>Add a site</SectionLabel>
         <View style={styles.addRow}>

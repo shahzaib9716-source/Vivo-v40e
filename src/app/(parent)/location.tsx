@@ -23,7 +23,7 @@ interface DemoAction {
 
 export default function Location() {
   const { colors } = useTheme();
-  const { children, activeChild, activeChildId, setActiveChildId, places } = useStore();
+  const { children, activeChild, activeChildId, setActiveChildId, places, live } = useStore();
   const [action, setAction] = useState<DemoAction | null>(null);
   const now = useNow();
 
@@ -76,19 +76,33 @@ export default function Location() {
             <Card style={{ marginTop: -28, marginHorizontal: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
               <Avatar name={activeChild.name} size={46} />
               <View style={{ flex: 1 }}>
-                <Text variant="title">
-                  {firstName} is at {activeChild.place}
-                </Text>
-                <Text variant="small" tone="muted">
-                  Updated {updatedAgoOf(activeChild, now)}
-                </Text>
+                {live ? (
+                  // A real family: only what the phone really sent. A check-in carries a time, not a place.
+                  <>
+                    <Text variant="title">{activeChild.checkInAt != null ? `${firstName} checked in ${updatedAgoOf(activeChild, now)}` : `${firstName} has not checked in yet`}</Text>
+                    <Text variant="small" tone="muted">
+                      Time only: this version does not read where the phone is
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Text variant="title">
+                      {firstName} is at {activeChild.place}
+                    </Text>
+                    <Text variant="small" tone="muted">
+                      Updated {updatedAgoOf(activeChild, now)}
+                    </Text>
+                  </>
+                )}
               </View>
-              <View accessible accessibilityLabel={`Battery ${activeChild.battery} percent`} style={{ alignItems: 'center' }}>
-                <Feather name="battery" size={18} color={activeChild.battery < 30 ? colors.danger : colors.success} />
-                <Text variant="tiny" tone="muted">
-                  {activeChild.battery}%
-                </Text>
-              </View>
+              {live ? null : (
+                <View accessible accessibilityLabel={`Battery ${activeChild.battery} percent`} style={{ alignItems: 'center' }}>
+                  <Feather name="battery" size={18} color={activeChild.battery < 30 ? colors.danger : colors.success} />
+                  <Text variant="tiny" tone="muted">
+                    {activeChild.battery}%
+                  </Text>
+                </View>
+              )}
             </Card>
           </View>
 

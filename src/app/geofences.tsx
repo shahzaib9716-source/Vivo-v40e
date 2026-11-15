@@ -19,7 +19,7 @@ function hereNow(names: string[]) {
 
 export default function Geofences() {
   const { colors } = useTheme();
-  const { places, children, togglePlaceAlert, removePlace } = useStore();
+  const { places, children, togglePlaceAlert, removePlace, live } = useStore();
   const [confirmId, setConfirmId] = useState<string | null>(null);
 
   const count = places.length;
@@ -28,7 +28,7 @@ export default function Geofences() {
 
   return (
     <Screen>
-      <Header back title="Places & Geofences" subtitle="Get alerts on arrival and departure" />
+      <Header back title="Places & Geofences" subtitle={live ? 'Saved places for your family' : 'Get alerts on arrival and departure'} />
       <SampleNote about="location" />
 
       <View style={[styles.map, { borderColor: colors.border }]}>
@@ -42,7 +42,7 @@ export default function Geofences() {
             No saved places
           </Text>
           <Text variant="body" tone="muted" center>
-            Add home, school or practice to get a heads-up when your child arrives or leaves.
+            {live ? 'Add home, school or practice to keep them in your family’s list. Arrival and departure alerts are not in this version.' : 'Add home, school or practice to get a heads-up when your child arrives or leaves.'}
           </Text>
           <Button label="Add a place" icon="plus" onPress={openAdd} style={{ marginTop: spacing.md }} />
         </Card>
@@ -51,7 +51,8 @@ export default function Geofences() {
           <SectionLabel>Saved places</SectionLabel>
           <View style={styles.list}>
             {places.map((p) => {
-              const here = hereNow(children.filter((c) => c.place === p.name).map((c) => c.name.split(' ')[0]));
+              // Who is at a place is only known in the sample data: a real family's phones send no location.
+              const here = live ? null : hereNow(children.filter((c) => c.place === p.name).map((c) => c.name.split(' ')[0]));
               const confirming = confirmId === p.id;
               return (
                 <Card key={p.id}>
@@ -97,7 +98,7 @@ export default function Geofences() {
                   {confirming ? (
                     <InlineConfirm
                       title={`Remove “${p.name}”?`}
-                      detail="You’ll stop getting arrival and departure alerts for it."
+                      detail={live ? 'It is removed from your family’s list.' : 'You’ll stop getting arrival and departure alerts for it.'}
                       onCancel={() => setConfirmId(null)}
                       onConfirm={() => {
                         removePlace(p.id);
@@ -117,7 +118,9 @@ export default function Geofences() {
       <View style={styles.note}>
         <Feather name="shield" size={14} color={colors.textFaint} style={styles.noteIcon} />
         <Text variant="small" tone="faint" style={styles.flex}>
-          Location sharing is never hidden. Your child can always see that it is on under “What’s shared”.
+          {live
+            ? 'This version of Haven does not read location. Your child can see exactly what is shared under “What’s shared”.'
+            : 'Location sharing is never hidden. Your child can always see that it is on under “What’s shared”.'}
         </Text>
       </View>
     </Screen>

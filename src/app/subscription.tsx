@@ -15,8 +15,8 @@ const PLANS = [
 const FEATURES = [
   'Unlimited children & devices',
   'Full screen-time & app controls',
-  'Live location & unlimited geofences',
-  '30-day activity & location history',
+  'Unlimited saved places',
+  '30-day activity history',
   'Detailed weekly reports',
   'Priority support',
 ];

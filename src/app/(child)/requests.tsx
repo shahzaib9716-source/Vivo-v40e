@@ -100,7 +100,9 @@ export default function ChildRequests() {
       </View>
       <Text variant="small" tone="muted" style={styles.tilesNote}>
         {childSelf.bedtime
-          ? 'Your device is paused right now.'
+          ? live
+            ? 'Your family asked for a screen break right now.'
+            : 'Your device is paused right now.'
           : live
             ? `Your limit is ${fmtDuration(childSelf.limitMin)} a day.`
             : left > 0

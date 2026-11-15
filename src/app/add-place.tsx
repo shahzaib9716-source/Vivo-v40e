@@ -52,7 +52,7 @@ const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().t
 
 export default function AddPlace() {
   const { colors } = useTheme();
-  const { places, addPlace } = useStore();
+  const { places, addPlace, live } = useStore();
 
   const [name, setName] = useState('');
   const [icon, setIcon] = useState(ICONS[0].name);
@@ -96,7 +96,7 @@ export default function AddPlace() {
     <FormScreen
       ref={form}
       title="New place"
-      subtitle="Get a heads-up when your child arrives or leaves"
+      subtitle={live ? 'Saved in your family’s list. Arrival and departure alerts are not in this version.' : 'Get a heads-up when your child arrives or leaves'}
       saveLabel="Save place"
       onSave={save}
       error={tried ? nameError : null}
@@ -210,8 +210,8 @@ export default function AddPlace() {
           <View style={styles.caption}>
             <Feather name="target" size={14} color={TINT} style={styles.captionIcon} />
             <Text variant="small" tone="muted" style={styles.flex}>
-              <Text variant="smallStrong">{meters} m radius.</Text> {fits ? `${fits}.` : ''} Alerts fire when your child crosses the edge of
-              the zone.
+              <Text variant="smallStrong">{meters} m radius.</Text> {fits ? `${fits}.` : ''}{' '}
+              {live ? 'Saved with the place. No alerts are sent in this version.' : 'Alerts fire when your child crosses the edge of the zone.'}
             </Text>
           </View>
           <Text variant="tiny" tone="faint" style={styles.demoNote}>

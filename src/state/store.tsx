@@ -318,7 +318,8 @@ export function makeChild(id: string, name: string, age?: number): Child {
     age: years,
     deviceName: '',
     updatedAgo: NEVER_CHECKED_IN,
-    apps: mkApps(0),
+    // The example app list, with nothing blocked: a new family starts without rules nobody set.
+    apps: mkApps(0).map((app) => ({ ...app, blocked: false })),
     weekly: [...template.weekly],
   };
 }

@@ -15,7 +15,7 @@ type Action = 'bonus' | 'paused' | 'resumed';
 
 export default function ScreenTime() {
   const { colors } = useTheme();
-  const { activeChild, activeChildId, adjustLimit, grantBonus, pauseDevice, resumeDevice } = useStore();
+  const { activeChild, activeChildId, adjustLimit, grantBonus, pauseDevice, resumeDevice, live } = useStore();
   const [lastAction, setLastAction] = useState<Action | null>(null);
 
   const firstName = activeChild.name.split(' ')[0];
@@ -33,9 +33,17 @@ export default function ScreenTime() {
   const topMinutes = Math.max(1, byCategory[0]?.[1] ?? 0);
 
   const notes: Record<Action, { title: string; detail: string }> = {
-    bonus: { title: '30 minutes added', detail: `Today's limit is now ${fmtDuration(activeChild.limitMin)}.` },
-    paused: { title: 'Device paused', detail: `${firstName}'s device stays paused until you resume it.` },
-    resumed: { title: 'Device resumed', detail: `${firstName} has ${fmtDuration(left)} left today.` },
+    // In a real family extra time raises the daily limit itself (there is no today-only bonus in
+    // this version), and a break is shown on the child's phone: nothing is locked.
+    bonus: live
+      ? { title: '30 minutes added', detail: `The daily limit is now ${fmtDuration(activeChild.limitMin)}, from today on, until you lower it.` }
+      : { title: '30 minutes added', detail: `Today's limit is now ${fmtDuration(activeChild.limitMin)}.` },
+    paused: live
+      ? { title: 'Screen-time break', detail: `${firstName}'s phone shows a break until you end it. The phone itself is not locked.` }
+      : { title: 'Device paused', detail: `${firstName}'s device stays paused until you resume it.` },
+    resumed: live
+      ? { title: 'Break ended', detail: `${firstName}'s phone shows the daily limit again.` }
+      : { title: 'Device resumed', detail: `${firstName} has ${fmtDuration(left)} left today.` },
   };
 
   return (
@@ -105,7 +113,7 @@ export default function ScreenTime() {
 
       <View style={{ marginTop: spacing.xl, gap: spacing.sm }}>
         <Button
-          label="Add 30 minutes today"
+          label={live ? 'Raise the limit by 30 minutes' : 'Add 30 minutes today'}
           icon="plus-circle"
           variant="secondary"
           onPress={() => {
@@ -115,7 +123,7 @@ export default function ScreenTime() {
         />
         {activeChild.bedtime ? (
           <Button
-            label="Resume device"
+            label={live ? 'End the break' : 'Resume device'}
             icon="play"
             onPress={() => {
               resumeDevice(activeChildId);
@@ -124,7 +132,7 @@ export default function ScreenTime() {
           />
         ) : (
           <Button
-            label="Pause device now"
+            label={live ? 'Start a screen-time break' : 'Pause device now'}
             icon="pause"
             variant="danger"
             onPress={() => {

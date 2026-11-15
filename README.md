@@ -19,6 +19,7 @@ Haven is transparent by design: the child can always open a screen that lists ex
 
 | Document | What it covers |
 |---|---|
+| [docs/SETUP.md](docs/SETUP.md) | **Start here:** the Firebase console steps, installing, creating the family, linking the child's phone |
 | [docs/SECURITY.md](docs/SECURITY.md) | What the security rules guarantee, how to publish them, their limits |
 | [docs/RELEASE.md](docs/RELEASE.md) | Building for Android and iPhone with EAS, installing, over-the-air updates |
 | [docs/BACKEND.md](docs/BACKEND.md) | The Firebase project, the data layout, how syncing works |
@@ -36,6 +37,8 @@ Said plainly, because it matters for a safety app:
 - It does **not send notifications to a closed app**. An SOS, a request or a message appears on the other phone when Haven is open there.
 - **Haven is not an emergency service.** Its SOS reaches a parent only while Haven is open on the parent's phone and both phones have a connection. In danger, call the emergency number.
 - Calls, messages in other apps, social apps, browsing and video history, and keyword alerts are labelled preview screens with made-up rows. Nothing reads them from a device, on purpose.
+- Schedules, saved places and the blocked/allowed site lists are saved and shared between parents, but are not shown on the child's phone yet. The web filter categories, routines, app-install and purchase approvals are example screens.
+- Extra time has no "today only" form: approving "30 more minutes" or tapping "+30 min" raises the daily limit until a parent lowers it again.
 
 Each of the first two needs native modules and system permissions that differ between Android and iOS; `src/platform/capabilities.ts` is where that difference is described, and "What this version does" in the app shows it to both parent and child.
 

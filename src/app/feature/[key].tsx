@@ -173,6 +173,8 @@ export default function FeatureScreen() {
 
   const sample = def.sample ?? [];
   const isMonitor = def.kind === 'monitor';
+  // App installs, purchases and age ratings are examples as well: nothing on a phone asks for them.
+  const isExample = def.kind === 'approval' || def.kind === 'rating';
   const isApproval = def.kind === 'approval';
   const pending = sample.map((item, index) => ({ item, index })).filter(({ index }) => !decisions.some((d) => d.index === index));
   const latest = decisions[0];
@@ -199,7 +201,7 @@ export default function FeatureScreen() {
             {def.subtitle}
           </Text>
         </View>
-        {isMonitor && (
+        {(isMonitor || isExample) && (
           <View style={[styles.badge, { backgroundColor: colors.warningSoft }]}>
             <Text variant="tiny" color={colors.warning}>
               Preview
@@ -209,6 +211,9 @@ export default function FeatureScreen() {
       </Card>
 
       {isMonitor && <PlaceholderNotice note="Preview screen — sample data shown for layout. Live monitoring is not connected in this build." />}
+      {isExample && (
+        <PlaceholderNotice note="Preview screen — the requests and settings here are examples. Nothing on your child’s phone asks for approval, and nothing is saved or enforced in this build." />
+      )}
 
       {def.toggleLabel && (
         <Card style={{ marginBottom: spacing.xl }}>

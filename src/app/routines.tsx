@@ -32,7 +32,7 @@ export default function Routines() {
   return (
     <Screen>
       <Header back title="Routines & Focus" subtitle="One tap to change the rules" />
-      <SampleNote about="rules" />
+      <SampleNote about="demo" />
 
       <View
         accessibilityLiveRegion="polite"

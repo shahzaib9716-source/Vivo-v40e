@@ -4,6 +4,7 @@ import { Feather } from '@expo/vector-icons';
 
 import { Card, Header, Screen, SectionLabel, Text } from '@/components/ui';
 import { useStore } from '@/state/store';
+import { useLink } from '@/sync/link';
 import { spacing, useTheme } from '@/theme';
 
 // Each line is written twice: once for the child reading about themselves, once for the parent.
@@ -45,10 +46,14 @@ const NOT_SHARED = [
 export default function Transparency() {
   const { colors } = useTheme();
   const { role, live } = useStore();
+  const linkConfigured = useLink().configured;
   const { as } = useLocalSearchParams<{ as?: string }>();
   const parent = as === 'parent' || role === 'parent';
-  const shared = live ? LIVE_SHARED : SHARED;
-  const notShared = live ? LIVE_NOT_SHARED : NOT_SHARED;
+  // With a server in the build, this list is what linking really shares, before and after joining.
+  // Only a build without one (a demo with no linking at all) shows the sample list.
+  const real = live || linkConfigured;
+  const shared = real ? LIVE_SHARED : SHARED;
+  const notShared = real ? LIVE_NOT_SHARED : NOT_SHARED;
   return (
     <Screen>
       <Header back title="What's shared" subtitle="Haven is built on transparency" />

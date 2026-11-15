@@ -118,7 +118,8 @@ function groupMessages(list: ChatMessage[]) {
     const before = last ? minutesOf(last.time) : null;
     const now = minutesOf(label);
     const close = before == null || now == null || (now >= before && now - before <= GROUP_WINDOW_MIN);
-    if (last && last.from === message.from && close) {
+    const sameDay = !last || dayKeyOf(last.items[last.items.length - 1]) === dayKeyOf(message);
+    if (last && last.from === message.from && close && sameDay) {
       last.items.push(message);
       last.time = label;
     } else {
@@ -126,6 +127,23 @@ function groupMessages(list: ChatMessage[]) {
     }
   }
   return groups;
+}
+
+/** The calendar day a message was sent on; the sample messages, which have no time, count as today. */
+function dayKeyOf(message: { at?: number }): string {
+  const d = message.at != null ? new Date(message.at) : new Date();
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+/** "Today", "Yesterday", or the date, for the chip above a day's messages. */
+function dayLabelOf(message: { at?: number }): string {
+  if (message.at == null) return 'Today';
+  const day = new Date(message.at);
+  const today = new Date();
+  const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+  if (dayKeyOf(message) === dayKeyOf({ at: today.getTime() })) return 'Today';
+  if (dayKeyOf(message) === dayKeyOf({ at: yesterday.getTime() })) return 'Yesterday';
+  return day.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
 }
 
 function positionOf(index: number, count: number): BubblePosition {
@@ -294,15 +312,19 @@ export default function Messages() {
             <>
               <ThreadIntro isChild={isChild} firstName={firstName} tint={tint} linked={linked} />
               <View style={styles.spacer} />
-              <View style={[styles.day, { backgroundColor: colors.surfaceAlt }]}>
-                <Text variant="tiny" tone="muted">
-                  Today
-                </Text>
-              </View>
               {groups.map((group, groupIndex) => {
                 const mine = group.from === me;
+                const first = group.items[0];
+                const newDay = groupIndex === 0 || dayKeyOf(groups[groupIndex - 1].items[0]) !== dayKeyOf(first);
                 return (
                   <View key={`${group.key}-${groupIndex}`} style={styles.group}>
+                    {newDay ? (
+                      <View style={[styles.day, { backgroundColor: colors.surfaceAlt }]}>
+                        <Text variant="tiny" tone="muted">
+                          {dayLabelOf(first)}
+                        </Text>
+                      </View>
+                    ) : null}
                     {group.items.map((message, index) => (
                       <ChatBubble
                         key={`${message.id}-${index}`}

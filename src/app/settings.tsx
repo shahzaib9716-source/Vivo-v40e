@@ -21,6 +21,12 @@ const DEMO_NOTES: Record<DemoRow, { title: string; detail: string }> = {
   terms: { title: 'Demo: no documents yet', detail: 'Terms and a privacy policy are not part of this build. Nothing was opened.' },
 };
 
+const LIVE_DATA_NOTE = {
+  title: 'Export and deletion are not in this version',
+  detail:
+    'Your family’s data is kept in your family’s Firebase project and on its linked phones. Nothing was downloaded or deleted. docs/SECURITY.md (“Starting over”) explains how to delete it in the Firebase console.',
+};
+
 const EDIT_HIT_SLOP = { top: 14, bottom: 14, left: 12, right: 12 };
 
 export default function Settings() {
@@ -80,10 +86,12 @@ export default function Settings() {
     setReset('done');
   };
 
-  const note = (rows: DemoRow[]) =>
-    demo != null && rows.includes(demo) ? (
-      <InlineNote tone="neutral" title={DEMO_NOTES[demo].title} detail={DEMO_NOTES[demo].detail} style={{ marginTop: -spacing.sm, marginBottom: spacing.xl }} />
-    ) : null;
+  const note = (rows: DemoRow[]) => {
+    if (demo == null || !rows.includes(demo)) return null;
+    // In a real family the data is the family's own, kept in its Firebase project, not sample data.
+    const text = demo === 'data' && live ? LIVE_DATA_NOTE : DEMO_NOTES[demo];
+    return <InlineNote tone="neutral" title={text.title} detail={text.detail} style={{ marginTop: -spacing.sm, marginBottom: spacing.xl }} />;
+  };
 
   return (
     <Screen>

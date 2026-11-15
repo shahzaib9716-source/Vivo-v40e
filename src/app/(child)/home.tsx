@@ -109,10 +109,12 @@ export default function ChildHome() {
                 </View>
                 <View style={styles.flex}>
                   <Text variant="title" color="#FFFFFF">
-                    SOS sent: your family has been alerted
+                    {live ? 'SOS sent to your family' : 'SOS (sample): not sent to anyone'}
                   </Text>
                   <Text variant="small" color="rgba(255,255,255,0.92)" style={styles.sosDetail}>
-                    {live ? 'They see it when Haven is open on their phone. If you are in danger, call them or the emergency number.' : "They can see your live location until you say you're safe."}
+                    {live
+                      ? 'They see it when Haven is open on their phone. If you are in danger, call them or the emergency number.'
+                      : 'This phone is not linked to a family, so nobody was told. If you are in danger, call the emergency number.'}
                   </Text>
                 </View>
               </View>

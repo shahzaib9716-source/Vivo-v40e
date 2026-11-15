@@ -13,7 +13,7 @@ import { spacing } from '@/theme';
  * that would come from such readings are examples, and these notes say so on the screens that show
  * them. Outside a family (sample mode) everything is sample data and the notes stay away.
  */
-type Topic = 'location' | 'usage' | 'rules';
+type Topic = 'location' | 'usage' | 'rules' | 'saved' | 'demo';
 
 const TEXT: Record<Topic, { title: string; detail: string }> = {
   location: {
@@ -29,7 +29,16 @@ const TEXT: Record<Topic, { title: string; detail: string }> = {
   rules: {
     title: 'Rules are agreements',
     detail:
-      'What you set here appears on your child’s phone straight away. This version of Haven does not lock the phone, block apps or filter the web by itself.',
+      'The daily limit, app rules and a screen-time break appear on your child’s phone straight away. This version of Haven does not lock the phone, block apps or filter the web by itself.',
+  },
+  saved: {
+    title: 'Saved for your family, not enforced',
+    detail:
+      'What you set here is saved and shared with the other parents in your family. It is not shown on your child’s phone yet, and this version of Haven does not enforce it.',
+  },
+  demo: {
+    title: 'Example controls',
+    detail: 'The switches on this screen are examples. They are not saved, not sent to your child’s phone, and change nothing.',
   },
 };
 

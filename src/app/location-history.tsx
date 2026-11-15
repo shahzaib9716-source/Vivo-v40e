@@ -172,7 +172,7 @@ export default function LocationHistory() {
       </Card>
 
       <Text variant="tiny" tone="faint" center style={{ marginTop: spacing.lg }}>
-        Sample history for this demo. Location history is kept for 30 days on Haven Premium.
+        Sample history for this demo. This version of Haven does not read or keep location.
       </Text>
     </Screen>
   );

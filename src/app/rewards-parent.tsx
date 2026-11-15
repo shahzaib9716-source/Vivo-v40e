@@ -26,7 +26,7 @@ interface Granted {
 
 export default function RewardsParent() {
   const { colors } = useTheme();
-  const { tasks, toggleTask, points, activeChild, activeChildId, grantBonus, toggleApp } = useStore();
+  const { tasks, toggleTask, points, activeChild, activeChildId, grantBonus, toggleApp, live } = useStore();
   const [granted, setGranted] = useState<Granted | null>(null);
   const done = tasks.filter((t) => t.done).length;
   const firstName = activeChild.name.split(' ')[0];
@@ -37,7 +37,9 @@ export default function RewardsParent() {
       grantBonus(activeChildId, 30);
       setGranted({
         title: '30 minutes granted',
-        detail: `${firstName}'s limit today is now ${fmtDuration(activeChild.limitMin + 30)}.`,
+        detail: live
+          ? `${firstName}'s daily limit is now ${fmtDuration(activeChild.limitMin + 30)}, from today on, until you lower it.`
+          : `${firstName}'s limit today is now ${fmtDuration(activeChild.limitMin + 30)}.`,
         applied: true,
       });
       return;
