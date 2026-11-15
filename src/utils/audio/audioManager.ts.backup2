@@ -1,0 +1,295 @@
+/**
+ * Audio Manager for handling sound recording functionality
+ * Supports both periodic recordings and live recording with real-time listening
+ */
+import fs from 'fs';
+import path from 'path';
+
+// Define types for audio recording configuration
+export type RecordingMode = 'periodic' | 'live';
+export type PeriodicInterval = 1 | 2 | 3 | 4 | 5; // Minutes
+
+export interface AudioRecordingConfig {
+  mode: RecordingMode;
+  interval?: PeriodicInterval; // For periodic recordings
+  duration: number; // Duration in seconds for each recording
+}
+
+/**
+ * Audio Manager singleton class
+ * Handles audio recording and playback functionality
+ */
+export class AudioManager {
+  private static instance: AudioManager;
+  private recordingDirectory: string;
+  private isRecording: boolean = false;
+  private isPlaying: boolean = false;
+  private currentRecordingPath: string | null = null;
+  private currentPlaybackPath: string | null = null;
+  private periodicRecordingTimeouts: Array<NodeJS.Timeout> = [];
+  private liveRecordingInterval: NodeJS.Timeout | null = null;
+  
+  private constructor() {
+    // Initialize with a default directory for audio recordings
+    this.recordingDirectory = path.join(process.cwd(), 'audio-recordings');
+    
+    // Create directory if it doesn't exist
+    if (!fs.existsSync(this.recordingDirectory)) {
+      fs.mkdirSync(this.recordingDirectory, { recursive: true });
+    }
+  }
+
+  /**
+   * Get the singleton instance of AudioManager
+   */
+  static getInstance(): AudioManager {
+    if (!AudioManager.instance) {
+      AudioManager.instance = new AudioManager();
+    }
+    return AudioManager.instance;
+  }
+
+  /**
+   * Start periodic audio recording at specified intervals
+   * @param interval - Interval in minutes (1, 2, 3, 4, or 5)
+   * @param duration - Duration of each recording in seconds (should be 23 seconds as per requirements)
+   * @returns Function to stop all periodic recordings
+   */
+  startPeriodicAudioRecording(interval: PeriodicInterval, duration: number = 23): () => void {
+    if (this.isRecording) {
+      console.warn('Audio recording is already running, stopping previous recordings first');
+      this.stopAllAudioRecordings();
+    }
+
+    this.isRecording = true;
+    
+    // Clear any existing timeouts
+    this.periodicRecordingTimeouts.forEach(timeout => clearTimeout(timeout));
+    this.periodicRecordingTimeouts = [];
+
+    // Schedule the first recording immediately
+    const firstTimeout = setTimeout(async () => {
+      if (this.isRecording) {
+        console.log(`Starting periodic audio recording every ${interval} minute(s) for ${duration} seconds`);
+        await this.recordAudio(duration);
+        
+        // Schedule next recording
+        const nextTimeout = setTimeout(() => {
+          if (this.isRecording) {
+            this.recordAudio(duration).catch(console.error);
+          }
+        }, interval * 60 * 1000); // Convert minutes to milliseconds
+        
+        this.periodicRecordingTimeouts.push(nextTimeout);
+      }
+    }, 0); // Start immediately
+    
+    this.periodicRecordingTimeouts.push(firstTimeout);
+
+    console.log(`Periodic audio recording started: every ${interval} minute(s) for ${duration} seconds`);
+    
+    // Return stop function
+    return () => {
+      this.stopAllAudioRecordings();
+    };
+  }
+
+  /**
+   * Start live audio recording with continuous capture
+   * @param duration - Duration of each recording segment in seconds
+   * @returns Function to stop live recording
+   */
+  startLiveAudioRecording(duration: number = 23): () => void {
+    if (this.isRecording) {
+      console.warn('Audio recording is already running, stopping previous recordings first');
+      this.stopAllAudioRecordings();
+    }
+
+    this.isRecording = true;
+    
+    // Start live recording immediately
+    console.log(`Starting live audio recording for ${duration} seconds segments`);
+    this.recordAudio(duration).catch(console.error);
+    
+    // For live recording, we'll create a new recording every duration seconds
+    this.liveRecordingInterval = setInterval(async () => {
+      if (this.isRecording) {
+        await this.recordAudio(duration);
+      }
+    }, duration * 1000); // Convert seconds to milliseconds
+
+    console.log('Live audio recording started');
+    
+    // Return stop function
+    return () => {
+      this.stopAllAudioRecordings();
+    };
+  }
+
+  /**
+   * Record audio for a specific duration
+   * @param duration - Duration in seconds
+   * @returns Promise resolving to the path of the saved recording or null if failed
+   */
+  async recordAudio(duration: number): Promise<string | null> {
+    try {
+      // In a real implementation, this would use native audio APIs or Expo Audio
+      // For now, we'll create a mock audio file with metadata
+      
+      const timestamp = new Date().toISOString();
+      const fileName = `audio_${timestamp.replace(/[:.]/g, '-')}.m4a`;
+      const filePath = path.join(this.recordingDirectory, fileName);
+      
+      // Create a mock audio recording file (in real app this would be actual audio data)
+      const mockAudioData = `Mock audio recording for ${duration} seconds at ${timestamp}`;
+      
+      // Write the mock audio data
+      fs.writeFileSync(filePath, mockAudioData);
+      
+      // Create metadata file with recording information
+      const metaPath = path.join(this.recordingDirectory, `${fileName}.metadata.json`);
+      const metadata = {
+        timestamp,
+        filePath,
+        duration,
+        description: `Audio recording of ${duration} seconds`
+      };
+      fs.writeFileSync(metaPath, JSON.stringify(metadata, null, 2));
+      
+      console.log(`Audio recording saved: ${filePath}`);
+      this.currentRecordingPath = filePath;
+      
+      return filePath;
+    } catch (error) {
+      console.error('Failed to record audio:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Stop all audio recordings
+   */
+  stopAllAudioRecordings(): void {
+    this.isRecording = false;
+    
+    // Clear periodic recording timeouts
+    this.periodicRecordingTimeouts.forEach(timeout => clearTimeout(timeout));
+    this.periodicRecordingTimeouts = [];
+    
+    // Clear live recording interval
+    if (this.liveRecordingInterval) {
+      clearInterval(this.liveRecordingInterval);
+      this.liveRecordingInterval = null;
+    }
+    
+    console.log('Audio recordings stopped');
+  }
+
+  /**
+   * Get list of all audio recordings in the directory
+   */
+  async getAudioRecordingList(): Promise<Array<{name: string, path: string, timestamp: Date, duration?: number}>> {
+    try {
+      const files = fs.readdirSync(this.recordingDirectory);
+      const recordings: Array<{name: string, path: string, timestamp: Date, duration?: number}> = [];
+      
+      for (const file of files) {
+        if (file.endsWith('.m4a')) {
+          const filePath = path.join(this.recordingDirectory, file);
+          const stats = fs.statSync(filePath);
+          
+          // Extract timestamp from filename
+          const timestampMatch = file.match(/_(\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}\\.\\d+Z)/);
+          let timestamp = new Date();
+          
+          if (timestampMatch && timestampMatch[1]) {
+            timestamp = new Date(timestampMatch[1].replace(/-/g, '/').replace('T', ' ').replace(/\\.\\d+Z/, 'Z'));
+          }
+          
+          // Look for metadata file
+          const metaFileName = `${file}.metadata.json`;
+          let duration: number | undefined;
+          
+          try {
+            const metaPath = path.join(this.recordingDirectory, metaFileName);
+            if (fs.existsSync(metaPath)) {
+              const metaContent = fs.readFileSync(metaPath, 'utf8');
+              const metadata = JSON.parse(metaContent);
+              duration = metadata.duration;
+            }
+          } catch (metaError) {
+            console.warn('Failed to read audio recording metadata:', metaError);
+          }
+          
+          recordings.push({
+            name: file,
+            path: filePath,
+            timestamp,
+            duration
+          });
+        }
+      }
+      
+      // Sort by timestamp descending (newest first)
+      recordings.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+      
+      return recordings;
+    } catch (error) {
+      console.error('Failed to get audio recording list:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Clean up old audio recordings (keep only the most recent N)
+   * @param maxCount - Maximum number of recordings to keep
+   */
+  async cleanupOldAudioRecordings(maxCount: number = 50): Promise<void> {
+    try {
+      const recordings = await this.getAudioRecordingList();
+      
+      if (recordings.length <= maxCount) {
+        return;
+      }
+      
+      // Keep only the most recent recordings
+      const recordingsToKeep = recordings.slice(0, maxCount);
+      const recordingsToDelete = recordings.slice(maxCount);
+      
+      for (const recording of recordingsToDelete) {
+        try {
+          fs.unlinkSync(recording.path);
+          
+          // Also delete associated metadata file
+          const metaPath = `${recording.path}.metadata.json`;
+          if (fs.existsSync(metaPath)) {
+            fs.unlinkSync(metaPath);
+          }
+          
+          console.log(`Deleted old audio recording: ${recording.name}`);
+        } catch (deleteError) {
+          console.error(`Failed to delete audio recording ${recording.name}:`, deleteError);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to cleanup audio recordings:', error);
+    }
+  }
+
+  /**
+   * Get current status of audio recording
+   */
+  getStatus(): { isRecording: boolean; mode?: RecordingMode; interval?: PeriodicInterval } {
+    return {
+      isRecording: this.isRecording,
+      mode: this.isRecording ? (this.liveRecordingInterval ? 'live' : 'periodic') : undefined,
+      interval: this.isRecording && !this.liveRecordingInterval ? 1 : undefined // Simplified for now
+    };
+  }
+
+  /**
+   * Get the path of the currently recorded file
+   */
+  getCurrentRecordingPath(): string | null {
+    return this.currentRecordingPath;
+  }
