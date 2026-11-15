@@ -118,7 +118,10 @@ Optional, after both phones are set up:
   in the project at all. Switch it back on before pairing a new phone, because a child device
   creates its anonymous account at that moment. (Check that the option is offered on your plan.)
 - Google Cloud console, APIs and Services, Credentials: the browser key Firebase created can be
-  restricted to the Identity Toolkit, Token Service and Cloud Firestore APIs.
+  restricted to the Identity Toolkit, Token Service and Cloud Firestore APIs ("API
+  restrictions"). Leave "Application restrictions" at None: Haven uses Firebase's JavaScript SDK on
+  both phones, which does not identify itself as an Android or iOS app, so an Android or iOS
+  application restriction would lock the app out.
 
 ## The app and the server
 
