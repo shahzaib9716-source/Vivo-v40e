@@ -98,7 +98,10 @@ test('a time request, then the approval: the minutes are added once and both pho
 
 test('an unlock request is approved, and a second time request is denied', async () => {
   await fresh();
-  assert.equal(kid(await child.view()).apps.find((a) => a.id === 'a7').blocked, true, 'Voxel Arena starts blocked');
+  // A real family's child starts with nothing blocked, so block one first to unlock it.
+  await parent.store('toggleApp', cid, 'a7');
+  await child.eventually((v) => kid(v).apps.find((a) => a.id === 'a7').blocked === true, 'the child to see Voxel Arena blocked');
+  await fresh();
   await child.store('requestUnlock', 'a7');
   const p = await parent.eventually((v) => v.store.requests.some((r) => r.kind === 'unlock_app'), 'the parent to get the unlock request');
   const unlock = p.store.requests.find((r) => r.kind === 'unlock_app');

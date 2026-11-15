@@ -52,6 +52,9 @@ before(async () => {
   cid = fam.childId;
   await enrol(parent, child, { childId: cid });
   await parent.eventually((v) => v.link.members.length === 2 && v.link.members.every((m) => m.lastSeenAt !== null), 'both phones to have said "last seen" once');
+  // A real family's child starts with nothing blocked; block one so the unlock-request costs can be measured.
+  await parent.store('toggleApp', cid, 'a7');
+  await child.eventually((v) => v.store.children.find((c) => c.id === cid)?.apps.find((a) => a.id === 'a7')?.blocked === true, 'the child to see the app blocked');
   await quiet([parent, child]);
 });
 after(disposeAll);
