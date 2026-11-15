@@ -56,6 +56,17 @@ export default function SOS() {
   const fired = useRef(false);
   const sentAt = useRef(0);
 
+  // The SOS can also be ended from the other phone (a parent taps "Mark as safe"). A child who
+  // sent one is likely to still be looking at this screen, so it has to say so instead of going on
+  // claiming the SOS is on.
+  const wasActive = useRef(sosActive);
+  const endedHere = useRef(false);
+  const [endedByFamily, setEndedByFamily] = useState(false);
+  useEffect(() => {
+    if (wasActive.current && !sosActive && !endedHere.current) setEndedByFamily(true);
+    wasActive.current = sosActive;
+  }, [sosActive]);
+
   const close = () => {
     if (router.canGoBack()) router.back();
     else (router.replace as any)('/(child)/home');
@@ -72,6 +83,7 @@ export default function SOS() {
 
   const safe = () => {
     if (Date.now() - sentAt.current < SETTLE_MS) return;
+    endedHere.current = true;
     clearSOS();
     close();
   };
@@ -94,12 +106,14 @@ export default function SOS() {
             onPress={close}
             hitSlop={12}
             accessibilityRole="button"
-            accessibilityLabel={showSent ? 'Close and keep the SOS on' : 'Close'}
+            accessibilityLabel={showSent && !endedByFamily ? 'Close and keep the SOS on' : 'Close'}
             style={({ pressed }) => [styles.close, pressed && styles.pressed]}>
             <Feather name="x" size={24} color={WHITE} />
           </Pressable>
 
-          {showSent ? (
+          {endedByFamily ? (
+            <EndedPanel onClose={close} onMessage={openMessages} />
+          ) : showSent ? (
             <SentPanel place={childSelf.place} live={live} onSafe={safe} onMessage={openMessages} />
           ) : (
             <HoldPanel compact={compact} live={live} onSend={send} onMessage={openMessages} />
@@ -279,6 +293,34 @@ function HoldFace({ color }: { color: string }) {
       <Text variant="h3" color={color} selectable={false} style={styles.faceLabel}>
         Hold to send
       </Text>
+    </>
+  );
+}
+
+/** Shown when the SOS was ended from the other phone while this screen was open. */
+function EndedPanel({ onClose, onMessage }: { onClose: () => void; onMessage: () => void }) {
+  return (
+    <>
+      <View style={styles.body} accessible accessibilityRole="alert" accessibilityLiveRegion="assertive">
+        <View style={styles.sentIcon}>
+          <Feather name="shield" size={48} color={WHITE} />
+        </View>
+        <Text variant="h1" color={WHITE} center style={styles.sentTitle}>
+          SOS turned off
+        </Text>
+        <Text variant="body" color={WHITE} center style={styles.lead}>
+          Your family marked this as safe, so the SOS is off. If you still need help, send a new one or call them.
+        </Text>
+      </View>
+      <View style={styles.footer}>
+        <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" style={({ pressed }) => [styles.safeBtn, pressed && styles.pressed]}>
+          <Feather name="check" size={20} color={SAFE_INK} />
+          <Text variant="bodyStrong" color={SAFE_INK}>
+            OK
+          </Text>
+        </Pressable>
+        <ActionRow label="Message my family" onPress={onMessage} />
+      </View>
     </>
   );
 }

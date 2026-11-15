@@ -11,6 +11,7 @@ import { ProgressRing, Text } from '@/components/ui';
 import { useLink } from '@/sync/link';
 import { useStore, fmtDuration, nowLabel, timeOf, type ManagedApp } from '@/state/store';
 import { radius, shadow, spacing, useTheme } from '@/theme';
+import { OfflineBanner } from '@/components/OfflineBanner';
 
 type FeatherName = keyof typeof Feather.glyphMap;
 
@@ -97,6 +98,7 @@ export default function ChildHome() {
               </View>
             )}
           </View>
+          <OfflineBanner style={{ marginBottom: spacing.lg }} />
 
           {/* SOS in progress */}
           {sosActive && (
@@ -183,7 +185,7 @@ export default function ChildHome() {
             <QuickAction
               icon={checkedIn ? 'check' : 'map-pin'}
               label={checkedIn ? 'Checked in' : 'Check in'}
-              hint={checkedIn ? undefined : 'Tells your family where you are'}
+              hint={checkedIn ? undefined : live ? 'Tells your family you checked in, with the time. Not where you are' : 'Tells your family where you are'}
               color={checkedIn ? colors.success : colors.info}
               confirmed={checkedIn}
               onPress={onCheckIn}

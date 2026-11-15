@@ -26,7 +26,8 @@ node --test --test-concurrency=1 --test-reporter=spec tests/rules/*.test.mjs
 ```
 
 The files must run one after the other (`--test-concurrency=1`): they share one emulator project,
-`demo-haven-rules`, and each loads the rules into it and resets its data.
+`demo-haven-rules`, and each loads the rules into it and resets its data. To work on one file while
+the suite runs, give it its own project: `HAVEN_RULES_PROJECT=demo-haven-mine node --test ...`.
 
 ## What is where
 
@@ -40,6 +41,7 @@ The files must run one after the other (`--test-concurrency=1`): they share one 
 | `05-pairing-abuse` | Guessing, claiming, reading, approving, reusing and creating pairing codes |
 | `06-integrity` | Forged signatures, client-made times, missing or extra fields, wrong types and sizes, immutable fields, the founder, one family per account |
 | `07-access-call-budget` | The document lookups the rules make stay within Firestore's limits |
+| `08-red-team` | Attacks by someone who did not write the rules, from ten positions (no account to a second parent), sent through the SDK and the REST API. Tests marked FOUND are the two holes it found, now closed; KNOWN LIMIT and BY DESIGN tests show what the rules cannot or do not mean to stop |
 
 The **access matrix** is one table of about 130 operations (`OPS` in `helpers.mjs`), each written
 the way its rightful author issues it, with the list of personas for whom it must succeed. Every

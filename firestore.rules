@@ -51,13 +51,19 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isAnonymous() {
-      return request.auth.token.firebase.sign_in_provider == 'anonymous';
+    // Signed in with email and password: the only way a parent signs in to Haven.
+    // Red team: this used to read "not anonymous". A token from any other sign-in method that
+    // carries email_verified (a custom token, or a provider switched on in the console later
+    // that reports an address it has not checked) then counted as a confirmed parent account,
+    // and with an address from ownerEmails() it could create a family. Naming the one method
+    // that is meant keeps that shut. A token without the claim is refused (an error refuses).
+    function usesPassword() {
+      return request.auth.token.firebase.sign_in_provider == 'password';
     }
 
     // A real account whose email address has been confirmed.
     function hasVerifiedEmail() {
-      return signedIn() && !isAnonymous() && request.auth.token.email_verified == true;
+      return signedIn() && usesPassword() && request.auth.token.email_verified == true;
     }
 
     function mayCreateFamily() {
@@ -141,7 +147,15 @@ service cloud.firestore {
         && request.resource.data.familyId is string && idOk(request.resource.data.familyId)
         && request.resource.data.updatedAt == request.time
         && existsAfter(memberPath(request.resource.data.familyId, uid))
-        && getAfter(memberPath(request.resource.data.familyId, uid)).data.role == request.resource.data.role;
+        && getAfter(memberPath(request.resource.data.familyId, uid)).data.role == request.resource.data.role
+        // Red team: the pointer may move to another family only once the account has left the
+        // family it names (at the latest in this same batch). Without this, a founder who was
+        // also enrolled in a second family could point there, leave it, delete the pointer and
+        // create another family: "one family per account" rests on the founder's pointer
+        // staying where it is, since the founder can never leave.
+        && (resource == null
+              || resource.data.familyId == request.resource.data.familyId
+              || !existsAfter(memberPath(resource.data.familyId, uid)));
 
       // The pointer can be removed only once the account is no longer in that family.
       allow delete: if signedIn() && request.auth.uid == uid

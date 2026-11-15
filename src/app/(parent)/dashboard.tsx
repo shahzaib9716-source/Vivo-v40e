@@ -10,6 +10,7 @@ import { Avatar, Button, Card, IconBadge, ProgressRing, Text } from '@/component
 import { useStore, alertText, fmtDuration, agoOf, requestTitle, timeOf, updatedAgoOf, useNow } from '@/state/store';
 import { useLink } from '@/sync/link';
 import { categoryColors, radius, shadow, spacing, useTheme } from '@/theme';
+import { OfflineBanner } from '@/components/OfflineBanner';
 
 /** How many requests show before "Show all". */
 const REQUEST_PREVIEW = 2;
@@ -153,6 +154,8 @@ export default function Dashboard() {
               </LinearGradient>
             </Animated.View>
           )}
+
+          <OfflineBanner style={{ marginHorizontal: spacing.xl, marginBottom: spacing.lg }} />
 
           {/* Not in a family yet: say so, and offer the real setup. */}
           {needsSetup && (

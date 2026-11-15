@@ -204,9 +204,18 @@ const text = (page) => page.evaluate(() => {
     await shot(child, '06-child-waiting');
     await shot(parent, '07-parent-claim');
     const parentText = await text(parent);
-    check('parent: the claim card names the check and asks whose phone it is', parentText.includes('wants to join') && parentText.includes('Whose phone is it?'));
+    check('parent: the claim card asks for the check and whose phone it is', parentText.includes('wants to join') && parentText.includes('Whose phone is it?'));
 
-    await tap(parent, 'Approve');
+    const approveBtn = B(parent, 'Approve').first();
+    check('parent: Approve is off until the 4 characters are typed', await approveBtn.isDisabled());
+    const wrong = s.offer.claim.check === 'AAAA' ? 'BBBB' : 'AAAA';
+    await L(parent, 'The 4 characters shown on the other phone').fill(wrong);
+    await T(parent, 'These do not match. If that phone shows other characters, someone else used the code: decline it.').waitFor({ timeout: 10000 });
+    check('parent: wrong characters keep Approve off and say why', await approveBtn.isDisabled());
+    await L(parent, 'The 4 characters shown on the other phone').fill(cs.pendingJoin.check.toLowerCase());
+    await T(parent, 'They match. Approve if this is the phone you expect.').waitFor({ timeout: 10000 });
+    check('parent: the right characters (any letter case) switch Approve on', !(await approveBtn.isDisabled()));
+    await approveBtn.click();
     await T(parent, 'Done').waitFor({ timeout: 20000 });
     await waitState(child, () => window.__haven.link.role === 'child' && window.__haven.link.status === 'linked' && window.__haven.store.children.length === 1 && window.__haven.store.children[0].name === 'Aisha', null, 40000);
     cs = await state(child);

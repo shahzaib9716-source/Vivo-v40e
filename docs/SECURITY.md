@@ -61,6 +61,10 @@ such an account can do exactly one thing: try to claim a pairing code.
 Chat messages cannot be edited or deleted by anyone. A request can be answered only while it is
 pending, and only by a parent. A child cannot read a sibling's profile, requests or chat.
 
+One deliberate exception to "every write needs a member record": a device that has just been
+removed may still delete its own "last seen" record, so it can tidy up after itself. It cannot
+write one, and cannot touch anyone else's.
+
 ## Pairing
 
 1. A parent creates a code: 8 characters from a 31-character alphabet, about 850 billion
@@ -68,7 +72,8 @@ pending, and only by a parent. A child cannot read a sibling's profile, requests
 2. The joining device claims it. The claim records that device's account, name and platform. A
    wrong guess and an expired code give the same refusal, so guessing learns nothing. A code can
    be claimed once.
-3. Both phones show the same 4-character check. The parent compares them and approves or declines.
+3. Both phones show a 4-character check. The parent types the characters shown on the joining
+   phone; Approve only switches on when they match. Then the parent approves or declines.
 4. Approval creates the member record and marks the code used **in one step**: the rules accept
    neither without the other, and the member record must match the claim (account, role, name).
    A used code cannot enrol anyone again.
@@ -83,9 +88,11 @@ What this prevents:
   account that claimed one of that family's own codes.
 - **A removed device coming back.** It needs a new code and a new approval.
 
-The step that depends on a person: **compare the 4 characters before approving.** If someone
-else saw the code on the parent's screen and claimed it first, the child's own phone will show
-"code not valid", and the request on the parent's phone will not match.
+The step that depends on a person: **type the 4 characters from the phone in your hand.** If
+someone else saw the code on the parent's screen and claimed it first, the child's own phone will
+show "code not valid", and the characters on it will not match the request on the parent's phone,
+so Approve stays off. The server cannot check that a person compared them; the app makes it a step
+that cannot be skipped by tapping.
 
 ## Publishing the rules
 
@@ -122,7 +129,7 @@ refused there whatever a modified app sends, and the tests below send exactly su
 
 ## Tests
 
-`npm run test:rules` runs the rules in the Firestore emulator: 2,508 checks, none of which
+`npm run test:rules` runs the rules in the Firestore emulator: 3,017 checks, none of which
 contact a real project. They cover
 
 - every legitimate operation of each role, issued the way the app issues it;
@@ -135,7 +142,8 @@ contact a real project. They cover
   reuse, wrong role or device, self-approval;
 - integrity: forged authors, client-made timestamps, extra or missing fields, wrong types and
   sizes, fields that must never change;
-- the number of document lookups the rules make, against Firestore's limits.
+- the number of document lookups the rules make, against Firestore's limits;
+- the red team's attacks (above).
 
 `npm run test:sync` tests the app's sync logic, including 5,000 random histories with restarts,
 offline periods and killed apps, against a model of these same permissions.
@@ -150,18 +158,55 @@ killed at awkward moments.
 confirmation, family, code, the matching four characters, approval, and that each phone only
 opens its own side.
 
+## Red team
+
+After the rules were written and tested, they were attacked by someone who had not written them,
+with a modified client sending anything the SDK or the REST API allows (batches, transactions,
+field masks, transforms, queries, collection-group queries, odd tokens and ids), from ten
+positions: no account, a fresh anonymous account, an unverified account (also one registered with
+the owner's address), a verified non-owner, an enrolled child, a removed child, a phone whose claim
+is waiting, a parent and a child of another family, a second parent against the founder.
+
+1,916 attack requests are in `tests/rules/08-red-team.test.mjs`. Two got through and were fixed:
+
+| Finding | Who could use it | Fixed by |
+|---|---|---|
+| A token with a verified email from any sign-in method other than "anonymous" (a custom token, or a provider switched on later) counted as a confirmed parent account | Nobody with this project's console settings; it would have opened if another sign-in provider were enabled | Parent rights now require email-and-password sign-in specifically |
+| An owner who was also enrolled in a second family could park its account pointer there, leave, and found more families | Only an owner-listed account, only with two families in the project | The pointer can only move once the account has left the family it names |
+
+Everything else was refused. Each of the two fixes was checked against the old rules (the attack
+succeeds) and the new ones (refused), and eight deliberately weakened copies of the rules were each
+caught by the suite.
+
 ## What the rules cannot do
 
 - **Rate limiting.** Firestore rules cannot count attempts. Someone with the project's public
-  client settings can send refused requests and use up the free plan's daily quota. That is a
-  nuisance, not a data leak. The defence is Firebase App Check, which needs native attestation
-  modules and is not part of this build.
+  client settings can send refused requests until the free plan's daily quota is used up, and an
+  enrolled phone could do the same with permitted writes. Nothing leaks, but until the quota resets
+  (midnight, Pacific time) the phones stop syncing, **SOS included**: do not rely on Haven as the only
+  way to call for help. Defences: restrict the API key (below), switch off sign-up while nobody is
+  pairing, remove a phone that misbehaves, and Firebase App Check, which needs native attestation
+  and is not part of this version.
 - **Cutting off an open connection instantly.** When a parent removes a device, its next request
   is refused. A listener that a modified app already had open can keep receiving updates until
   its access is next re-checked, which can take up to about an hour. The Haven app itself stops
   and erases its copy as soon as it sees it was removed.
 - **What a parent does.** A parent account can do everything inside its own family, including
-  enrolling another parent. Protect it with a strong password.
+  enrolling another parent, who can then do the same, except remove or replace the person who
+  created the family. Protect the account with a strong password.
+- **One SOS at a time per family.** The SOS flag is one document for the family. With two
+  children, one child's phone can replace the other's active SOS with its own and then clear it.
+  Both SOS entries stay in the parent's activity feed, so neither is lost from view. A flag per
+  child would remove this; it changes what the app sends and is not in this version.
+- **A device that floods.** An enrolled phone can send many messages or requests in a short time
+  (they are permitted writes). A parent can delete requests and feed entries and remove the phone;
+  chat messages are permanent by design.
+- **Firebase Authentication itself.** Anyone can register an account with the owner's address
+  before the owner does; it stays unconfirmed and cannot create a family, and the owner gets the
+  address back with "Forgot password". Repeated wrong passwords can lock sign-in briefly.
+- **Starting over.** The person who created the family can never leave it or move to another
+  one, and families are never deleted by the app. Starting again from scratch needs the Firebase
+  console (delete the documents and the accounts).
 - **Text written by a child device.** Rules check who wrote a message, request or feed entry and
   its shape, not what the words say. The app therefore builds the wording of requests and feed
   entries from the structured fields (kind, minutes, child) instead of displaying text supplied

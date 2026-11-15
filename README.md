@@ -34,6 +34,7 @@ Said plainly, because it matters for a safety app:
 
 - It does **not read a phone's location**, **measure screen time or app use**, or **lock the phone or block apps**. Limits and blocked apps are agreements that both phones show. Usage numbers, maps and battery levels on the parent's screens are examples and are marked as such in a linked family.
 - It does **not send notifications to a closed app**. An SOS, a request or a message appears on the other phone when Haven is open there.
+- **Haven is not an emergency service.** Its SOS reaches a parent only while Haven is open on the parent's phone and both phones have a connection. In danger, call the emergency number.
 - Calls, messages in other apps, social apps, browsing and video history, and keyword alerts are labelled preview screens with made-up rows. Nothing reads them from a device, on purpose.
 
 Each of the first two needs native modules and system permissions that differ between Android and iOS; `src/platform/capabilities.ts` is where that difference is described, and "What this version does" in the app shows it to both parent and child.

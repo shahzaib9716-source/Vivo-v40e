@@ -5,6 +5,8 @@ import { SPLASH_BG } from '@/config/variant';
 import { newId } from '@/sync/ids';
 import { agoLabel, clockLabel } from '@/sync/labels';
 import { rebaseList } from '@/sync/reconcile';
+import { isBackendConfigured } from '@/sync/config';
+import { LINK_KEY, parseLinkRecord } from '@/sync/types';
 import { loadState, resolvedRequestIds, serialiseState, STATE_KEY, type PersistedState, type SliceKey } from './persist';
 import { readKey, removeKey, writeKey } from './storage';
 
@@ -561,9 +563,18 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
   useEffect(() => {
     if (hydrated.current) return;
     let alive = true;
-    Promise.all([readKey(ONBOARDED_KEY), readKey(STATE_KEY), readKey(ROLE_KEY)]).then(([flag, raw, savedRole]) => {
+    Promise.all([readKey(ONBOARDED_KEY), readKey(STATE_KEY), readKey(ROLE_KEY), readKey(LINK_KEY)]).then(([flag, raw, savedRole, linkRaw]) => {
       if (!alive) return;
       if (flag === '1') setHasOnboarded(true);
+      // A device that is in a family is known to be one from its first frame. The link layer reads
+      // the same record and says the same a moment later (and takes it back if the record turns out
+      // not to hold); without this, a linked phone drew the sample layout for an instant at start.
+      const linkedFamily = isBackendConfigured ? (parseLinkRecord(linkRaw)?.family ?? null) : null;
+      if (linkedFamily && !(linkedFamily.pendingSeed && !linkedFamily.pendingSeed.familyStored)) {
+        liveRef.current = true;
+        setLiveState(true);
+        setSelfChildId(linkedFamily.role === 'child' ? linkedFamily.childId : null);
+      }
       // A side picked before this read came back wins over the saved one.
       if (roleRef.current === null && (savedRole === 'parent' || savedRole === 'child')) {
         roleRef.current = savedRole;

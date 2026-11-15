@@ -62,7 +62,7 @@ test('the parent removes the child’s phone: it shows "removed", the sample dat
   const c = await child.eventually((v) => v.link.status === 'removed' && v.link.account === null, 'the child phone to say it was removed', 20000);
   await quiet([parent, child]);
 
-  // The parent: one batch, the member record and that phone's "last seen".
+  // The parent: the member record (alone, first), then that phone's "last seen".
   assert.deepEqual(describeWrites(await parent.fx(true), { presence: true }).sort(), [`delete devices/${deviceId}`, `delete members/${joined.uid}`]);
   const p = await parent.eventually((v) => v.link.members.length === 1, 'the parent to see the member gone');
   assert.equal(p.link.members[0].uid, fam.uid);

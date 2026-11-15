@@ -38,6 +38,8 @@ export default function Pairing() {
   const [picked, setPicked] = useState<string | null>(null);
   const [newName, setNewName] = useState('');
   const [removing, setRemoving] = useState<FamilyMember | null>(null);
+  /** What the parent typed from the other phone's screen. */
+  const [typedCheck, setTypedCheck] = useState('');
   const [done, setDone] = useState<string | null>(null);
 
   const offer = link.offer;
@@ -62,6 +64,7 @@ export default function Pairing() {
     setDone(null);
     setPicked(null);
     setNewName('');
+    setTypedCheck('');
     act.run(`code-${role}`, () => link.createPairingCode(role).then(() => setNow(Date.now())));
   };
 
@@ -73,15 +76,28 @@ export default function Pairing() {
     return choice ? { childId: choice } : undefined;
   };
   const target = approveTarget();
-  const canApprove = claim !== null && target !== undefined;
+  // The parent types the four characters the joining phone shows. If someone else saw the code
+  // and used it first, their phone shows different characters, and Approve stays off. (The server
+  // cannot check that a person compared them; this makes the comparison a step that has to be done.)
+  const checkTyped = typedCheck.trim().toUpperCase();
+  const checkMatches = claim !== null && checkTyped === claim.check.toUpperCase();
+  const checkWrong = claim !== null && checkTyped.length === claim.check.length && !checkMatches;
+  const canApprove = claim !== null && target !== undefined && checkMatches;
 
   const approve = () => {
     if (!claim || target === undefined) return;
     const who = offer?.role === 'parent' ? 'as a parent' : choice === NEW_CHILD ? `as ${newName.trim()}’s phone` : `as ${childName(choice ?? '') ?? 'your child'}’s phone`;
     const name = claim.name;
-    act.run('approve', () => link.approveClaim(target), () => setDone(`“${name}” joined ${who}.`));
+    act.run('approve', () => link.approveClaim(target), () => {
+      setTypedCheck('');
+      setDone(`“${name}” joined ${who}.`);
+    });
   };
-  const decline = () => act.run('decline', () => link.declineClaim(), () => setDone('The request was declined. That code no longer works.'));
+  const decline = () =>
+    act.run('decline', () => link.declineClaim(), () => {
+      setTypedCheck('');
+      setDone('The request was declined. That code no longer works.');
+    });
 
   const remove = () => {
     const member = removing;
@@ -145,7 +161,24 @@ export default function Pairing() {
               <Text variant="small" tone="muted">
                 {PLATFORM[claim.platform] ?? claim.platform} · {offer.role === 'child' ? 'as a child’s phone' : 'as another parent, with full control'}
               </Text>
-              <CheckCode check={claim.check} caption="Approve only if the other phone shows these same 4 characters." />
+              <Field
+                label="Type the 4 characters shown on the other phone"
+                error={checkWrong ? 'These do not match. If that phone shows other characters, someone else used the code: decline it.' : undefined}>
+                <TextField
+                  value={typedCheck}
+                  onChangeText={(text) => setTypedCheck(text.replace(/[^0-9A-Za-z]/g, '').slice(0, claim.check.length))}
+                  placeholder="XXXX"
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  autoComplete="off"
+                  spellCheck={false}
+                  maxLength={claim.check.length}
+                  invalid={checkWrong}
+                  accessibilityLabel="The 4 characters shown on the other phone"
+                  style={styles.checkInput}
+                />
+              </Field>
+              {checkMatches ? <CheckCode check={claim.check} caption="They match. Approve if this is the phone you expect." /> : null}
 
               {offer.role === 'child' ? (
                 <View style={styles.picker}>
@@ -259,6 +292,7 @@ const styles = StyleSheet.create({
   claimCard: { gap: spacing.lg, marginBottom: spacing.lg },
   claimActions: { flexDirection: 'row', gap: spacing.md },
   picker: { gap: spacing.sm },
+  checkInput: { textAlign: 'center', fontSize: 22, letterSpacing: 6 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   flex: { flex: 1 },
   gapBottom: { marginBottom: spacing.lg },

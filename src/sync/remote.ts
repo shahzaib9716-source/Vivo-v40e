@@ -372,7 +372,15 @@ export async function relabelMember(familyId: string, uid: string, change: { nam
  * `deviceIds`: the ids of the devices documents whose `uid` is that account.
  */
 export async function removeMember(familyId: string, uid: string, deviceIds: readonly string[]): Promise<void> {
-  await commitAll([{ op: 'delete', path: memberPath(familyId, uid) }, ...deviceIds.map((id): BatchWrite => ({ op: 'delete', path: devicePath(familyId, id) }))]);
+  // The member record goes first and by itself: that is what ends the account's access, and it
+  // must not depend on anything else. (In one batch with the "last seen" records, a device that
+  // had written many of those could have made the batch too large for the server to accept.)
+  await acked(deleteDoc(doc(db(), memberPath(familyId, uid))));
+  // Tidying up its "last seen" records comes after, a few at a time, and may fail without harm.
+  for (let i = 0; i < deviceIds.length; i += 10) {
+    const chunk = deviceIds.slice(i, i + 10);
+    await commitAll(chunk.map((id): BatchWrite => ({ op: 'delete', path: devicePath(familyId, id) }))).catch(() => {});
+  }
 }
 
 /**
