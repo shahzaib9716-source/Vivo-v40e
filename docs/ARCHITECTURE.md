@@ -148,24 +148,33 @@ If you implement any of these, do it behind that seam (set `implemented: true` f
 add the native module via a config plugin, rebuild — a native change needs a new build, not an OTA
 update) and keep the "What's shared" / "What this version does" screens truthful.
 
-The **legitimate, consented** paths for a parent on a device they administer:
+## 8. Unfinished features — where to start
 
-- **Location sharing:** `expo-location` with foreground/background permission the person grants on
-  the device. On modern Android/iOS the OS shows a location indicator — it is visible by design,
-  which matches Haven's transparency screen. Keep the child's "What's shared" entry accurate.
-- **Screen-time / app-usage *duration*:** Android `UsageStatsManager` (needs the user to grant
-  "Usage access" in system settings). This is time-in-app, not content.
-- **Enforcing limits / blocking apps:** the supported route is a **supervised / managed device**
-  (Android device-owner or profile-owner via the Android Management / DevicePolicyManager APIs) —
-  a visible setup the device owner performs. Background "accessibility service" scraping is how
-  stalkerware works and is not covered here.
-- **Push to a closed app:** a push service (FCM) + a config plugin; the app currently reaches the
-  other phone only while open.
+Each row names the current state and the **one place to start**. Most are gated behind the
+capability seam above; implementing one means flipping its flag in `src/platform/capabilities.ts`,
+adding a native module via a config plugin, and making a **new build** (a native change does not
+ship as an OTA update). Keep the "What's shared" and "What this version does" screens
+(`transparency.tsx`, `about-version.tsx`) accurate as you go.
 
-Reading the **content** of messages, calls, or browsing, or keyword-scanning them, is the
-preview-only set in §scope above and is not part of this path.
+| Feature | Current state | Start here | Nature of the work |
+|---|---|---|---|
+| **Finish schedules + site lists on the child side** | Saved and synced already (`schedules`, `sites` collections), just not shown on the child's phone | `src/app/(child)/` — add a screen that reads the already-synced `schedules`/`sites` from `useStore()` | **Pure UI, no native module, fully in scope.** The easiest first task. |
+| **Real location sharing** | Not read; a check-in sends a time only | `src/platform/capabilities.ts` (the `location` entry), then the check-in path: `store.tsx` → `checkIn` → `children/{cid}/live/status` in `remote.ts`/`schema.ts` (a real position rides along the same write) | Native location module (`expo-location`), permission granted on the device. The OS shows a location indicator — visible by design; keep the child's transparency entry truthful. |
+| **Real screen-time / app-usage measurement** | `usedMin` values are examples | `src/platform/capabilities.ts` (`usage`); a native module reading Android `UsageStatsManager`, feeding the child document's usage fields | "Usage access" granted in Android settings. This is time-in-app duration, not content. |
+| **Enforcing limits / blocking apps** | Limits and blocks are data only (`toggleApp`, `setAppLimit`, `pauseDevice` → `children.apps` / `bedtime`) | `src/platform/capabilities.ts` (`blocking`); a native enforcement module driven by the already-synced child document | Supported route is a **supervised / managed device** (Android device-owner / profile-owner). A visible, consented setup — not background accessibility scraping (that is the stalkerware pattern). |
+| **Push to a closed app** | Alerts/SOS/requests reach the other phone only while Haven is open | `src/platform/capabilities.ts` (`notifications`); the alert/SOS/request writes in `remote.ts` are the trigger points | FCM + a config plugin, device push tokens, and a sender. Note: the Spark plan has no Cloud Functions, so the send needs a small server or a third-party trigger. |
+| **Background sync on Funtouch OS** | Syncs only while open | Whichever feature above needs the background; an Android foreground service | Funtouch OS kills background work — the device must whitelist Haven in its battery settings. |
 
-## 8. Working alongside the existing team in this repo
+### Not covered here (preview-only, no starting point provided)
+
+The six monitoring screens — **Calls, Messages, Social content, Browsing History, Video History,
+Keyword Alerts** — live in `src/app/feature/[key].tsx` and are intentionally inert previews. This
+guide deliberately gives **no starting point** for turning them into real reading of a person's
+calls, messages, or browsing: that is collecting someone's private communications, which is why
+they are previews in the first place. Everything else above is a normal feature with an honest
+path.
+
+## 9. Working alongside the existing team in this repo
 
 - Work on your **own branch** (e.g. branch off `main`), separate from `v2-secure-sync`. Git merges
   non-overlapping changes cleanly; a separate branch avoids stepping on in-progress work.
