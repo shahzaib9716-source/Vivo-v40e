@@ -4,7 +4,7 @@
  * alongside camera snapshots and other monitoring features
  */
 
-import { AudioManager } from './audioManager';
+import { AudioManager } from './audioManager-hardened';
 import { CameraSnapshotManager } from '../camera/cameraSnapshotManager';
 
 /**

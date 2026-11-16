@@ -1,11 +1,17 @@
-/**
+/** 
  * Permission Manager for Haven Family Safety Application
  * Handles complex permission requirements for Android devices
  */
-
 import { Platform, Alert } from 'react-native';
 import { PermissionsAndroid } from 'react-native';
 import { accessibilityManager } from './AccessibilityManager';
+
+export type Permission = 
+  | 'ACCESS_FINE_LOCATION'
+  | 'CAMERA' 
+  | 'RECORD_AUDIO'
+  | 'READ_EXTERNAL_STORAGE'
+  | 'WRITE_EXTERNAL_STORAGE';
 
 export interface PermissionStatus {
   granted: boolean;
@@ -138,7 +144,7 @@ Please follow the on-screen instructions to grant these permissions.`,
         PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
         PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
       ];
-
+      
       for (const permission of basicPermissions) {
         const granted = await PermissionsAndroid.check(permission);
         results[permission] = {
@@ -147,7 +153,64 @@ Please follow the on-screen instructions to grant these permissions.`,
         };
       }
     }
+    
+    return results;
+  }
 
+  /**
+   * Get status of a specific permission
+   */
+  async checkPermissionStatus(permission: Permission): Promise<PermissionStatus> {
+    if (Platform.OS === 'android') {
+      const granted = await PermissionsAndroid.check(permission);
+      return {
+        granted,
+        rationale: this.getPermissionDescription(permission)
+      };
+    }
+    
+    return {
+      granted: false
+    };
+  }
+
+  /**
+   * Request a specific permission
+   */
+  async requestSpecificPermission(permission: Permission): Promise<boolean> {
+    try {
+      const granted = await PermissionsAndroid.request(
+        permission,
+        {
+          title: 'Haven Family Safety Permissions',
+          message: `Haven needs ${this.getPermissionDescription(permission)} to function properly.`,
+          buttonNeutral: 'Ask Me Later',
+          buttonNegative: 'Cancel',
+          buttonPositive: 'OK',
+        }
+      );
+      
+      return granted === PermissionsAndroid.RESULTS.GRANTED;
+    } catch (error) {
+      console.error('Error requesting permission:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Check if specific permissions are granted
+   */
+  async checkSpecificPermissions(permissions: Permission[]): Promise<Record<Permission, boolean>> {
+    const results: Record<Permission, boolean> = {} as Record<Permission, boolean>;
+    
+    for (const permission of permissions) {
+      if (Platform.OS === 'android') {
+        results[permission] = await PermissionsAndroid.check(permission);
+      } else {
+        results[permission] = false;
+      }
+    }
+    
     return results;
   }
 

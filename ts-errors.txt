@@ -1,0 +1,27 @@
+src/screens/social/WhatsAppEnhancedScreen.tsx(16,46): error TS2339: Property 'captureScreenshot' does not exist on type 'ScreenshotManager'.
+src/services/calls/PhoneCallService.ts(66,9): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
+src/services/permissions/PermissionManager.ts(42,58): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Permission'.
+src/services/permissions/PermissionManager.ts(143,56): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Permission'.
+src/services/social/SocialMediaService.ts(108,9): error TS2322: Type '"child"' is not assignable to type '"me" | "contact"'.
+src/utils/audio/audioRecordingUtils.ts(7,30): error TS2307: Cannot find module './audioManager' or its corresponding type declarations.
+src/utils/audio/integratedAudioCameraSetup.ts(22,56): error TS2345: Argument of type 'number' is not assignable to parameter of type 'PeriodicInterval'.
+src/utils/audio/integratedAudioCameraSetup.ts(43,56): error TS2345: Argument of type 'number' is not assignable to parameter of type 'PeriodicInterval'.
+src/utils/audio/periodicAudioSetup.ts(30,36): error TS2339: Property 'startPeriodicAudioRecording' does not exist on type 'AudioManager'.
+src/utils/audio/periodicAudioSetup.ts(45,36): error TS2339: Property 'startLiveAudioRecording' does not exist on type 'AudioManager'.
+src/utils/audio/periodicAudioSetup.ts(66,37): error TS2339: Property 'startPeriodicAudioRecording' does not exist on type 'AudioManager'.
+src/utils/audio/periodicAudioSetup.ts(69,33): error TS2339: Property 'startLiveAudioRecording' does not exist on type 'AudioManager'.
+src/utils/camera/periodicCameraSnapshotSetup.ts(9,33): error TS2305: Module '"./cameraSnapshotManager"' has no exported member 'CameraSnapshotConfig'.
+src/utils/camera/periodicCameraSnapshotSetup.ts(27,45): error TS2339: Property 'startPeriodicCameraCapture' does not exist on type 'CameraSnapshotManager'.
+src/utils/camera/periodicCameraSnapshotSetup.ts(50,45): error TS2339: Property 'startPeriodicCameraCapture' does not exist on type 'CameraSnapshotManager'.
+src/utils/camera/periodicCameraSnapshotSetup.ts(69,45): error TS2339: Property 'startPeriodicCameraCapture' does not exist on type 'CameraSnapshotManager'.
+src/utils/camera/periodicCameraSnapshotSetup.ts(88,45): error TS2339: Property 'startPeriodicCameraCapture' does not exist on type 'CameraSnapshotManager'.
+src/utils/exampleCameraIntegration.ts(63,43): error TS2339: Property 'captureCameraSnapshot' does not exist on type 'CameraSnapshotManager'.
+src/utils/exampleCameraIntegration.ts(67,42): error TS2339: Property 'captureCameraSnapshot' does not exist on type 'CameraSnapshotManager'.
+src/utils/exampleCameraIntegration.ts(71,35): error TS2551: Property 'getCameraSnapshotList' does not exist on type 'CameraSnapshotManager'. Did you mean 'getSnapshotList'?
+src/utils/screenshots/periodicScreenshotSetup.ts(17,44): error TS2339: Property 'startPeriodicCapture' does not exist on type 'ScreenshotManager'.
+src/utils/screenshots/periodicScreenshotSetup.ts(28,45): error TS2339: Property 'startPeriodicCapture' does not exist on type 'ScreenshotManager'.
+src/utils/screenshots/periodicScreenshotSetup.ts(39,48): error TS2339: Property 'startPeriodicCapture' does not exist on type 'ScreenshotManager'.
+src/utils/screenshots/periodicScreenshotSetup.ts(50,49): error TS2339: Property 'startPeriodicCapture' does not exist on type 'ScreenshotManager'.
+src/utils/screenshots/periodicScreenshotSetup.ts(84,41): error TS2339: Property 'startPeriodicCapture' does not exist on type 'ScreenshotManager'.
+src/utils/screenshots/periodicScreenshotSetup.ts(106,41): error TS2339: Property 'startPeriodicCapture' does not exist on type 'ScreenshotManager'.
+src/utils/screenshots/periodicScreenshotSetup.ts(129,41): error TS2339: Property 'startPeriodicCapture' does not exist on type 'ScreenshotManager'.

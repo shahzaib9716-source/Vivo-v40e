@@ -27,7 +27,7 @@ export const setupPeriodicAudioRecording = (interval: PeriodicInterval) => {
   }
   
   // Start periodic audio recording with specified interval for 23 seconds each time
-  const stopCapture = audioManager.startPeriodicRecording(interval, 23);
+  const stopCapture = audioManager.startPeriodicAudioRecording(interval, 23);
   
   console.log(`Periodic audio recording started: every ${interval} minute(s) for 23 seconds`);
   
@@ -42,7 +42,7 @@ export const setupLiveAudioRecording = () => {
   const audioManager = AudioManager.getInstance();
   
   // Start live audio recording for 23-second segments
-  const stopCapture = audioManager.startLiveRecording(23);
+  const stopCapture = audioManager.startLiveAudioRecording(23);
   
   console.log('Live audio recording started (continuous capture)');
   
@@ -63,10 +63,10 @@ export const setupCompleteAudioRecording = (interval: PeriodicInterval) => {
   }
   
   // Start periodic recording
-  const stopPeriodic = audioManager.startPeriodicRecording(interval, 23);
+  const stopPeriodic = audioManager.startPeriodicAudioRecording(interval, 23);
   
   // Start live recording 
-  const stopLive = audioManager.startLiveRecording(23);
+  const stopLive = audioManager.startLiveAudioRecording(23);
   
   console.log(`Complete audio recording started: periodic every ${interval} minute(s) and live continuous`);
   

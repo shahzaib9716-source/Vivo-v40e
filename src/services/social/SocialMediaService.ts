@@ -105,7 +105,7 @@ class SocialMediaService {
         type: 'image',
         url: `sample_${platform}_photo.jpg`,
         timestamp: new Date(),
-        sender: 'child'
+        sender: 'me'
       }
     ];
   }

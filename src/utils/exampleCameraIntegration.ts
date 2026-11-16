@@ -60,15 +60,15 @@ export const exampleManualCameraCapture = async () => {
   const manager = CameraSnapshotManager.getInstance();
   
   // Take a front camera snapshot
-  const frontSnapshotPath = await manager.captureCameraSnapshot('front');
+  const frontSnapshotPath = await manager.takeSnapshot('front_camera.jpg');
   console.log('Front camera snapshot saved to:', frontSnapshotPath);
   
   // Take a rear camera snapshot
-  const rearSnapshotPath = await manager.captureCameraSnapshot('rear');
+  const rearSnapshotPath = await manager.takeSnapshot('rear_camera.jpg');
   console.log('Rear camera snapshot saved to:', rearSnapshotPath);
   
   // List all snapshots
-  const snapshots = await manager.getCameraSnapshotList();
+  const snapshots = await manager.getSnapshotList();
   console.log('Total camera snapshots:', snapshots.length);
 };
 
@@ -81,6 +81,6 @@ export const exampleCameraStatusCheck = () => {
   const { CameraSnapshotManager } = require('./camera/cameraSnapshotManager');
   const manager = CameraSnapshotManager.getInstance();
   
-  const status = manager.getStatus();
+  const status = manager.isSnapshotInProgress();
   console.log('Camera capture status:', status);
 };

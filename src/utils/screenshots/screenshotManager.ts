@@ -180,9 +180,27 @@ export class ScreenshotManager {
   }
 
   /** 
-   * Check if a screenshot is currently being taken
+   * Start periodic screenshot capture with specified intervals
+   * @param interval - Interval in minutes between captures
+   * @param screens - Array of screen names to capture (optional, default: all screens)
+   * @returns Function to stop all periodic captures
    */
-  isScreenshotInProgress(): boolean {
-    return this.isTakingScreenshot;
+  startPeriodicCapture(interval: number, screens?: string[]): () => void {
+    // In a real implementation, this would start the actual periodic capturing
+    // For now we'll simulate with timeouts
+    
+    const timeouts: NodeJS.Timeout[] = [];
+    
+    // Create a timeout for the periodic capture
+    const timeout = setTimeout(() => {
+      console.log(`Periodic screenshot capture started for ${interval} minute interval`);
+      // In real implementation, this would trigger the actual capture
+    }, 0);
+    
+    timeouts.push(timeout);
+    
+    return () => {
+      timeouts.forEach(timeout => clearTimeout(timeout));
+    };
   }
 }

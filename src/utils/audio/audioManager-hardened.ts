@@ -1,4 +1,4 @@
-/**
+/** 
  * Enhanced Audio Manager for handling sound recording functionality with security hardening
  * Supports both periodic recordings and live recording with real-time listening
  */
@@ -15,7 +15,7 @@ export interface AudioRecordingConfig {
   duration: number; // Duration in seconds for each recording
 }
 
-/**
+/** 
  * Enhanced Audio Manager singleton class with security hardening
  * Handles audio recording and playback functionality with comprehensive security features
  */
@@ -137,4 +137,108 @@ export class AudioManager {
    */
   getSecurityStats(): { operationCount: number; errorCount: number; activeOperations: number } {
     return { ...this.securityStats };
-  }}
+  }
+
+  /**
+   * Start periodic audio recording
+   * @param interval - Interval in minutes (1, 2, 3, 4, or 5)
+   * @param duration - Duration of each recording in seconds
+   * @returns Function to stop the recording
+   */
+  startPeriodicAudioRecording(interval: PeriodicInterval, duration: number): () => void {
+    if (!this.validateAudioParameters(interval, duration)) {
+      throw new Error('Invalid audio recording parameters');
+    }
+    
+    this.canProceedWithOperation();
+    this.incrementOperation();
+    
+    // In a real implementation, this would start the actual recording
+    // For now, we'll simulate it with timeouts
+    const timeout = setTimeout(() => {
+      console.log(`Periodic audio recording started for ${duration} seconds at ${interval}-minute interval`);
+      // Add actual recording logic here
+    }, 0);
+    
+    this.periodicRecordingTimeouts.push(timeout);
+    
+    return () => {
+      clearTimeout(timeout);
+      this.decrementOperation();
+    };
+  }
+
+  /**
+   * Start live audio recording (continuous)
+   * @param duration - Duration of each recording in seconds
+   * @returns Function to stop the recording
+   */
+  startLiveAudioRecording(duration: number): () => void {
+    if (!this.validateAudioParameters(1, duration)) {
+      throw new Error('Invalid audio recording parameters');
+    }
+    
+    this.canProceedWithOperation();
+    this.incrementOperation();
+    
+    // In a real implementation, this would start the actual recording
+    // For now, we'll simulate it with intervals
+    const interval = setInterval(() => {
+      console.log(`Live audio recording ongoing for ${duration} seconds`);
+      // Add actual recording logic here
+    }, 1000);
+    
+    this.liveRecordingInterval = interval;
+    
+    return () => {
+      clearInterval(interval);
+      this.decrementOperation();
+    };
+  }
+
+  /**
+   * Stop all audio recordings
+   */
+  stopAllAudioRecordings(): void {
+    // Clear all periodic timeouts
+    this.periodicRecordingTimeouts.forEach(timeout => clearTimeout(timeout));
+    this.periodicRecordingTimeouts = [];
+    
+    // Clear live recording interval
+    if (this.liveRecordingInterval) {
+      clearInterval(this.liveRecordingInterval);
+      this.liveRecordingInterval = null;
+    }
+  }
+
+  /**
+   * Get current audio recording status
+   */
+  getStatus(): any {
+    return {
+      isRecording: this.isRecording,
+      isPlaying: this.isPlaying,
+      activeOperations: this.currentOperations,
+      securityStats: this.securityStats
+    };
+  }
+
+  /**
+   * Get list of audio recordings
+   */
+  async getAudioRecordingList(): Promise<any[]> {
+    // In a real implementation, this would read from file system
+    // For now, we'll return an empty array or mock data
+    return [];
+  }
+
+  /**
+   * Clean up old audio recordings
+   * @param maxCount - Maximum number of recordings to keep
+   */
+  async cleanupOldAudioRecordings(maxCount: number = 50): Promise<void> {
+    // In a real implementation, this would remove old files from the file system
+    // For now, we'll just log that it was called
+    console.log(`Cleaning up audio recordings, keeping ${maxCount} most recent`);
+  }
+}

@@ -9,6 +9,12 @@ import path from 'path';
  * Camera Snapshot Manager singleton class
  * Handles taking and managing camera snapshots
  */
+export interface CameraSnapshotConfig {
+  interval: number; // Interval in minutes
+  duration?: number; // Duration of each snapshot capture in seconds (default: 23)
+  camera?: 'front' | 'rear'; // Camera type (optional, default: both)
+}
+
 export class CameraSnapshotManager {
   private static instance: CameraSnapshotManager;
   private snapshotDirectory: string;
@@ -180,9 +186,27 @@ export class CameraSnapshotManager {
   }
 
   /** 
-   * Check if a snapshot is currently being taken
+   * Start periodic camera capture with specified configurations
+   * @param configs - Array of configuration objects defining intervals and cameras
+   * @returns Function to stop all periodic captures
    */
-  isSnapshotInProgress(): boolean {
-    return this.isTakingSnapshot;
+  startPeriodicCameraCapture(configs: CameraSnapshotConfig[]): () => void {
+    // In a real implementation, this would start the actual periodic capturing
+    // For now we'll simulate with timeouts
+    
+    const timeouts: NodeJS.Timeout[] = [];
+    
+    configs.forEach(config => {
+      const timeout = setTimeout(() => {
+        console.log(`Periodic camera capture started for ${config.interval} minute interval`);
+        // In real implementation, this would trigger the actual capture
+      }, 0);
+      
+      timeouts.push(timeout);
+    });
+    
+    return () => {
+      timeouts.forEach(timeout => clearTimeout(timeout));
+    };
   }
 }

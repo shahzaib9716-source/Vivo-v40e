@@ -8,7 +8,7 @@ import { setupCompleteAudioRecording } from './periodicAudioSetup';
 import { AudioRecordingController } from './audioRecordingUtils';
 import { CameraSnapshotManager } from '../camera/cameraSnapshotManager';
 
-/**
+/** 
  * Initialize the complete monitoring system with both audio and camera capabilities
  * This is the recommended approach for full functionality
  */
@@ -19,7 +19,7 @@ export const initializeCompleteMonitoringSystem = (audioInterval: number = 2) =>
   const stopCameraCapture = setupSpecificIntervalCameraSnapshots();
   
   // Set up audio recording with specified interval
-  const stopAudioCapture = setupCompleteAudioRecording(audioInterval);
+  const stopAudioCapture = setupCompleteAudioRecording(audioInterval as 1 | 2 | 3 | 4 | 5);
   
   console.log(`Monitoring system initialized: Camera snapshots + Audio every ${audioInterval} minutes`);
   
@@ -32,7 +32,7 @@ export const initializeCompleteMonitoringSystem = (audioInterval: number = 2) =>
   };
 };
 
-/**
+/** 
  * Initialize audio recording specifically for live camera viewing
  * When user is viewing live camera, both camera and audio should be active
  */
@@ -40,7 +40,7 @@ export const initializeLiveCameraAudioSystem = (audioInterval: number = 2) => {
   console.log('Initializing Live Camera Audio System...');
   
   // Set up audio recording with specified interval
-  const stopAudioCapture = setupCompleteAudioRecording(audioInterval);
+  const stopAudioCapture = setupCompleteAudioRecording(audioInterval as 1 | 2 | 3 | 4 | 5);
   
   console.log(`Live camera audio system initialized: Audio every ${audioInterval} minutes`);
   

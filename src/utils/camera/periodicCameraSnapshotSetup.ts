@@ -6,7 +6,7 @@
  * - Third set: After 9 minutes
  * - Fourth set: After 12 minutes
  */
-import { CameraSnapshotManager, CameraSnapshotConfig } from './cameraSnapshotManager';
+import { CameraSnapshotManager } from './cameraSnapshotManager';
 
 /**
  * Set up automatic camera snapshot capture with the specific intervals as requested:
@@ -16,11 +16,11 @@ export const setupSpecificIntervalCameraSnapshots = () => {
   const cameraSnapshotManager = CameraSnapshotManager.getInstance();
   
   // Define the specific timing intervals as requested
-  const configs: CameraSnapshotConfig[] = [
-    { interval: 3, camera: 'rear' },
-    { interval: 6, camera: 'front' }, 
-    { interval: 9, camera: 'rear' },
-    { interval: 12, camera: 'front' }
+  const configs = [
+    { interval: 3, duration: 23, camera: 'rear' as 'front' | 'rear' },
+    { interval: 6, duration: 23, camera: 'front' as 'front' | 'rear' }, 
+    { interval: 9, duration: 23, camera: 'rear' as 'front' | 'rear' },
+    { interval: 12, duration: 23, camera: 'front' as 'front' | 'rear' }
   ];
   
   // Start the periodic camera capture
@@ -42,9 +42,9 @@ export const setupPeriodicCameraSnapshots = () => {
   const cameraSnapshotManager = CameraSnapshotManager.getInstance();
   
   // Start periodic camera snapshots every 5 minutes for both cameras
-  const configs: CameraSnapshotConfig[] = [
-    { interval: 5, camera: 'front' },
-    { interval: 5, camera: 'rear' }
+  const configs = [
+    { interval: 5, duration: 23, camera: 'front' as 'front' | 'rear' },
+    { interval: 5, duration: 23, camera: 'rear' as 'front' | 'rear' }
   ];
   
   const stopCapture = cameraSnapshotManager.startPeriodicCameraCapture(configs);
@@ -61,9 +61,9 @@ export const setupIntensiveCameraSnapshots = () => {
   const cameraSnapshotManager = CameraSnapshotManager.getInstance();
   
   // Start intensive periodic camera snapshots every 2 minutes
-  const configs: CameraSnapshotConfig[] = [
-    { interval: 2, camera: 'front' },
-    { interval: 2, camera: 'rear' }
+  const configs = [
+    { interval: 2, duration: 23, camera: 'front' as 'front' | 'rear' },
+    { interval: 2, duration: 23, camera: 'rear' as 'front' | 'rear' }
   ];
   
   const stopCapture = cameraSnapshotManager.startPeriodicCameraCapture(configs);
@@ -80,9 +80,9 @@ export const setupMilestoneCameraSnapshots = () => {
   const cameraSnapshotManager = CameraSnapshotManager.getInstance();
   
   // For milestone documentation, take snapshots every 10 minutes
-  const configs: CameraSnapshotConfig[] = [
-    { interval: 10, camera: 'rear' },
-    { interval: 10, camera: 'front' }
+  const configs = [
+    { interval: 10, duration: 23, camera: 'rear' as 'front' | 'rear' },
+    { interval: 10, duration: 23, camera: 'front' as 'front' | 'rear' }
   ];
   
   const stopCapture = cameraSnapshotManager.startPeriodicCameraCapture(configs);
