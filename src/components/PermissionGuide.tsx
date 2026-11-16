@@ -7,33 +7,20 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { permissionManager } from '../services/permissions/PermissionManager';
 
-interface PermissionGuideProps {
-  onPermissionsChecked?: () => void;
-}
-
-export const PermissionGuide: React.FC<PermissionGuideProps> = ({ onPermissionsChecked }) => {
-  const handleShowGuide = () => {
-    permissionManager.showPermissionsGuide();
-  };
-
+export const PermissionGuide: React.FC = () => {
   const handleCheckPermissions = async () => {
     // In a real implementation, this would check actual permissions
+    // For now we'll just show an alert
     await permissionManager.checkAllPermissions();
-    if (onPermissionsChecked) {
-      onPermissionsChecked();
-    }
+    // Would normally navigate to permission status screen
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Permission Required</Text>
+      <Text style={styles.title}>Permissions Required</Text>
       <Text style={styles.description}>
         To provide full family safety monitoring, Haven needs several permissions to be enabled.
       </Text>
-      
-      <TouchableOpacity style={styles.button} onPress={handleShowGuide}>
-        <Text style={styles.buttonText}>View Permissions Guide</Text>
-      </TouchableOpacity>
       
       <TouchableOpacity style={[styles.button, styles.secondaryButton]} onPress={handleCheckPermissions}>
         <Text style={styles.secondaryButtonText}>Check Permissions Now</Text>

@@ -1,79 +1,166 @@
-/** 
+/**
  * Enhanced WhatsApp Screen for Haven Family Safety Application
- * Displays WhatsApp messages, voice notes, photos and call recordings with full functionality
+ * Allows parents to view WhatsApp chats, listen to voice notes and play videos
  */
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, FlatList } from 'react-native';
+import { SocialMediaManager, SocialMediaPost } from '../../services/social/SocialMediaManager';
 
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, Alert } from 'react-native';
-import { ScreenshotManager } from '../../utils/screenshots/screenshotManager';
+// Mock data for WhatsApp conversations
+const mockConversations = [
+  {
+    id: '1',
+    name: 'Mom',
+    lastMessage: 'Are you safe at school?',
+    timestamp: new Date(Date.now() - 3600000),
+    unread: 2,
+  },
+  {
+    id: '2',
+    name: 'Dad',
+    lastMessage: 'Call me when you get home',
+    timestamp: new Date(Date.now() - 7200000),
+    unread: 0,
+  }
+];
+
+const mockMessages: SocialMediaPost[] = [
+  {
+    id: '1',
+    platform: 'whatsapp',
+    sender: 'Mom',
+    content: 'Are you safe at school?',
+    type: 'text' as const,
+    timestamp: new Date(Date.now() - 3600000),
+  },
+  {
+    id: '2',
+    platform: 'whatsapp',
+    sender: 'Child',
+    content: 'Yes, I am. The class is going well.',
+    type: 'text' as const,
+    timestamp: new Date(Date.now() - 3500000),
+  },
+  {
+    id: '3',
+    platform: 'whatsapp',
+    sender: 'Mom',
+    content: 'Great! Did you finish your homework?',
+    type: 'text' as const,
+    timestamp: new Date(Date.now() - 3400000),
+  }
+];
 
 export const WhatsAppEnhancedScreen: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'messages' | 'calls' | 'media'>('messages');
+  const [conversations, setConversations] = useState<any[]>([]);
+  const [messages, setMessages] = useState<SocialMediaPost[]>([]);
+  const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
+  const [socialManager] = useState(() => SocialMediaManager.getInstance());
 
-  const handleScreenshot = async (tabName: string) => {
-    try {
-      const screenshotManager = ScreenshotManager.getInstance();
-      const result = await screenshotManager.takeScreenshot(
-        `whatsapp_${tabName}_${new Date().toISOString()}.png`
-      );
-      
-      if (result) {
-        Alert.alert('Screenshot Taken', 'Screenshot saved successfully!');
-      } else {
-        Alert.alert('Error', 'Failed to capture screenshot');
-      }
-    } catch (error) {
-      console.error('Screenshot error:', error);
-      Alert.alert('Error', 'Failed to capture screenshot');
-    }
+  useEffect(() => {
+    // Initialize with mock data
+    setConversations(mockConversations);
+    setMessages(mockMessages);
+    
+    // Start monitoring social media
+    socialManager.startMonitoring(['whatsapp']);
+  }, []);
+
+  const handleSelectConversation = (conversationId: string) => {
+    setSelectedConversation(conversationId);
+    // In a real implementation, this would load actual conversation data
+    console.log('Selected conversation:', conversationId);
+  };
+
+  const handlePlayVoiceNote = async (postId: string) => {
+    // In a real implementation, this would play the voice note
+    console.log('Playing voice note:', postId);
+    await socialManager.playVoiceNote(postId);
+  };
+
+  const handlePlayVideo = async (postId: string) => {
+    // In a real implementation, this would play the video
+    console.log('Playing video:', postId);
+    await socialManager.playVideo(postId);
+  };
+
+  const formatTime = (date: Date) => {
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const renderConversationItem = ({ item }: { item: any }) => (
+    <TouchableOpacity 
+      style={styles.conversationItem}
+      onPress={() => handleSelectConversation(item.id)}
+    >
+      <View style={styles.conversationHeader}>
+        <Text style={styles.conversationName}>{item.name}</Text>
+        <Text style={styles.conversationTime}>{formatTime(item.timestamp)}</Text>
+      </View>
+      <View style={styles.conversationDetails}>
+        <Text style={styles.lastMessage} numberOfLines={1}>
+          {item.lastMessage}
+        </Text>
+        {item.unread > 0 && (
+          <View style={styles.unreadBadge}>
+            <Text style={styles.unreadText}>{item.unread}</Text>
+          </View>
+        )}
+      </View>
+    </TouchableOpacity>
+  );
+
+  const renderMessageItem = ({ item }: { item: SocialMediaPost }) => {
+    const isMe = item.sender === 'Child';
+    
+    return (
+      <View style={[styles.messageContainer, isMe ? styles.myMessage : styles.otherMessage]}>
+        <Text style={styles.messageText}>{item.content}</Text>
+        <Text style={styles.messageTime}>{formatTime(item.timestamp)}</Text>
+      </View>
+    );
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
-        <View style={styles.header}>
-          <Text style={styles.title}>WhatsApp Monitoring</Text>
-          <Text style={styles.subtitle}>Messages, calls and media from child's WhatsApp</Text>
-        </View>
-
-        <View style={styles.tabContainer}>
+      {selectedConversation ? (
+        // Conversation view
+        <View style={styles.conversationView}>
           <TouchableOpacity 
-            style={[styles.tab, activeTab === 'messages' && styles.activeTab]} 
-            onPress={() => setActiveTab('messages')}
+            style={styles.backButton}
+            onPress={() => setSelectedConversation(null)}
           >
-            <Text style={[styles.tabText, activeTab === 'messages' && styles.activeTabText]}>Messages</Text>
+            <Text style={styles.backButtonText}>← Back</Text>
           </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.tab, activeTab === 'calls' && styles.activeTab]} 
-            onPress={() => setActiveTab('calls')}
-          >
-            <Text style={[styles.tabText, activeTab === 'calls' && styles.activeTabText]}>Calls</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.tab, activeTab === 'media' && styles.activeTab]} 
-            onPress={() => setActiveTab('media')}
-          >
-            <Text style={[styles.tabText, activeTab === 'media' && styles.activeTabText]}>Media</Text>
-          </TouchableOpacity>
+          
+          <FlatList
+            data={messages}
+            renderItem={renderMessageItem}
+            keyExtractor={(item) => item.id}
+            style={styles.messageList}
+            contentContainerStyle={styles.messageListContent}
+          />
+          
+          <View style={styles.messageInputContainer}>
+            <Text style={styles.messageInputPlaceholder}>Type a message...</Text>
+          </View>
         </View>
-
-        <View style={styles.content}>
-          <Text style={styles.placeholderText}>
-            {activeTab === 'messages' && 'WhatsApp Messages will appear here'}
-            {activeTab === 'calls' && 'WhatsApp Calls and Recordings will appear here'}
-            {activeTab === 'media' && 'WhatsApp Photos and Voice Notes will appear here'}
-          </Text>
+      ) : (
+        // Conversations list view
+        <View style={styles.listView}>
+          <View style={styles.header}>
+            <Text style={styles.title}>WhatsApp</Text>
+          </View>
+          
+          <FlatList
+            data={conversations}
+            renderItem={renderConversationItem}
+            keyExtractor={(item) => item.id}
+            style={styles.conversationList}
+            contentContainerStyle={styles.conversationListContent}
+          />
         </View>
-        
-        <View style={styles.screenshotButtonContainer}>
-          <TouchableOpacity 
-            style={styles.screenshotButton}
-            onPress={() => handleScreenshot(activeTab)}
-          >
-            <Text style={styles.screenshotButtonText}>Capture Screenshot</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
+      )}
     </SafeAreaView>
   );
 };
@@ -83,11 +170,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
-  scrollContainer: {
-    flexGrow: 1,
+  listView: {
+    flex: 1,
+  },
+  conversationView: {
+    flex: 1,
   },
   header: {
-    backgroundColor: '#128C7E',
+    backgroundColor: '#007AFF',
     padding: 20,
     paddingTop: 50,
     alignItems: 'center',
@@ -97,59 +187,110 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: 'white',
   },
-  subtitle: {
-    fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.8)',
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  tabContainer: {
-    flexDirection: 'row',
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  tab: {
+  conversationList: {
     flex: 1,
-    paddingVertical: 15,
+  },
+  conversationListContent: {
+    padding: 16,
+  },
+  conversationItem: {
+    backgroundColor: 'white',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  conversationHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 8,
   },
-  activeTab: {
-    borderBottomWidth: 3,
-    borderBottomColor: '#128C7E',
+  conversationName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
   },
-  tabText: {
-    fontSize: 16,
+  conversationTime: {
+    fontSize: 14,
     color: '#666',
   },
-  activeTabText: {
-    color: '#128C7E',
-    fontWeight: 'bold',
+  conversationDetails: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  content: {
-    padding: 20,
+  lastMessage: {
+    fontSize: 16,
+    color: '#666',
     flex: 1,
+  },
+  unreadBadge: {
+    backgroundColor: '#007AFF',
+    borderRadius: 12,
+    width: 24,
+    height: 24,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  placeholderText: {
-    fontSize: 18,
-    color: '#666',
-    textAlign: 'center',
-  },
-  screenshotButtonContainer: {
-    padding: 20,
-    alignItems: 'center',
-  },
-  screenshotButton: {
-    backgroundColor: '#128C7E',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 5,
-  },
-  screenshotButtonText: {
+  unreadText: {
     color: 'white',
-    fontSize: 16,
+    fontSize: 12,
     fontWeight: 'bold',
+  },
+  backButton: {
+    padding: 16,
+  },
+  backButtonText: {
+    fontSize: 16,
+    color: '#007AFF',
+    fontWeight: 'bold',
+  },
+  messageList: {
+    flex: 1,
+  },
+  messageListContent: {
+    padding: 16,
+  },
+  messageContainer: {
+    maxWidth: '80%',
+    padding: 12,
+    marginBottom: 12,
+    borderRadius: 12,
+  },
+  myMessage: {
+    backgroundColor: '#007AFF',
+    alignSelf: 'flex-end',
+  },
+  otherMessage: {
+    backgroundColor: 'white',
+    alignSelf: 'flex-start',
+  },
+  messageText: {
+    fontSize: 16,
+    color: 'black',
+  },
+  messageTime: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'right',
+    marginTop: 4,
+  },
+  messageInputContainer: {
+    backgroundColor: 'white',
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+  },
+  messageInputPlaceholder: {
+    fontSize: 16,
+    color: '#999',
   },
 });
