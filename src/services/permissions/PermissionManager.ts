@@ -65,7 +65,7 @@ class PermissionManager {
   private async requestPermission(permission: string): Promise<boolean> {
     try {
       const granted = await PermissionsAndroid.request(
-        permission,
+        permission as any,
         {
           title: 'Haven Family Safety Permissions',
           message: `Haven needs ${this.getPermissionDescription(permission)} to function properly.`,
