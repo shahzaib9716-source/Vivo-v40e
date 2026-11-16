@@ -14,8 +14,7 @@ export const WhatsAppEnhancedScreen: React.FC = () => {
     try {
       const screenshotManager = ScreenshotManager.getInstance();
       const result = await screenshotManager.takeScreenshot(
-        `whatsapp_${tabName}_${new Date().toISOString()}.png`, 
-        `WhatsApp ${tabName} tab view`
+        `whatsapp_${tabName}_${new Date().toISOString()}.png`
       );
       
       if (result) {
