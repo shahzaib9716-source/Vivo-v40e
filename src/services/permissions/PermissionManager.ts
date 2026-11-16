@@ -38,9 +38,9 @@ class PermissionManager {
         ];
 
         for (const permission of requiredPermissions) {
-          const granted = await PermissionsAndroid.check(permission);
+          const granted = await PermissionsAndroid.check(permission as any);
           if (!granted) {
-            const result = await this.requestPermission(permission);
+            const result = await this.requestPermission(permission as any);
             if (!result) {
               return false;
             }
@@ -139,7 +139,7 @@ Please follow the on-screen instructions to grant these permissions.`,
       ];
       
       for (const permission of basicPermissions) {
-        const granted = await PermissionsAndroid.check(permission);
+        const granted = await PermissionsAndroid.check(permission as any);
         results[permission] = {
           granted,
           rationale: this.getPermissionDescription(permission)
