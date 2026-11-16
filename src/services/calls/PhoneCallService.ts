@@ -63,7 +63,7 @@ class PhoneCallService {
         type: 'incoming',
         duration: 90,
         timestamp: new Date(Date.now() - 86400000),
-        recordingUrl: null
+        recordingUrl: undefined
       },
       {
         id: '4',
