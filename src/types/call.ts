@@ -12,3 +12,13 @@ export interface CallRecord {
   recordingUrl?: string;
   isMissed?: boolean;
 }
+
+/**
+ * Call Statistics Interface
+ */
+export interface CallStats {
+  totalCalls: number;
+  totalDuration: number;
+  incomingCalls: number;
+  outgoingCalls: number;
+}

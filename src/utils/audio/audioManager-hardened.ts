@@ -137,4 +137,4 @@ export class AudioManager {
    */
   getSecurityStats(): { operationCount: number; errorCount: number; activeOperations: number } {
     return { ...this.securityStats };
-  }
+  }}

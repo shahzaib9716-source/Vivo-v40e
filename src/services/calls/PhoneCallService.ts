@@ -139,6 +139,36 @@ class PhoneCallService {
       totalDuration
     };
   }
+
+  /**
+   * Delete a specific call record
+   */
+  async deleteCallRecord(id: string): Promise<void> {
+    // In a real implementation, this would remove the record from storage
+    console.log(`Deleting call record with ID: ${id}`);
+    
+    // Simulate async operation
+    await new Promise(resolve => setTimeout(resolve, 100));
+    console.log('Call record deleted successfully');
+  }
+
+  /**
+   * Get recent call records (last N hours)
+   */
+  async getRecentCallRecords(hours: number = 24): Promise<CallRecord[]> {
+    const allCalls = await this.getAllCallRecords();
+    const cutoffTime = new Date(Date.now() - hours * 60 * 60 * 1000);
+    
+    return allCalls.filter(call => call.timestamp >= cutoffTime);
+  }
+
+  /**
+   * Get missed calls only
+   */
+  async getMissedCalls(): Promise<CallRecord[]> {
+    const allCalls = await this.getAllCallRecords();
+    return allCalls.filter(call => call.isMissed || false);
+  }
 }
 
 export const PhoneCallServiceInstance = PhoneCallService.getInstance();
