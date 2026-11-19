@@ -6,11 +6,13 @@ import { BarChart, Card, Row, Screen, SectionLabel, Text } from '@/components/ui
 import { TODAY_INDEX, WEEKDAY_LETTERS, WEEKDAY_NAMES, sum, weekChange } from '@/components/reportData';
 import { useStore, fmtDuration } from '@/state/store';
 import { categoryColors, spacing, useTheme } from '@/theme';
-import { SampleNote } from '@/components/SampleNote';
+import { DeviceReport } from '@/components/DeviceReport';
+import { useLink } from '@/sync/link';
 
 export default function Activity() {
   const { colors } = useTheme();
-  const { activeChild } = useStore();
+  const { activeChild, live } = useStore();
+  const link = useLink();
   const firstName = activeChild.name.split(' ')[0];
   const data = activeChild.weekly.map((v, i) => ({ label: WEEKDAY_LETTERS[i] ?? '', value: v, highlight: i === TODAY_INDEX }));
   const avg = Math.round(sum(activeChild.weekly) / Math.max(1, activeChild.weekly.length));
@@ -31,9 +33,11 @@ export default function Activity() {
           {firstName}’s week
         </Text>
       </View>
-      <SampleNote about="usage" />
+      {live && link.role === 'parent' && link.familyId && (
+        <DeviceReport key={link.familyId + '/' + activeChild.id} family={link.familyId} child={activeChild.id} view="summary" />
+      )}
 
-      <Card onPress={() => (router.push as any)('/reports')} style={{ marginBottom: spacing.xl }}>
+      {!live && <Card onPress={() => (router.push as any)('/reports')} style={{ marginBottom: spacing.xl }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.md }}>
           <View>
             <Text variant="small" tone="muted">
@@ -59,26 +63,26 @@ export default function Activity() {
           </Text>
           <Feather name="chevron-right" size={16} color={colors.primary} />
         </View>
-      </Card>
+      </Card>}
 
       <SectionLabel>Reports</SectionLabel>
       <Card padded={false} style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.xl }}>
         <Row title="Screen Time Report" subtitle="Daily and weekly breakdown" icon="bar-chart-2" iconColor={categoryColors.reports} onPress={() => (router.push as any)('/reports')} />
-        <Row title="App Usage" subtitle="Most used apps and categories" icon="grid" iconColor={categoryColors.apps} onPress={() => (router.push as any)('/app-limits')} />
-        <Row title="Web Activity" subtitle="Top sites and categories" icon="globe" iconColor={categoryColors.web} badge="Preview" badgeColor={colors.warning} onPress={() => (router.push as any)('/feature/browsing')} />
+        <Row title="App Usage" subtitle="Foreground usage and installed apps" icon="grid" iconColor={categoryColors.apps} onPress={() => (router.push as any)(live ? '/feature/app-usage' : '/app-limits')} />
+        <Row title="Web Activity" subtitle="Top sites and categories" icon="globe" iconColor={categoryColors.web} badge="Preview" badgeColor={colors.warning} onPress={() => (router.push as any)('/feature/web')} />
       </Card>
 
       <SectionLabel>Communication</SectionLabel>
       <Card padded={false} style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.xl }}>
         <Row title="Calls" subtitle="Recent call activity" icon="phone" iconColor={categoryColors.calls} badge="Preview" badgeColor={colors.warning} onPress={() => (router.push as any)('/feature/calls')} />
         <Row title="Messages" subtitle="Texting activity overview" icon="message-circle" iconColor={categoryColors.messages} badge="Preview" badgeColor={colors.warning} onPress={() => (router.push as any)('/feature/messages')} />
-        <Row title="Social Apps" subtitle="Activity in social apps" icon="share-2" iconColor={categoryColors.social} badge="Preview" badgeColor={colors.warning} onPress={() => (router.push as any)('/feature/social')} />
+        <Row title="Social Apps" subtitle="Foreground usage for recognized apps" icon="share-2" iconColor={categoryColors.social} badge={live ? "Limited Data" : "Preview"} badgeColor={colors.warning} onPress={() => (router.push as any)('/feature/social')} />
       </Card>
 
       <SectionLabel>Web & Video</SectionLabel>
       <Card padded={false} style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.xl }}>
         <Row title="Browsing History" subtitle="Visited sites overview" icon="compass" iconColor={categoryColors.browsing} badge="Preview" badgeColor={colors.warning} onPress={() => (router.push as any)('/feature/browsing')} />
-        <Row title="Video Watch History" subtitle="Watched videos overview" icon="video" iconColor={categoryColors.youtube} badge="Preview" badgeColor={colors.warning} onPress={() => (router.push as any)('/feature/video')} />
+        <Row title="Video Watch History" subtitle={live ? "Video-app usage available" : "Watched videos overview"} icon="video" iconColor={categoryColors.youtube} badge={live ? "Limited Data" : "Preview"} badgeColor={colors.warning} onPress={() => (router.push as any)('/feature/video')} />
       </Card>
 
       <SectionLabel>Alerts</SectionLabel>

@@ -6,7 +6,9 @@ import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated'
 
 import { InlineNote } from '@/components/InlineNote';
 import { Button, Card, Header, IconBadge, PlaceholderNotice, Row, Screen, SectionLabel, Text, Toggle } from '@/components/ui';
-import { nowLabel } from '@/state/store';
+import { DeviceReport } from '@/components/DeviceReport';
+import { useLink } from '@/sync/link';
+import { useStore, nowLabel } from '@/state/store';
 import { radius, shadow, spacing, useTheme } from '@/theme';
 
 type Kind = 'monitor' | 'approval' | 'rating';
@@ -161,9 +163,39 @@ interface Decision {
   time: string;
 }
 
+const SOURCE_STATUS: Record<string, string> = {
+  web: 'Connect an authorized browser or network source to report domains and coverage.',
+  browsing: 'Connect an authorized browser source or import genuine browser history to show visited pages.',
+  calls: 'Call activity requires an eligible Android call-log integration. Family check-ins remain available in Haven.',
+  messages: 'SMS activity requires an eligible Android SMS integration. Family chat is available in Haven.',
+  keywords: 'Keyword alerts need an explicitly authorized content source before rules can run.',
+};
+
 export default function FeatureScreen() {
   const { key } = useLocalSearchParams<{ key: string }>();
-  const def = FEATURES[key ?? ''] ?? FEATURES.calls;
+  const { live, activeChild } = useStore();
+  const link = useLink();
+  const category = key === 'social' ? 'social' : key === 'video' ? 'video' : key === 'app-usage' ? 'all' : null;
+  if (live && category) {
+    const title = key === 'social' ? 'Social Apps' : key === 'video' ? 'Video-app usage' : 'App Usage';
+    return <Screen>
+      <Header back title={title} subtitle={activeChild.name} />
+      {key === 'video' && <Text>Watch history requires an authorized video-service integration. This report shows Android foreground app usage.</Text>}
+      {link.role === 'parent' && link.familyId && <DeviceReport key={link.familyId + '/' + activeChild.id + '/' + category}
+        family={link.familyId} child={activeChild.id} view={category} />}
+    </Screen>;
+  }
+  if (live && key && SOURCE_STATUS[key]) {
+    return <Screen>
+      <Header back title={key === 'web' ? 'Web Activity' : FEATURES[key].title} />
+      <Card><Text variant="title">Integration required</Text><Text>{SOURCE_STATUS[key]}</Text></Card>
+    </Screen>;
+  }
+  return <PreviewFeature key={key} featureKey={key === 'web' ? 'browsing' : key} />;
+}
+
+function PreviewFeature({ featureKey }: { featureKey?: string }) {
+  const def = FEATURES[featureKey ?? ''] ?? FEATURES.calls;
   const { colors } = useTheme();
   const [enabled, setEnabled] = useState(def.kind !== 'monitor');
   const [rating, setRating] = useState('12+');
