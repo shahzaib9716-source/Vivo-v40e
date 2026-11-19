@@ -23,7 +23,7 @@ export default function AppLimits() {
 
   return (
     <Screen>
-      <Header back title="App Limits" subtitle={`${activeChild.apps.length} apps on ${activeChild.deviceName}`} />
+      <Header back title="App Limits" subtitle={`${activeChild.apps.length} configured app rules for ${activeChild.deviceName}`} />
       <SampleNote about="usage" />
 
       <ScrollView

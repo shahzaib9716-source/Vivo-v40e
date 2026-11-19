@@ -29,7 +29,7 @@ const TEXT: Record<Topic, { title: string; detail: string }> = {
   rules: {
     title: 'Rules are agreements',
     detail:
-      'The daily limit, app rules and a screen-time break appear on your child’s phone straight away. This version of Haven does not lock the phone, block apps or filter the web by itself.',
+      'The daily limit, app rules and a screen-time break sync to your child’s Haven app. They do not lock the Android device, block other apps or filter web traffic.',
   },
   saved: {
     title: 'Saved for your family, not enforced',
