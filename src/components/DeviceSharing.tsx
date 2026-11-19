@@ -35,7 +35,7 @@ export function DeviceSharing({ family, child, uid }: { family: string; child: s
       try {
         const fix = await device!.currentFix();
         if (!active()) return;
-        await reportChildLocation(family, child, uid, fix.latitude, fix.longitude, fix.accuracyM);
+        await reportChildLocation(family, child, uid, fix.latitude, fix.longitude, fix.accuracyM, fix.measuredAt);
         if (active()) {
           setStatus('Foreground location sharing is on.');
           timer = setTimeout(report, 60000);
@@ -69,7 +69,7 @@ export function DeviceSharing({ family, child, uid }: { family: string; child: s
     <Button title="Share my current location once" disabled={busy || sharing} onPress={() => run(async () => {
       const fix = await requestFix();
       foreground();
-      await reportChildLocation(family, child, uid, fix.latitude, fix.longitude, fix.accuracyM);
+      await reportChildLocation(family, child, uid, fix.latitude, fix.longitude, fix.accuracyM, fix.measuredAt);
     }, 'Location shared.')} />
     <Button title={sharing ? 'Stop location updates' : 'Share every minute while Me is open'} disabled={busy} onPress={() => {
       if (sharing) { stop(); setStatus('Location updates stopped.'); return; }
@@ -77,7 +77,7 @@ export function DeviceSharing({ family, child, uid }: { family: string; child: s
         const fix = await requestFix();
         foreground();
         const token = generation.current;
-        await reportChildLocation(family, child, uid, fix.latitude, fix.longitude, fix.accuracyM);
+        await reportChildLocation(family, child, uid, fix.latitude, fix.longitude, fix.accuracyM, fix.measuredAt);
         if (mounted.current && token === generation.current) setSharing(true);
       }, 'Location shared.');
     }} />

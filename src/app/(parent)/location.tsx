@@ -10,6 +10,7 @@ import { nowLabel, updatedAgoOf, useNow, useStore } from '@/state/store';
 import { categoryColors, radius, spacing, useTheme } from '@/theme';
 import { SampleNote } from '@/components/SampleNote';
 import { useLink } from '@/sync/link';
+import { locationStatus } from '@/sync/locationStatus';
 import { listenChildLocation, type ChildLocation } from '@/sync/location';
 
 // Child chips are about 34pt tall; extend the press target to 44pt.
@@ -29,14 +30,14 @@ export default function Location() {
   const [action, setAction] = useState<DemoAction | null>(null);
   const link = useLink();
   const scope = live && link.role === 'parent' && link.familyId && activeChildId ? link.familyId + '/' + activeChildId : '';
-  const [report, setReport] = useState<{ scope: string; value: ChildLocation | null; error: boolean }>();
+  const [report, setReport] = useState<{ scope: string; value: ChildLocation | null; error: boolean; cached: boolean }>();
   const location = report?.scope === scope ? report.value : null;
   const locationError = report?.scope === scope && report.error;
   useEffect(() => {
     if (!scope || !link.familyId) return;
     return listenChildLocation(link.familyId, activeChildId,
-      value => setReport({ scope, value, error: false }),
-      () => setReport({ scope, value: null, error: true }));
+      (value, cached) => setReport({ scope, value, cached, error: false }),
+      () => setReport({ scope, value: null, cached: false, error: true }));
   }, [scope, link.familyId, activeChildId]);
   const now = useNow();
 
@@ -86,13 +87,15 @@ export default function Location() {
               {live ? (
                 <View style={{ height: 260, alignItems: 'center', justifyContent: 'center', padding: spacing.xl, backgroundColor: colors.surface }}>
                   <Feather name="map-pin" size={34} color={colors.textMuted} />
-                  <Text variant="title" center style={{ marginTop: spacing.md }}>{location ? 'Latest shared location' : 'Location not available'}</Text>
+                  <Text variant="title" center style={{ marginTop: spacing.md }}>{locationStatus(location?.measuredAt, report?.scope === scope && report.cached, now, locationError)}</Text>
                   <Text variant="small" tone="muted" center style={{ marginTop: spacing.sm }}>
                     {location
-                      ? `${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)} · accuracy ±${Math.round(location.accuracyM)}m · reported ${new Date(location.capturedAt).toLocaleString()}`
+                      ? `${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)} · accuracy ±${Math.round(location.accuracyM)}m · received ${new Date(location.receivedAt).toLocaleString()}${location.measuredAt == null ? '' : ' · measured ' + new Date(location.measuredAt).toLocaleString()}`
                       : locationError
                         ? 'Unable to read location. Check family access and connectivity.'
-                        : 'No GPS report has been shared by this child device yet. Location sharing requires permission on the child phone.'}
+                        : report?.scope !== scope || report.cached
+                          ? 'Waiting for a confirmed report from the server.'
+                          : 'No GPS report has been shared by this child device yet. Location sharing requires permission on the child phone.'}
                   </Text>
                 </View>
               ) : (

@@ -7,7 +7,7 @@ export interface AppUsage { pkg: string; label: string; ms: number }
 interface DeviceModule {
   applyPolicy(payload: string): Promise<string>;
   clearPolicy(): Promise<void>;
-  currentFix(): Promise<{ latitude: number; longitude: number; accuracyM: number }>;
+  currentFix(): Promise<{ latitude: number; longitude: number; accuracyM: number; measuredAt: number }>;
   readUsage(): Promise<{ apps: AppUsage[]; screenMs: number; measuredAt: number }>;
   openUsageSettings(): Promise<void>;
 }

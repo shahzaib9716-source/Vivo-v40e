@@ -5,7 +5,8 @@ export interface ChildLocation {
   latitude: number;
   longitude: number;
   accuracyM: number;
-  capturedAt: number;
+  receivedAt: number;
+  measuredAt: number | null;
 }
 
 const path = (familyId: string, childId: string) =>
@@ -30,34 +31,36 @@ export async function reportChildLocation(
   latitude: number,
   longitude: number,
   accuracyM: number,
+  measuredAt: number,
 ): Promise<void> {
-  if (!familyId || !childId || !uid || !valid(latitude, longitude, accuracyM)) {
+  if (!familyId || !childId || !uid || !valid(latitude, longitude, accuracyM) || !Number.isSafeInteger(measuredAt) || measuredAt <= 0) {
     throw new Error('Invalid location report');
   }
   const key = path(familyId, childId);
   await inOrder(key, () => runTransaction(db(), async tx => {
-    tx.set(doc(db(), key), { latitude, longitude, accuracyM, capturedAt: serverTimestamp(), by: uid });
+    tx.set(doc(db(), key), { latitude, longitude, accuracyM, measuredAt, capturedAt: serverTimestamp(), by: uid });
   }));
 }
 
 export function listenChildLocation(
   familyId: string,
   childId: string,
-  onData: (location: ChildLocation | null) => void,
+  onData: (location: ChildLocation | null, cached: boolean) => void,
   onError: (error: Error) => void,
 ): () => void {
   if (!familyId || !childId) throw new Error('A linked family and child are required');
-  return onSnapshot(doc(db(), path(familyId, childId)), (snapshot) => {
+  return onSnapshot(doc(db(), path(familyId, childId)), { includeMetadataChanges: true }, (snapshot) => {
     const data = snapshot.data();
     const latitude = data?.latitude;
     const longitude = data?.longitude;
     const accuracyM = data?.accuracyM;
     const capturedAt = data?.capturedAt?.toMillis?.();
     if (!data || !valid(latitude, longitude, accuracyM) || !Number.isFinite(capturedAt)) {
-      onData(null);
+      onData(null, snapshot.metadata.fromCache);
       return;
     }
-    onData({ latitude, longitude, accuracyM, capturedAt });
+    const measuredAt = data.measuredAt;
+    onData({ latitude, longitude, accuracyM, receivedAt: capturedAt, measuredAt: Number.isSafeInteger(measuredAt) && measuredAt > 0 ? measuredAt : null }, snapshot.metadata.fromCache);
   }, (error) => onError(error));
 }
 

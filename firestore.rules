@@ -422,7 +422,7 @@ service cloud.firestore {
           allow list: if false;
           allow create, update: if docId == 'latest'
             && isChildOf(fid, cid)
-            && request.resource.data.keys().hasOnly(['latitude', 'longitude', 'accuracyM', 'capturedAt', 'by'])
+            && request.resource.data.keys().hasOnly(['latitude', 'longitude', 'accuracyM', 'capturedAt', 'by', 'measuredAt'])
             && request.resource.data.keys().hasAll(['latitude', 'longitude', 'accuracyM', 'capturedAt', 'by'])
             && request.resource.data.latitude is number
             && request.resource.data.latitude >= -90
@@ -433,6 +433,10 @@ service cloud.firestore {
             && request.resource.data.accuracyM is number
             && request.resource.data.accuracyM >= 0
             && request.resource.data.accuracyM <= 100000
+            && (!('measuredAt' in request.resource.data) ||
+                (request.resource.data.measuredAt is int
+                 && request.resource.data.measuredAt > 0
+                 && request.resource.data.measuredAt <= request.time.toMillis() + 60000))
             && request.resource.data.capturedAt == request.time
             && request.resource.data.by == request.auth.uid;
           allow delete: if isChildOf(fid, cid);

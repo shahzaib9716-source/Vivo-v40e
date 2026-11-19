@@ -68,7 +68,7 @@ class HavenDeviceModule : Module() {
         handler.removeCallbacks(timeout)
         if (done.compareAndSet(false, true)) {
           if (fix == null || !fix.hasAccuracy()) promise.reject("E_FIX", "No current location available.", null)
-          else promise.resolve(mapOf("latitude" to fix.latitude, "longitude" to fix.longitude, "accuracyM" to fix.accuracy.toDouble()))
+          else promise.resolve(mapOf("latitude" to fix.latitude, "longitude" to fix.longitude, "accuracyM" to fix.accuracy.toDouble(), "measuredAt" to fix.time))
         }
       }
     }

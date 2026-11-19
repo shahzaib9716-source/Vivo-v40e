@@ -16,6 +16,10 @@ test('child location is bounded, authenticated and scoped to its family', async 
   await refused(setDoc(at('founder', path), fix()));
   await refused(setDoc(at('kid1', path), { ...fix(), by: 'another' }));
   await refused(setDoc(at('kid1', path), { ...fix(), latitude: 91 }));
+  await allowed(setDoc(at('kid1', path), { ...fix(), measuredAt: Date.now() }));
+  for (const measuredAt of [-1, 1.5, 'yesterday', Date.now() + 3600000]) {
+    await refused(setDoc(at('kid1', path), { ...fix(), measuredAt }));
+  }
   await allowed(deleteDoc(at('kid1', path)));
 });
 test('only the enrolled child publishes or clears its usage report', async () => {
