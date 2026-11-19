@@ -4,8 +4,20 @@ import { collection, doc, onSnapshot, runTransaction, serverTimestamp } from 'fi
 import { localDay, readDays, recordDay, type UsageDay } from './usageWeek';
 import { db } from './remote';
 
-export interface AppUsage { pkg: string; label: string; ms: number }
+export interface AppUsage { pkg: string; label: string; ms: number; weeklyMs?: number; lastUsedAt?: number }
+export interface DevicePermissions {
+  usage: boolean;
+  location: boolean;
+  admin: boolean;
+  owner: boolean;
+  notifications: boolean;
+  batteryExempt: boolean;
+}
+
 interface DeviceModule {
+  permissionStatus?(): Promise<DevicePermissions>;
+  openAdminActivation?(): Promise<void>;
+  openBatterySettings?(): Promise<void>;
   applyPolicy(payload: string): Promise<string>;
   clearPolicy(): Promise<void>;
   currentFix(): Promise<{ latitude: number; longitude: number; accuracyM: number; measuredAt: number }>;
@@ -47,7 +59,14 @@ export function listenUsage(family: string, child: string, data: (apps: AppUsage
         !value.apps.every(a => a && typeof a.pkg === 'string' && typeof a.label === 'string' && Number.isSafeInteger(a.ms) && a.ms >= 0)) {
       error(Error('Invalid device report.')); return;
     }
-    data(value.apps, value.measuredAt, Number.isSafeInteger(value.screenMs) ? value.screenMs : undefined, readDays(value.days));
+    const apps: AppUsage[] = value.apps.map(a => ({
+      pkg: a.pkg,
+      label: a.label,
+      ms: a.ms,
+      weeklyMs: Number.isSafeInteger(a.weeklyMs) && a.weeklyMs > 0 && a.weeklyMs <= 7 * 93600000 ? a.weeklyMs : undefined,
+      lastUsedAt: Number.isSafeInteger(a.lastUsedAt) && a.lastUsedAt > 0 && a.lastUsedAt <= value.measuredAt ? a.lastUsedAt : undefined,
+    }));
+    data(apps, value.measuredAt, Number.isSafeInteger(value.screenMs) ? value.screenMs : undefined, readDays(value.days));
   }, error);
 }
 

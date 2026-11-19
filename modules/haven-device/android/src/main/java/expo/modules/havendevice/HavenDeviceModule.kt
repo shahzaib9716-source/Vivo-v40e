@@ -2,8 +2,11 @@ package expo.modules.havendevice
 
 import android.Manifest
 import android.app.AppOpsManager
+import android.app.NotificationManager
+import android.app.admin.DevicePolicyManager
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -13,6 +16,7 @@ import android.os.CancellationSignal
 import android.os.Handler
 import android.os.Looper
 import android.os.Process
+import android.os.PowerManager
 import android.provider.Settings
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
@@ -28,6 +32,30 @@ class HavenDeviceModule : Module() {
 
   override fun definition() = ModuleDefinition {
     Name("HavenDevice")
+    AsyncFunction("permissionStatus") {
+      val ctx = context
+      val policy = requireNotNull(ctx.getSystemService(DevicePolicyManager::class.java))
+      mapOf(
+        "usage" to usageAllowed(),
+        "location" to (ctx.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+          ctx.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED),
+        "admin" to policy.isAdminActive(ComponentName(ctx, HavenAdmin::class.java)),
+        "owner" to policy.isDeviceOwnerApp(ctx.packageName),
+        "notifications" to requireNotNull(ctx.getSystemService(NotificationManager::class.java)).areNotificationsEnabled(),
+        "batteryExempt" to requireNotNull(ctx.getSystemService(PowerManager::class.java)).isIgnoringBatteryOptimizations(ctx.packageName)
+      )
+    }
+    AsyncFunction("openAdminActivation") {
+      val ctx = context
+      val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
+        .putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, ComponentName(ctx, HavenAdmin::class.java))
+        .putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, "Optional Android administration. App restrictions require Device Owner enrollment.")
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      ctx.startActivity(intent)
+    }
+    AsyncFunction("openBatterySettings") {
+      context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
     AsyncFunction("openUsageSettings") {
       context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
@@ -91,10 +119,10 @@ internal fun readUsage(context: Context, week: UsageWeek? = null, end: Long = Sy
       val event = UsageEvents.Event()
       val active = mutableMapOf<String, MutableSet<String>>()
       val opened = mutableMapOf<String, Long>()
-      val totals = mutableMapOf<String, Long>()
+      val totals = mutableMapOf<String, AppUsageWindow>()
       fun close(pkg: String, at: Long) {
         val from = opened.remove(pkg) ?: return
-        totals[pkg] = (totals[pkg] ?: 0L) + (at - maxOf(start, from)).coerceAtLeast(0L)
+        totals.getOrPut(pkg) { AppUsageWindow(start, week?.start) }.add(from, at)
       }
       var foregroundMs = 0L
       var previous = week?.start ?: start
@@ -107,7 +135,7 @@ internal fun readUsage(context: Context, week: UsageWeek? = null, end: Long = Sy
           week?.add(previous, at)
         }
         previous = at
-        if (event.eventType in listOf(UsageEvents.Event.SCREEN_NON_INTERACTIVE, UsageEvents.Event.DEVICE_SHUTDOWN)) {
+        if (event.eventType == UsageEvents.Event.SCREEN_NON_INTERACTIVE || event.eventType == UsageEvents.Event.DEVICE_SHUTDOWN || event.eventType == UsageEvents.Event.DEVICE_STARTUP) {
           opened.keys.toList().forEach { close(it, at) }
           active.clear()
         } else if (pkg in apps) {
@@ -130,5 +158,6 @@ internal fun readUsage(context: Context, week: UsageWeek? = null, end: Long = Sy
       }
       screenTime(foregroundMs)
       opened.keys.toList().forEach { close(it, end) }
-      return apps.map { (pkg, label) -> mapOf("pkg" to pkg, "label" to label, "ms" to (totals[pkg] ?: 0L)) }.sortedByDescending { it["ms"] as Long }
+      return apps.map { (pkg, label) -> (totals[pkg] ?: AppUsageWindow(start, week?.start)).toReport(pkg, label) }
+        .sortedByDescending { it["ms"] as Long }
 }

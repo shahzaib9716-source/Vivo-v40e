@@ -15,11 +15,12 @@ const VIDEO = new Set([
 
 export type AppActivityFilter = 'all' | 'social' | 'video';
 
-export function rankAppActivity(apps: readonly AppUsage[], filter: AppActivityFilter, search = '') {
+export function rankAppActivity(apps: readonly AppUsage[], filter: AppActivityFilter, search = '', week = false) {
   const matches = filter === 'social' ? SOCIAL : filter === 'video' ? VIDEO : null;
   const query = search.trim().toLowerCase();
   return apps.filter(app =>
     (!matches || matches.has(app.pkg)) &&
+    (!week || app.weeklyMs !== undefined) &&
     (!query || app.label.toLowerCase().includes(query) || app.pkg.toLowerCase().includes(query))
-  ).sort((a, b) => b.ms - a.ms || a.label.localeCompare(b.label) || a.pkg.localeCompare(b.pkg));
+  ).sort((a, b) => (week ? (b.weeklyMs ?? 0) - (a.weeklyMs ?? 0) : b.ms - a.ms) || a.label.localeCompare(b.label) || a.pkg.localeCompare(b.pkg));
 }
