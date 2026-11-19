@@ -82,12 +82,12 @@ export function DeviceSharing({ family, child, uid }: { family: string; child: s
       }, 'Location shared.');
     }} />
     <Button title="Clear shared location" disabled={busy} onPress={() => run(() => { stop(); return clearChildLocation(family, child); }, 'Location cleared.')} />
-    <Text>Usage reports include launchable apps, their package names, and foreground time since midnight on this phone. Sharing also keeps daily totals for up to seven days. Clear shared usage removes these totals.</Text>
+    <Text>Usage reports include launchable apps, their package names, and foreground time since midnight on this phone. Sharing includes up to seven days of foreground totals available from Android. Clear shared usage removes these totals.</Text>
     <Button title="Open Android usage access" disabled={busy} onPress={() => run(() => native.openUsageSettings(), 'Return here and tap Share app usage.')} />
     <Button title="Share app usage" disabled={busy} onPress={() => run(async () => {
       const report = await native.readUsage();
       foreground();
-      await shareUsage(family, child, uid, report.apps, report.measuredAt, report.screenMs);
+      await shareUsage(family, child, uid, report.apps, report.measuredAt, report.screenMs, report.days);
     }, 'Usage report shared.')} />
     <Button title="Clear shared usage" disabled={busy} onPress={() => run(() => clearUsage(family, child), 'Usage report cleared.')} />
     <Text>{management}</Text>
