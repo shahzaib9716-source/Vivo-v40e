@@ -1,6 +1,7 @@
 import { requireOptionalNativeModule } from 'expo';
 import { PermissionsAndroid as Permissions } from 'react-native';
 import { collection, doc, onSnapshot, runTransaction, serverTimestamp } from 'firebase/firestore';
+import { localDay, readDays, recordDay, type UsageDay } from './usageWeek';
 import { db } from './remote';
 
 export interface AppUsage { pkg: string; label: string; ms: number }
@@ -28,21 +29,25 @@ const usageRef = (family: string, child: string) => doc(db(), 'families', family
 export function shareUsage(family: string, child: string, by: string, apps: AppUsage[], measuredAt: number, screenMs: number) {
   if (apps.length > 1000) throw Error('The device exceeds the 1,000-app report limit.');
   return runTransaction(db(), async tx => {
-    tx.set(usageRef(family, child), { apps, measuredAt, screenMs, by, receivedAt: serverTimestamp() });
+    const ref = usageRef(family, child);
+    const previous = (await tx.get(ref)).data();
+    if (previous && previous.measuredAt > measuredAt) throw Error('A newer usage report has already been shared.');
+    const days = recordDay(previous?.days, localDay(measuredAt), screenMs);
+    tx.set(ref, { apps, measuredAt, screenMs, days, by, receivedAt: serverTimestamp() });
   });
 }
 export function clearUsage(family: string, child: string) {
   return runTransaction(db(), async tx => { tx.delete(usageRef(family, child)); });
 }
-export function listenUsage(family: string, child: string, data: (apps: AppUsage[], at: number, screenMs?: number) => void, error: (e: Error) => void) {
+export function listenUsage(family: string, child: string, data: (apps: AppUsage[], at: number, screenMs: number | undefined, days: UsageDay[]) => void, error: (e: Error) => void) {
   return onSnapshot(usageRef(family, child), snap => {
     const value = snap.data();
-    if (!value) { data([], 0); return; }
+    if (!value) { data([], 0, undefined, []); return; }
     if (!Array.isArray(value.apps) || !Number.isSafeInteger(value.measuredAt) ||
         !value.apps.every(a => a && typeof a.pkg === 'string' && typeof a.label === 'string' && Number.isSafeInteger(a.ms) && a.ms >= 0)) {
       error(Error('Invalid device report.')); return;
     }
-    data(value.apps, value.measuredAt, Number.isSafeInteger(value.screenMs) ? value.screenMs : undefined);
+    data(value.apps, value.measuredAt, Number.isSafeInteger(value.screenMs) ? value.screenMs : undefined, readDays(value.days));
   }, error);
 }
 

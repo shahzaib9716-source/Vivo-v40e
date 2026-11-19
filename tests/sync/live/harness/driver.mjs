@@ -4,6 +4,7 @@
  *
  * Nothing here talks to a real Firebase project: the only addresses are the two local emulators.
  */
+import { readRules } from '../../../rules/helpers.mjs';
 import { fork } from 'node:child_process';
 import fs from 'node:fs';
 import net from 'node:net';
@@ -68,7 +69,7 @@ const ADMIN = { Authorization: 'Bearer owner' };
 
 /** Loads the repo's firestore.rules into the emulator for the test project. */
 export async function loadRules() {
-  const content = fs.readFileSync(path.join(REPO, 'firestore.rules'), 'utf8');
+  const content = readRules();
   const r = await http('PUT', `http://${FIRESTORE}/emulator/v1/projects/${PROJECT}:securityRules`, { rules: { files: [{ content }] } });
   if (r.status !== 200) throw new Error(`could not load firestore.rules into the emulator: HTTP ${r.status} ${r.text.slice(0, 400)}`);
 }

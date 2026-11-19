@@ -26,6 +26,8 @@ test('only the enrolled child publishes or clears its usage report', async () =>
   const path = 'usage/latest';
   const report = { by: h.a.kid1.selfId, apps: [], screenMs: 1500, measuredAt: Date.now(), receivedAt: serverTimestamp() };
   await allowed(setDoc(at('kid1', path), report));
+  await allowed(setDoc(at('kid1', path), { ...report, days: [{ day: '2026-11-19', ms: 1500 }] }));
+  await refused(setDoc(at('kid1', path), { ...report, days: Array(8).fill({ day: '2026-11-19', ms: 1500 }) }));
   await getDoc(at('founder', path));
   await refused(getDoc(at('kid2', path)));
   await refused(setDoc(at('founder', path), report));
