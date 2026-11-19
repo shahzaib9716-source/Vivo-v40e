@@ -18,19 +18,21 @@ object ManagedPolicy {
   private fun owner(c: Context) = requireNotNull(c.getSystemService(DevicePolicyManager::class.java)).isDeviceOwnerApp(c.packageName)
 
   @Synchronized fun clear(c: Context) {
-    requireNotNull(c.getSystemService(JobScheduler::class.java)).cancel(JOB)
     val saved = prefs(c)
+    check(saved.edit().remove("policy").commit()) { "Could not record policy removal." }
     val held = saved.getStringSet("held", emptySet()).orEmpty()
     if (owner(c) && held.isNotEmpty()) {
       val failed = requireNotNull(c.getSystemService(DevicePolicyManager::class.java)).setPackagesSuspended(admin(c), held.toTypedArray(), false)
+      check(saved.edit().putStringSet("held", failed.toSet()).commit())
       check(failed.isEmpty()) { "Android could not release all managed packages." }
     }
-    saved.edit().clear().commit()
+    check(saved.edit().clear().commit())
+    requireNotNull(c.getSystemService(JobScheduler::class.java)).cancel(JOB)
   }
 
   @Synchronized fun update(c: Context, payload: String): String {
     if (!owner(c)) return "Family agreements only. Android device-owner enrollment is required for enforcement."
-    prefs(c).edit().putString("policy", payload).commit()
+    check(prefs(c).edit().putString("policy", payload).commit())
     val job = JobInfo.Builder(JOB, ComponentName(c, PolicyJob::class.java))
       .setPeriodic(15 * 60 * 1000L).setPersisted(true).build()
     val scheduler = requireNotNull(c.getSystemService(JobScheduler::class.java))
@@ -41,7 +43,12 @@ object ManagedPolicy {
   @Synchronized fun apply(c: Context): String {
     if (!owner(c)) return "Device management unavailable."
     val saved = prefs(c)
-    val config = JSONObject(saved.getString("policy", null) ?: return "No policy.")
+    val payload = saved.getString("policy", null)
+    if (payload == null) {
+      clear(c)
+      return "Policy released."
+    }
+    val config = JSONObject(payload)
     val rules = config.getJSONArray("rules")
     val pm = c.packageManager
     val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
@@ -61,34 +68,30 @@ object ManagedPolicy {
       ScheduleWindow.active(window.getInt("start"), window.getInt("end"), window.getInt("mask"), mondayBasedDay, minute)
     }
     val desired = mutableSetOf<String>()
+    var ineligible = 0
     for (i in 0 until rules.length()) {
       val rule = rules.getJSONObject(i)
       val pkg = rule.getString("pkg")
-      if (pkg in protected) continue
-      val app = try { pm.getApplicationInfo(pkg, 0) } catch (_: android.content.pm.PackageManager.NameNotFoundException) { continue }
-      if (app.flags and ApplicationInfo.FLAG_SYSTEM != 0) continue
+      val app = try { pm.getApplicationInfo(pkg, 0) } catch (_: android.content.pm.PackageManager.NameNotFoundException) { null }
+      if (pkg in protected || app == null || app.flags and ApplicationInfo.FLAG_SYSTEM != 0) {
+        ineligible++
+        continue
+      }
       val limit = rule.getInt("minutes")
       if ((allowed && screenMs >= config.getInt("dailyMinutes") * 60000L) || scheduled || config.getBoolean("paused") || rule.getBoolean("blocked") || (allowed && limit > 0 && (usage[pkg] ?: 0L) >= limit * 60000L)) desired.add(pkg)
     }
     val held = saved.getStringSet("held", emptySet()).orEmpty().toMutableSet()
     val manager = requireNotNull(c.getSystemService(DevicePolicyManager::class.java))
-    val release = held - desired
-    var failed = emptySet<String>()
-    if (release.isNotEmpty()) {
-      failed = manager.setPackagesSuspended(admin(c), release.toTypedArray(), false).toSet()
-      held.removeAll(release - failed)
-    }
-    if (desired.isNotEmpty()) {
-      val rejected = manager.setPackagesSuspended(admin(c), desired.toTypedArray(), true).toSet()
-      held.addAll(desired - rejected)
-      failed = failed + rejected
-    }
-    saved.edit().putStringSet("held", held).commit()
-    return when {
-      failed.isNotEmpty() -> "Android declined changes for " + failed.joinToString()
-      !allowed -> "Managed blocks applied. Enable Usage access for timed limits."
-      else -> "Managed policy applied. Suspended packages: " + held.size
-    }
+    val result = reconcileSuspensions(held, desired,
+      persist = { packages -> check(saved.edit().putStringSet("held", packages).commit()) },
+      change = { packages, shouldSuspend -> manager.setPackagesSuspended(admin(c), packages.toTypedArray(), shouldSuspend).toSet() })
+    val failed = result.failed
+    return buildList {
+      add("Suspended packages: " + result.held.size + ".")
+      if (failed.isNotEmpty()) add("Android declined changes for " + failed.size + " packages.")
+      if (ineligible > 0) add("Ineligible or unavailable packages: " + ineligible + ".")
+      if (!allowed) add("Timed limits require Usage access.")
+    }.joinToString(" ")
   }
 }
 
