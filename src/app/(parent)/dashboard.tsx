@@ -231,13 +231,13 @@ export default function Dashboard() {
                     // used are not read by this version, so they are not shown as if they were.
                     <View style={styles.chips}>
                       <HeroChip icon="check-circle" label={activeChild.checkInAt != null ? `Checked in ${updatedAgoOf(activeChild, now)}` : 'No check-in yet'} />
-                      <HeroChip icon={activeChild.bedtime ? 'moon' : 'circle'} label={activeChild.bedtime ? 'Paused' : 'Active'} />
+                      <HeroChip icon={activeChild.bedtime ? 'moon' : 'circle'} label={activeChild.bedtime ? (live ? 'Break requested' : 'Paused') : 'Active'} />
                     </View>
                   ) : (
                     <View style={styles.chips}>
                       <HeroChip icon="battery" label={`${activeChild.battery}%`} />
                       <HeroChip icon="map-pin" label={activeChild.place} />
-                      <HeroChip icon={activeChild.bedtime ? 'moon' : 'circle'} label={activeChild.bedtime ? 'Paused' : 'Active'} />
+                      <HeroChip icon={activeChild.bedtime ? 'moon' : 'circle'} label={activeChild.bedtime ? (live ? 'Break requested' : 'Paused') : 'Active'} />
                     </View>
                   )}
                 </View>
@@ -256,7 +256,7 @@ export default function Dashboard() {
                 {activeChild.bedtime ? (
                   <HeroBtn icon="play" label="Resume" onPress={() => resumeDevice(activeChildId)} />
                 ) : (
-                  <HeroBtn icon="pause" label={live ? 'Pause screen time' : 'Pause device'} onPress={() => pauseDevice(activeChildId)} />
+                  <HeroBtn icon="pause" label={live ? 'Request screen break' : 'Pause device'} onPress={() => pauseDevice(activeChildId)} />
                 )}
                 <HeroBtn icon="plus-circle" label={live ? 'Limit +30 min' : 'Add 30 min'} onPress={() => grantBonus(activeChildId, 30)} />
               </View>
@@ -270,7 +270,7 @@ export default function Dashboard() {
             ) : (
               <MiniStat value={fmtDuration(activeChild.usedMin)} caption="Used today" color={colors.primary} icon="clock" onPress={() => router.push("/screen-time")} />
             )}
-            <MiniStat value={`${blocked}`} caption="Apps blocked" color={colors.accent} icon="slash" onPress={() => router.push("/app-limits")} />
+            <MiniStat value={`${blocked}`} caption={live ? "App rules" : "Apps blocked"} color={colors.accent} icon="slash" onPress={() => router.push("/app-limits")} />
             <MiniStat value={`${pending.length}`} caption="Requests" color={colors.warning} icon="inbox" onPress={() => requestsScrollRef.current?.scrollTo({ y: requestsY.current, animated: true })} />
           </View>
 
