@@ -9,6 +9,7 @@ import { APP_NAME } from '@/config/variant';
 import { StoreProvider, useStore } from '@/state/store';
 import { LinkProvider, useLink } from '@/sync/link';
 import { ManagedDevicePolicy } from '@/components/ManagedDevicePolicy';
+import { UsageSharingProvider } from '@/components/UsageSharing';
 import { PolicyStatus } from '@/sync/policyStatus';
 import { palette } from '@/theme';
 
@@ -32,7 +33,9 @@ export default function RootLayout() {
           <LinkProvider>
             <ThemeProvider value={navTheme}>
               <ManagedDevicePolicy onStatus={setPolicyStatus} />
-              <PolicyStatus.Provider value={policyStatus}><Screens scheme={scheme} /></PolicyStatus.Provider>
+              <PolicyStatus.Provider value={policyStatus}>
+                <UsageSharingProvider><Screens scheme={scheme} /></UsageSharingProvider>
+              </PolicyStatus.Provider>
               <StatusBar style="auto" />
             </ThemeProvider>
           </LinkProvider>
