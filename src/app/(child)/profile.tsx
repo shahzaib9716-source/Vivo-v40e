@@ -1,14 +1,14 @@
 import { DeviceSharing } from '@/components/DeviceSharing';
 import { useState } from 'react';
 import { router } from 'expo-router';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 
-import { Avatar, Card, IconBadge, Row, Screen, SectionLabel, Text } from '@/components/ui';
+import { Avatar, Card, Row, Screen, SectionLabel, Text } from '@/components/ui';
 import { linkSummary } from '@/components/LinkParts';
 import { useLink } from '@/sync/link';
 import { useStore, fmtDuration } from '@/state/store';
-import { radius, shadow, spacing, useTheme } from '@/theme';
+import { radius, spacing, useTheme } from '@/theme';
 
 const HELP = [
   {

@@ -38,7 +38,9 @@ jobs:
           npm_config_fetch_retry_mintimeout: '20000'
           npm_config_fetch_retry_maxtimeout: '120000'
         run: npm ci --no-audit --no-fund
+      - run: npm run lint
       - name: TypeScript validation
         run: npm run typecheck
       - name: Synchronization regression tests
         run: npm run test:sync
+

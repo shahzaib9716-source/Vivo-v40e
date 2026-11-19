@@ -1,7 +1,6 @@
 import { useCallback } from 'react';
 import { Tabs, useFocusEffect } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
-import { Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useStore } from '@/state/store';
@@ -58,3 +57,4 @@ export default function ParentLayout() {
     </Tabs>
   );
 }
+

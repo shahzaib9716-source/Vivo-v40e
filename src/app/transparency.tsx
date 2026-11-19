@@ -20,7 +20,7 @@ const SHARED = [
  * phone itself (no location, no usage, no battery), so those are listed as not shared.
  */
 const LIVE_SHARED = [
-  { icon: 'map-pin', label: 'Shared location', detail: 'A GPS report when you choose Share my current location', parentDetail: 'The latest location your child chooses to share' },
+  { icon: 'map-pin', label: 'Shared location', detail: 'A location you share once or every minute while the Me tab is open', parentDetail: 'The latest location your child chooses to share' },
   { icon: 'grid', label: 'Shared usage', detail: 'Launchable apps and foreground time when you share a usage report', parentDetail: 'Apps and foreground time in the latest report your child shared' },
   { icon: 'send', label: 'Requests', detail: 'When you ask for more time or to unlock an app', parentDetail: 'When your child asks for more time or to unlock an app' },
   { icon: 'check-circle', label: 'Check-ins', detail: 'The time you tap “Check in”. Not where you are', parentDetail: 'The time your child taps “Check in”. Not where they are' },

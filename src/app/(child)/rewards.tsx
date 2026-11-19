@@ -41,7 +41,7 @@ export default function ChildRewards() {
         </View>
       </LinearGradient>
 
-      <SectionLabel>Today's tasks</SectionLabel>
+      <SectionLabel>Today’s tasks</SectionLabel>
       <View style={{ gap: spacing.sm }}>
         {tasks.map((t) => (
           <Card key={t.id} onPress={() => toggleTask(t.id)} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
@@ -70,3 +70,4 @@ const styles = StyleSheet.create({
   check: { width: 30, height: 30, borderRadius: 999, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   pts: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.pill },
 });
+

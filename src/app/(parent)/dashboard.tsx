@@ -79,12 +79,12 @@ export default function Dashboard() {
   const lastResolve = useRef(0);
   const requestsScrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
   const requestsY = useRef(0);
-  const resolve = (id: string, approve: boolean) => {
+  const resolve = useCallback((id: string, approve: boolean) => {
     const now = Date.now();
     if (now - lastResolve.current < 500) return;
     lastResolve.current = now;
     resolveRequest(id, approve);
-  };
+  }, [resolveRequest]);
 
   const [hello, setHello] = useState(greeting);
   useFocusEffect(

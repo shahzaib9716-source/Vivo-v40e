@@ -92,11 +92,10 @@ export default function Notifications() {
     .map((a) => a.id)
     .join('|');
 
+  const newlyArrived = alerts.filter(a => a.unread && !fresh.has(a.id));
+  if (newlyArrived.length) setFresh(new Set([...fresh, ...newlyArrived.map(a => a.id)]));
   useEffect(() => {
-    if (!unreadKey) return;
-    const ids = unreadKey.split('|');
-    setFresh((prev) => (ids.every((id) => prev.has(id)) ? prev : new Set([...prev, ...ids])));
-    markAlertsRead();
+    if (unreadKey) markAlertsRead();
   }, [unreadKey, markAlertsRead]);
 
   // Alerts are stored newest first. While an SOS is open, the latest one is the live emergency: it
@@ -256,7 +255,7 @@ export default function Notifications() {
         <View style={styles.empty}>
           <Feather name="check-circle" size={20} color={colors.textFaint} />
           <Text variant="small" tone="faint">
-            You're all caught up
+            You’re all caught up
           </Text>
         </View>
       )}
@@ -300,3 +299,4 @@ const styles = StyleSheet.create({
 
   empty: { alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xxxl },
 });
+
