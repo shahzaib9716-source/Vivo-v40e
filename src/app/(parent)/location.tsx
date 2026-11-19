@@ -70,7 +70,17 @@ export default function Location() {
 
           <View style={{ paddingHorizontal: spacing.xl }}>
             <View style={[styles.mapWrap, { borderColor: colors.border }]}>
-              <MockMap height={260} pinColor={colors.primary} rounded={false} />
+              {live ? (
+                <View style={{ height: 260, alignItems: 'center', justifyContent: 'center', padding: spacing.xl, backgroundColor: colors.surface }}>
+                  <Feather name="map-pin" size={34} color={colors.textMuted} />
+                  <Text variant="title" center style={{ marginTop: spacing.md }}>Location not available</Text>
+                  <Text variant="small" tone="muted" center style={{ marginTop: spacing.sm }}>
+                    This child device has not shared GPS coordinates. The map will be available after location sharing is implemented and enabled on the child's phone.
+                  </Text>
+                </View>
+              ) : (
+                <MockMap height={260} pinColor={colors.primary} rounded={false} />
+              )}
             </View>
 
             <Card style={{ marginTop: -28, marginHorizontal: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
@@ -108,11 +118,11 @@ export default function Location() {
 
           <View style={{ paddingHorizontal: spacing.xl, marginTop: spacing.xl }}>
             <View style={styles.actions}>
-              <ActionTile icon="navigation" label="Directions" color={categoryColors.location} onPress={() => run('directions')} />
-              <ActionTile icon="bell" label="Ping device" color={colors.accent} onPress={() => run('ping')} />
-              <ActionTile icon="clock" label="History" color={colors.info} onPress={() => (router.push as any)('/location-history')} />
+              {!live && <ActionTile icon="navigation" label="Directions" color={categoryColors.location} onPress={() => run('directions')} />}
+              <ActionTile icon={live ? 'message-circle' : 'bell'} label={live ? 'Message child' : 'Ping device'} color={colors.accent} onPress={() => live ? (router.push as any)(`/messages?childId=${activeChildId}`) : run('ping')} />
+              {!live && <ActionTile icon="clock" label="History" color={colors.info} onPress={() => (router.push as any)('/location-history')} />}
             </View>
-            {shownAction?.kind === 'ping' && (
+            {!live && shownAction?.kind === 'ping' && (
               <InlineNote
                 tone="success"
                 title={`Ping sent to ${activeChild.deviceName}`}
@@ -120,7 +130,7 @@ export default function Location() {
                 style={styles.note}
               />
             )}
-            {shownAction?.kind === 'directions' && (
+            {!live && shownAction?.kind === 'directions' && (
               <InlineNote
                 icon="navigation"
                 title={`Directions to ${activeChild.place}`}
