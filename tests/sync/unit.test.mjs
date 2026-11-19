@@ -6,6 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import "./app-activity.test.mjs";
+import "./activity-import.test.mjs";
 const files = ['ids', 'labels', 'schema', 'reconcile', 'single', 'persist', 'scenarios'];
 
 for (const file of files) {
