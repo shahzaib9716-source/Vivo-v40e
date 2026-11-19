@@ -24,8 +24,20 @@ jobs:
         with:
           node-version: '22'
           cache: npm
+      - name: Verify npm registry connectivity
+        shell: bash
+        run: |
+          node --version
+          npm --version
+          npm config get registry
+          node -e "require('dns').promises.lookup('registry.npmjs.org').then(x => console.log(x)).catch(e => { console.error(e); process.exitCode = 1 })"
       - name: Install locked dependencies
-        run: npm ci
+        env:
+          npm_config_registry: https://registry.npmjs.org/
+          npm_config_fetch_retries: '5'
+          npm_config_fetch_retry_mintimeout: '20000'
+          npm_config_fetch_retry_maxtimeout: '120000'
+        run: npm ci --no-audit --no-fund
       - name: TypeScript validation
         run: npm run typecheck
       - name: Synchronization regression tests
