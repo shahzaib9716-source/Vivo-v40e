@@ -77,6 +77,8 @@ export default function Dashboard() {
   // After a request is resolved its card leaves and the next one slides into the same spot, so a
   // quick second tap would land on a different request. Ignore presses for half a second.
   const lastResolve = useRef(0);
+  const requestsScrollRef = useRef<ScrollView>(null);
+  const requestsY = useRef(0);
   const resolve = (id: string, approve: boolean) => {
     const now = Date.now();
     if (now - lastResolve.current < 500) return;
@@ -94,7 +96,7 @@ export default function Dashboard() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <SafeAreaView edges={['top']} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={{ paddingBottom: spacing.huge }} showsVerticalScrollIndicator={false}>
+        <ScrollView ref={requestsScrollRef} contentContainerStyle={{ paddingBottom: spacing.huge }} showsVerticalScrollIndicator={false}>
           {/* Top bar */}
           <View style={styles.topbar}>
             <View>
@@ -264,12 +266,12 @@ export default function Dashboard() {
           {/* Stat row */}
           <View style={styles.statRow}>
             {live ? (
-              <MiniStat value={fmtDuration(activeChild.limitMin)} caption="Daily limit" color={colors.primary} icon="clock" />
+              <MiniStat value={fmtDuration(activeChild.limitMin)} caption="Daily limit" color={colors.primary} icon="clock" onPress={() => router.push("/screen-time")} />
             ) : (
-              <MiniStat value={fmtDuration(activeChild.usedMin)} caption="Used today" color={colors.primary} icon="clock" />
+              <MiniStat value={fmtDuration(activeChild.usedMin)} caption="Used today" color={colors.primary} icon="clock" onPress={() => router.push("/screen-time")} />
             )}
-            <MiniStat value={`${blocked}`} caption="Apps blocked" color={colors.accent} icon="slash" />
-            <MiniStat value={`${pending.length}`} caption="Requests" color={colors.warning} icon="inbox" />
+            <MiniStat value={`${blocked}`} caption="Apps blocked" color={colors.accent} icon="slash" onPress={() => router.push("/app-limits")} />
+            <MiniStat value={`${pending.length}`} caption="Requests" color={colors.warning} icon="inbox" onPress={() => requestsScrollRef.current?.scrollTo({ y: requestsY.current, animated: true })} />
           </View>
 
           {/* Messages shortcut */}
@@ -296,7 +298,7 @@ export default function Dashboard() {
           </View>
 
           {/* Pending requests */}
-          <View style={styles.section}>
+          <View style={styles.section} onLayout={(event) => { requestsY.current = event.nativeEvent.layout.y; }}>
             <SectionTitle
               title="Needs your approval"
               actionLabel={pending.length > REQUEST_PREVIEW ? (showAllRequests ? 'Show less' : `Show all ${pending.length}`) : undefined}
@@ -381,10 +383,10 @@ function HeroBtn({ icon, label, onPress }: { icon: keyof typeof Feather.glyphMap
   );
 }
 
-function MiniStat({ value, caption, color, icon }: { value: string; caption: string; color: string; icon: keyof typeof Feather.glyphMap }) {
+function MiniStat({ value, caption, color, icon, onPress }: { value: string; caption: string; color: string; icon: keyof typeof Feather.glyphMap; onPress: () => void }) {
   const { colors } = useTheme();
   return (
-    <View style={[styles.miniStat, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${caption}: ${value}`} style={({ pressed }) => [styles.miniStat, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]}>
       <Feather name={icon} size={16} color={color} />
       <Text variant="h3" style={{ marginTop: 4 }}>
         {value}
@@ -392,7 +394,7 @@ function MiniStat({ value, caption, color, icon }: { value: string; caption: str
       <Text variant="tiny" tone="muted">
         {caption}
       </Text>
-    </View>
+    </Pressable>
   );
 }
 
