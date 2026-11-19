@@ -1,4 +1,4 @@
-import { doc, runTransaction, serverTimestamp, type Firestore } from 'firebase/firestore';
+import { doc, getDocFromServer, runTransaction, serverTimestamp, type Firestore } from 'firebase/firestore';
 
 export function decideExtraTime(database: Firestore, family: string, child: string, id: string, parent: string, approve: boolean) {
   const childRef = doc(database, 'families', family, 'children', child);
@@ -16,5 +16,11 @@ export function decideExtraTime(database: Firestore, family: string, child: stri
     }
     tx.update(requestRef, { status: approve ? 'approved' : 'denied', resolvedBy: parent, resolvedAt: serverTimestamp() });
     return approve ? 'Time request approved.' : 'Time request declined.';
+  }).catch(async error => {
+    if (error.code === 'permission-denied') {
+      const latest = (await getDocFromServer(requestRef)).data();
+      if (latest?.status === 'approved' || latest?.status === 'denied') return 'Already answered.';
+    }
+    throw error;
   });
 }
