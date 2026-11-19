@@ -20,6 +20,8 @@ const SHARED = [
  * phone itself (no location, no usage, no battery), so those are listed as not shared.
  */
 const LIVE_SHARED = [
+  { icon: 'map-pin', label: 'Shared location', detail: 'A location you share once or every minute while the Me tab is open', parentDetail: 'The latest location your child chooses to share' },
+  { icon: 'grid', label: 'Shared usage', detail: 'Launchable apps and foreground time when you share a usage report', parentDetail: 'Apps and foreground time in the latest report your child shared' },
   { icon: 'send', label: 'Requests', detail: 'When you ask for more time or to unlock an app', parentDetail: 'When your child asks for more time or to unlock an app' },
   { icon: 'check-circle', label: 'Check-ins', detail: 'The time you tap “Check in”. Not where you are', parentDetail: 'The time your child taps “Check in”. Not where they are' },
   { icon: 'message-circle', label: 'Messages in Haven', detail: 'The chat between you and your parent in this app', parentDetail: 'The chat between you and your child in this app' },
@@ -29,8 +31,6 @@ const LIVE_SHARED = [
 ] as const;
 
 const LIVE_NOT_SHARED = [
-  { label: 'Your location', parentLabel: 'Their location', detail: 'This version of Haven does not read where the phone is', parentDetail: 'This version of Haven does not read where a phone is' },
-  { label: 'Screen time and apps', parentLabel: 'Screen time and apps', detail: 'Haven does not measure what you use. Limits are agreements, shown here', parentDetail: 'Haven does not measure use or lock the phone. Limits are agreements, shown on their phone' },
   { label: 'Other messages, calls and photos', parentLabel: 'Other messages, calls and photos', detail: 'Haven does not read texts, chats, calls or your camera roll', parentDetail: 'Haven does not read texts, chats, calls or the camera roll' },
   { label: 'Browsing and what you watch', parentLabel: 'Browsing and what they watch', detail: 'Those parent screens are previews with example data only', parentDetail: 'Those screens are previews with example data only' },
   { label: 'Hidden tracking', parentLabel: 'Hidden tracking', detail: 'Nothing runs secretly — this screen shows it all', parentDetail: 'Nothing runs secretly. Your child sees this same list' },
@@ -111,3 +111,4 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md },
   icon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
 });
+

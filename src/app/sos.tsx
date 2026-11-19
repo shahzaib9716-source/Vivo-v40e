@@ -382,12 +382,12 @@ function SentPanel({ live, onSafe, onMessage }: { live: boolean; onSafe: () => v
           style={({ pressed }) => [styles.safeBtn, pressed && styles.pressed]}>
           <Feather name="check" size={20} color={SAFE_INK} />
           <Text variant="bodyStrong" color={SAFE_INK}>
-            I'm safe now
+            I’m safe now
           </Text>
         </Pressable>
         <ActionRow label="Message my family" onPress={onMessage} />
         <Text variant="small" color={WHITE} center>
-          Closing this screen keeps the SOS on until you say you're safe.
+          Closing this screen keeps the SOS on until you say you’re safe.
         </Text>
       </View>
     </>
@@ -478,3 +478,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 });
+

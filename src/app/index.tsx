@@ -85,7 +85,7 @@ export default function Welcome() {
         <ScrollView contentContainerStyle={styles.bottom} bounces={false} showsVerticalScrollIndicator={false}>
           <Entrance delay={150} style={styles.intro}>
             <Text variant="h3" style={{ marginBottom: spacing.xs }}>
-              Who's setting up?
+              Who’s setting up?
             </Text>
             <Text variant="small" tone="muted" style={{ marginBottom: spacing.lg }}>
               Choose how this device is used. Once it joins your family, that role is fixed by your family’s account.
@@ -115,7 +115,7 @@ export default function Welcome() {
             <View style={styles.footer}>
               <Feather name="lock" size={13} color={colors.textFaint} />
               <Text variant="tiny" tone="faint" style={{ flex: 1 }}>
-                Haven is built around transparency — children can always see what's shared and limited.
+                Haven is built around transparency — children can always see what’s shared and limited.
               </Text>
             </View>
           </Entrance>
@@ -195,3 +195,4 @@ const styles = StyleSheet.create({
   footerWrap: { marginTop: 'auto' },
   footer: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.lg },
 });
+

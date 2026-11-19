@@ -28,7 +28,7 @@ export default function Activity() {
           Activity
         </Text>
         <Text variant="body" tone="muted" style={{ marginTop: 2 }}>
-          {firstName}'s week
+          {firstName}’s week
         </Text>
       </View>
       <SampleNote about="usage" />
@@ -88,3 +88,4 @@ export default function Activity() {
     </Screen>
   );
 }
+

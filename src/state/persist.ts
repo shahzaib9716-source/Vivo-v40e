@@ -77,7 +77,7 @@ const isListOf = <T>(v: unknown, item: Guard<T>): v is T[] => Array.isArray(v) &
 const isWeekOf = <T>(v: unknown, item: Guard<T>): v is T[] => isListOf(v, item) && v.length === 7;
 
 const APP_CATEGORIES: readonly AppCategory[] = ['social', 'games', 'video', 'education', 'music', 'web', 'messaging', 'creativity'];
-const REQUEST_KINDS: readonly FamilyRequest['kind'][] = ['extra_time', 'unlock_app', 'bedtime'];
+const REQUEST_KINDS: readonly FamilyRequest['kind'][] = ['extra_time', 'unlock_app', 'install_app', 'bedtime'];
 const REQUEST_STATUSES: readonly FamilyRequest['status'][] = ['pending', 'approved', 'denied'];
 const SENDERS: readonly ChatMessage['from'][] = ['parent', 'child'];
 const SITE_LISTS: readonly SiteRule['list'][] = ['blocked', 'allowed'];
@@ -306,3 +306,4 @@ export function loadState(raw: string | null | undefined, seed: PersistedState):
 export function resolvedRequestIds(requests: readonly FamilyRequest[]): Set<string> {
   return new Set(requests.filter((r) => r.status !== 'pending').map((r) => r.id));
 }
+

@@ -1,0 +1,54 @@
+name: Android preview APK
+on:
+  push:
+    branches: ['build/haven-android-preview', 'build/haven-signed-apk']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - run: npm ci --no-audit --no-fund
+      - run: npm run typecheck && npm run test:sync
+      - name: Build with the existing Haven signing credentials
+        if: github.ref_name == 'build/haven-signed-apk'
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          ORG_GRADLE_PROJECT_reactNativeArchitectures: arm64-v8a
+        run: |
+          test -n "$EXPO_TOKEN" || { echo "::error::Haven's Expo credential is unavailable"; exit 1; }
+          npx --yes eas-cli@19.1.0 build --local --platform android --profile preview --non-interactive --output "$RUNNER_TEMP/Haven.apk"
+      - if: github.ref_name != 'build/haven-signed-apk'
+        run: npx --no-install expo prebuild --platform android --no-install
+      - name: Assemble standalone ARM64 preview
+        if: github.ref_name != 'build/haven-signed-apk'
+        working-directory: android
+        env:
+          NODE_ENV: production
+        run: ./gradlew :app:assembleRelease -PreactNativeArchitectures=arm64-v8a
+      - name: Verify preview signature
+        run: |
+          if [[ "$GITHUB_REF_NAME" != "build/haven-signed-apk" ]]; then
+            cp android/app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/Haven.apk"
+          fi
+          signer="$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)"
+          "$signer" verify --verbose --print-certs "$RUNNER_TEMP/Haven.apk"
+          sha256sum "$RUNNER_TEMP/Haven.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Haven-Android-arm64-preview
+          path: ${{ runner.temp }}/Haven.apk
+          if-no-files-found: error
+          retention-days: 7

@@ -174,7 +174,7 @@ export default function LinkDevice() {
                 style={styles.input}
               />
               <Text variant="small" tone="muted" center>
-                {PAIRING_CODE_LENGTH} letters and numbers from the parent's phone
+                {PAIRING_CODE_LENGTH} letters and numbers from the parent’s phone
               </Text>
               <Button label={joinAs === 'child' ? 'Link this phone' : 'Join the family'} icon="link" loading={act.busy === 'join'} disabled={!complete} onPress={join} full />
             </Card>
@@ -208,3 +208,4 @@ const styles = StyleSheet.create({
   gapBottom: { marginBottom: spacing.lg },
   gapTop: { marginTop: spacing.md },
 });
+

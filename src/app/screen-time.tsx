@@ -6,7 +6,8 @@ import { InlineNote } from '@/components/InlineNote';
 import { Button, Card, Chip, Header, ProgressRing, Screen, SectionLabel, Text } from '@/components/ui';
 import { useStore, fmtDuration } from '@/state/store';
 import { categoryColors, radius, spacing, useTheme } from '@/theme';
-import { SampleNote } from '@/components/SampleNote';
+import { DeviceReport } from '@/components/DeviceReport';
+import { useLink } from '@/sync/link';
 
 const PRESETS = [60, 120, 180, 240];
 const STEP = 15;
@@ -18,6 +19,7 @@ export default function ScreenTime() {
   const { activeChild, activeChildId, adjustLimit, grantBonus, pauseDevice, resumeDevice, live } = useStore();
   const [lastAction, setLastAction] = useState<Action | null>(null);
 
+  const link = useLink();
   const firstName = activeChild.name.split(' ')[0];
   const left = Math.max(0, activeChild.limitMin - activeChild.usedMin);
   const progress = activeChild.limitMin > 0 ? Math.min(1, activeChild.usedMin / activeChild.limitMin) : 1;
@@ -49,14 +51,14 @@ export default function ScreenTime() {
   return (
     <Screen>
       <Header back title="Screen Time" subtitle={firstName} />
-      <SampleNote about="usage" />
+      
 
-      <Card style={{ alignItems: 'center', paddingVertical: spacing.xl }}>
+      {live ? (link.familyId && link.role === 'parent' && <DeviceReport key={link.familyId + '/' + activeChildId} family={link.familyId} child={activeChildId} />) : <Card style={{ alignItems: 'center', paddingVertical: spacing.xl }}>
         <ProgressRing progress={progress} size={168} stroke={16} label={fmtDuration(left)} sublabel="remaining today" />
         <Text variant="small" tone="muted" style={{ marginTop: spacing.md }}>
           {fmtDuration(activeChild.usedMin)} used of {fmtDuration(activeChild.limitMin)}
         </Text>
-      </Card>
+      </Card>}
 
       <View style={{ marginTop: spacing.xl }}>
         <SectionLabel>Daily limit</SectionLabel>
@@ -90,7 +92,7 @@ export default function ScreenTime() {
         </Card>
       </View>
 
-      <View style={{ marginTop: spacing.xl }}>
+      {!live && <View style={{ marginTop: spacing.xl }}>
         <SectionLabel>Where the time goes</SectionLabel>
         <Card padded={false} style={{ paddingHorizontal: spacing.lg }}>
           {byCategory.map(([cat, mins]) => (
@@ -109,7 +111,7 @@ export default function ScreenTime() {
             </View>
           ))}
         </Card>
-      </View>
+      </View>}
 
       <View style={{ marginTop: spacing.xl, gap: spacing.sm }}>
         <Button
@@ -189,3 +191,4 @@ const styles = StyleSheet.create({
   presets: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg, flexWrap: 'wrap' },
   catRow: { paddingVertical: spacing.sm },
 });
+

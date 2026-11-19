@@ -125,7 +125,7 @@ export default function ChildHome() {
                 style={({ pressed }) => [styles.sosBtn, pressed && styles.pressed]}>
                 <Feather name="check" size={18} color={SOS_INK} />
                 <Text variant="bodyStrong" color={SOS_INK}>
-                  I'm safe now
+                  I’m safe now
                 </Text>
               </Pressable>
             </LinearGradient>
@@ -206,7 +206,7 @@ export default function ChildHome() {
               <View style={{ flex: 1 }}>
                 <Text variant="title">Link to your family</Text>
                 <Text variant="small" tone="muted">
-                  Enter the code from your parent's phone
+                  Enter the code from your parent’s phone
                 </Text>
               </View>
             </LinkCard>
@@ -537,3 +537,4 @@ const styles = StyleSheet.create({
 
   blocked: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.md, paddingHorizontal: spacing.xs },
 });
+

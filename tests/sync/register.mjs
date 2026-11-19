@@ -18,7 +18,7 @@ registerHooks({
     if (specifier.startsWith('@/')) {
       target = path.join(root, 'src', specifier.slice(2));
     } else if ((specifier.startsWith('./') || specifier.startsWith('../')) && context.parentURL?.startsWith('file:')) {
-      target = path.resolve(path.dirname(fileURLToPath(context.parentURL)), specifier);
+      target = fileURLToPath(new URL(specifier, context.parentURL));
     }
     if (target && !existsSync(target)) {
       if (existsSync(`${target}.ts`)) target = `${target}.ts`;
@@ -29,3 +29,4 @@ registerHooks({
     return result.url.endsWith('.ts') ? { ...result, format: 'module-typescript' } : result;
   },
 });
+

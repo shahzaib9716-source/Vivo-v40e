@@ -688,7 +688,7 @@ function TransparencyArt({ index, progress, accent }: ArtProps) {
               <Feather name="eye" size={15} color={accent} />
             </View>
             <View style={styles.flex}>
-              <Text variant="smallStrong">What's shared</Text>
+              <Text variant="smallStrong">What’s shared</Text>
               <Text variant="tiny" tone="faint" numberOfLines={1}>
                 Visible to you both
               </Text>
@@ -783,7 +783,7 @@ function SetupArt({ index, progress, accent }: ArtProps) {
             Linked
           </Text>
           <Text variant="tiny" tone="faint">
-            Mia's Tablet
+            Mia’s Tablet
           </Text>
           <View style={[styles.bar, { width: 52, marginTop: 12, backgroundColor: colors.surfaceSunken }]} />
         </View>
@@ -945,3 +945,4 @@ const styles = StyleSheet.create({
   linkRing: { width: 44, height: 44, borderRadius: 22, padding: 3 },
   linkBadge: { flex: 1, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
 });
+

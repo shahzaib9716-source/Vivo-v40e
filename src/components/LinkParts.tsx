@@ -1,3 +1,4 @@
+import { useNow } from '@/state/store';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
@@ -103,7 +104,7 @@ export function LinkStatusCard({ link }: { link: LinkState }) {
  */
 export function DeviceList({ devices, onRemove, childName }: { devices: FamilyMember[]; onRemove?: (member: FamilyMember) => void; childName?: (childId: string) => string | null }) {
   const { colors } = useTheme();
-  const now = Date.now();
+  const now = useNow();
   if (devices.length === 0) return null;
   return (
     <Card padded={false} style={styles.list}>
@@ -220,3 +221,4 @@ const styles = StyleSheet.create({
   note: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg, paddingHorizontal: spacing.xs },
   noteIcon: { marginTop: 2 },
 });
+

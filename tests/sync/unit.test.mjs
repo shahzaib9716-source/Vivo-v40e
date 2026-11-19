@@ -18,3 +18,15 @@ for (const file of files) {
     for (const c of cases) await t.test(c.name, () => c.run(assert));
   });
 }
+
+test('GPS status distinguishes fix age, cache, missing measurements and clock skew', async () => {
+  const { locationStatus } = await import('../../src/sync/locationStatus.ts');
+  const now = 900000;
+  assert.equal(locationStatus(now - 299999, false, now, false), 'Recent shared location');
+  assert.equal(locationStatus(now - 300000, false, now, false), 'Stale location');
+  assert.equal(locationStatus(null, false, now, false), 'Last report · GPS fix time unknown');
+  assert.equal(locationStatus(now, true, now, false), 'Saved location · awaiting server confirmation');
+  assert.equal(locationStatus(undefined, true, now, false), 'No cached location');
+  assert.equal(locationStatus(now + 1, false, now, false), 'Last report · check device clocks');
+  assert.equal(locationStatus(now, true, now, true), 'Location unavailable');
+});

@@ -37,7 +37,7 @@ export default function AboutVersion() {
         ))}
       </Card>
 
-      <SectionLabel>Not in this version</SectionLabel>
+      <SectionLabel>Device capabilities</SectionLabel>
       <Card padded={false} style={styles.group}>
         {features.map((item) => (
           <View key={item.key} accessible accessibilityLabel={`${item.implemented ? 'Works' : 'Not in this version'}: ${item.title}. ${item.note}`} style={styles.row}>
@@ -55,8 +55,7 @@ export default function AboutVersion() {
       </Card>
 
       <Text variant="small" tone="faint" style={styles.foot}>
-        Haven is the same app on Android and iPhone. Where it shows usage numbers, maps or battery levels in a linked family, those
-        are examples and are marked as such.
+        The child can review sharing permissions in Android Settings.
       </Text>
     </Screen>
   );
@@ -69,3 +68,4 @@ const styles = StyleSheet.create({
   icon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   foot: { paddingHorizontal: spacing.xs },
 });
+

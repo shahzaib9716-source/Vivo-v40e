@@ -1,3 +1,5 @@
+import { DeviceReport } from '@/components/DeviceReport';
+import { useLink } from '@/sync/link';
 import { useState } from 'react';
 import { Pressable, ScrollView, View, StyleSheet } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -13,6 +15,14 @@ const FILTERS = ['All', 'Social', 'Games', 'Video', 'Messaging', 'Education'] as
 const PILL_HIT_SLOP = { top: 6, bottom: 6, left: 4, right: 4 };
 
 export default function AppLimits() {
+  const { live, activeChild } = useStore();
+  const link = useLink();
+  if (!live) return <SampleAppLimits />;
+  return <Screen><Header back title="App limits" subtitle={activeChild.name} />
+    {link.role === 'parent' && link.familyId && <DeviceReport manage key={link.familyId + '/' + activeChild.id} family={link.familyId} child={activeChild.id} />}
+  </Screen>;
+}
+function SampleAppLimits() {
   const { colors } = useTheme();
   const { activeChild, activeChildId, toggleApp, setAppLimit } = useStore();
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>('All');
@@ -145,3 +155,4 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
 });
+

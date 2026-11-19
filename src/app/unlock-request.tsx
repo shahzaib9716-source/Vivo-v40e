@@ -125,7 +125,7 @@ export default function UnlockRequest() {
           <View style={styles.note}>
             <Feather name="info" size={14} color={colors.textMuted} />
             <Text variant="small" tone="muted" style={styles.flex}>
-              Your family sees your request and decides. You'll find their answer in Requests.
+              Your family sees your request and decides. You’ll find their answer in Requests.
             </Text>
           </View>
         </>
@@ -298,3 +298,4 @@ const styles = StyleSheet.create({
   sentTitle: { marginTop: spacing.xl },
   sentBody: { marginTop: spacing.sm, maxWidth: 300 },
 });
+

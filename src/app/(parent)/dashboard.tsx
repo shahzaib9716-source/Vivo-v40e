@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState, type ComponentRef } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect } from 'expo-router';
 import { Pressable, ScrollView, View, StyleSheet } from 'react-native';
@@ -77,14 +77,14 @@ export default function Dashboard() {
   // After a request is resolved its card leaves and the next one slides into the same spot, so a
   // quick second tap would land on a different request. Ignore presses for half a second.
   const lastResolve = useRef(0);
-  const requestsScrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
+  const requestsScrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
   const requestsY = useRef(0);
-  const resolve = (id: string, approve: boolean) => {
+  const resolve = useCallback((id: string, approve: boolean) => {
     const now = Date.now();
     if (now - lastResolve.current < 500) return;
     lastResolve.current = now;
     resolveRequest(id, approve);
-  };
+  }, [resolveRequest]);
 
   const [hello, setHello] = useState(greeting);
   useFocusEffect(
@@ -468,3 +468,4 @@ const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   quick: { width: '48%', flexGrow: 1, padding: spacing.lg, borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth },
 });
+

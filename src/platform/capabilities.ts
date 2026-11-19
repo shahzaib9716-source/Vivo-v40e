@@ -1,3 +1,4 @@
+import { requireOptionalNativeModule } from 'expo';
 import { Platform } from 'react-native';
 
 /**
@@ -31,17 +32,17 @@ const os = Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android'
 
 const NOTES: Record<DeviceFeature, Record<'ios' | 'android' | 'web', { platform: FeatureInfo['platform']; note: string }>> = {
   usage: {
-    android: { platform: 'possible', note: 'Android can report app use to an app the family has given “Usage access” in system settings. That needs a native module that this version does not include.' },
+    android: { platform: 'possible', note: 'Share launchable apps and foreground time from the child profile after granting Usage access.' },
     ios: { platform: 'restricted', note: 'On iPhone, app use is only available through Apple’s Screen Time framework, which needs a special permission from Apple for the app. Until then, use Screen Time in iOS Settings.' },
     web: { platform: 'restricted', note: 'A browser cannot see how a device is used.' },
   },
   blocking: {
-    android: { platform: 'possible', note: 'Android lets a family-safety app hold back apps only with extra system permissions and a native module. This version shows the agreed rules; it does not hold apps back.' },
+    android: { platform: 'possible', note: 'App suspension requires device-owner enrollment. Saved rules apply to selected eligible packages.' },
     ios: { platform: 'restricted', note: 'On iPhone, only Apple’s Screen Time can limit or block apps. Haven shows the agreed rules; set the same limits in iOS Settings, Screen Time, to enforce them.' },
     web: { platform: 'restricted', note: 'A browser cannot limit other apps.' },
   },
   location: {
-    android: { platform: 'possible', note: 'Android shares location with an app only after the person using the phone allows it. This version does not ask for it: check-ins send the time, not the place.' },
+    android: { platform: 'possible', note: 'The child can share or clear a location report from Me after granting foreground location access.' },
     ios: { platform: 'possible', note: 'iPhone shares location with an app only after the person using the phone allows it. This version does not ask for it: check-ins send the time, not the place.' },
     web: { platform: 'possible', note: 'This version does not ask for location.' },
   },
@@ -61,7 +62,7 @@ const TITLES: Record<DeviceFeature, string> = {
 
 /** Device features in a fixed order, described for the platform this app is running on. */
 export function deviceFeatures(): FeatureInfo[] {
-  return (Object.keys(TITLES) as DeviceFeature[]).map((key) => ({ key, title: TITLES[key], implemented: false, ...NOTES[key][os] }));
+  return (Object.keys(TITLES) as DeviceFeature[]).map((key) => ({ key, title: TITLES[key], implemented: (key === 'location' || key === 'usage') && os === 'android' && !!requireOptionalNativeModule('HavenDevice'), ...NOTES[key][os] }));
 }
 
 /** True when this build really does `feature` on this phone. Screens use it to decide what to show as real. */
@@ -78,3 +79,4 @@ export const SYNCED_FEATURES: readonly { icon: string; title: string; detail: st
   { icon: 'award', title: 'Tasks and rewards', detail: 'Ticked by the child, seen by the parent' },
   { icon: 'alert-circle', title: 'SOS', detail: 'Raised by the child, shown on the parent’s phone while Haven is open' },
 ];
+

@@ -1,13 +1,14 @@
+import { DeviceSharing } from '@/components/DeviceSharing';
 import { useState } from 'react';
 import { router } from 'expo-router';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 
-import { Avatar, Card, IconBadge, Row, Screen, SectionLabel, Text } from '@/components/ui';
+import { Avatar, Card, Row, Screen, SectionLabel, Text } from '@/components/ui';
 import { linkSummary } from '@/components/LinkParts';
 import { useLink } from '@/sync/link';
 import { useStore, fmtDuration } from '@/state/store';
-import { radius, shadow, spacing, useTheme } from '@/theme';
+import { radius, spacing, useTheme } from '@/theme';
 
 const HELP = [
   {
@@ -92,6 +93,9 @@ export default function ChildProfileTab() {
         </Card>
       )}
 
+       {live && link.role === 'child' && link.familyId && link.childId && link.account && (
+        <DeviceSharing key={[link.familyId, link.childId, link.account.uid].join('/')} family={link.familyId} child={link.childId} uid={link.account.uid} />
+      )}
       <SectionLabel>My family</SectionLabel>
       <Card padded={false} style={styles.group}>
         <Row
@@ -203,3 +207,4 @@ const styles = StyleSheet.create({
 
   switch: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
 });
+

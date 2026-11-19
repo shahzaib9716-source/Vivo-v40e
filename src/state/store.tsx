@@ -49,7 +49,7 @@ export interface Child {
 export interface FamilyRequest {
   id: string;
   childId: string;
-  kind: 'extra_time' | 'unlock_app' | 'bedtime';
+  kind: 'extra_time' | 'unlock_app' | 'install_app' | 'bedtime';
   label: string;
   detail: string;
   minutes?: number;
@@ -268,6 +268,7 @@ export const SEED_TASKS: readonly RewardTask[] = initialTasks;
  */
 export function requestTitle(request: FamilyRequest, child?: Child | null): string {
   if (request.kind === 'extra_time') return request.minutes ? `${request.minutes} more minutes` : 'More screen time';
+  if (request.kind === 'install_app') return 'Allow installation of ' + request.label;
   if (request.kind === 'unlock_app') {
     const app = child?.apps.find((a) => a.id === request.appId);
     return app ? `Unlock ${app.name}` : 'Unlock an app';
@@ -449,6 +450,7 @@ interface Store {
   renameChild: (id: string, name: string) => void;
   /** Adds a child with the sample app list and numbers. Returns the new child's id. */
   addChild: (name: string, age?: number) => string;
+  requestInstall: (name: string) => void;
   requestUnlock: (appId: string) => void;
   checkIn: () => void;
   sosActive: boolean;
@@ -829,6 +831,14 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
     return child.id;
   }, []);
 
+  const requestInstall = useCallback((name: string) => {
+    const label = name.trim().slice(0, 80);
+    if (!label) return;
+    const request: FamilyRequest = { id: newId('r'), childId: selfId, kind: 'install_app', label,
+      detail: 'Family approval to install this app manually', ago: 'just now', at: Date.now(), status: 'pending' };
+    setRequests(prev => prev.some(r => r.kind === 'install_app' && r.childId === selfId && r.label === label && r.status === 'pending') ? prev : [request, ...prev]);
+  }, [selfId]);
+
   const requestUnlock = useCallback((appId: string) => {
     const app = childSelf.apps.find((a) => a.id === appId);
     if (!app) return;
@@ -955,7 +965,7 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
       adjustLimit, grantBonus, toggleApp, setAppLimit, pauseDevice, resumeDevice,
       resolveRequest, toggleTask, requestExtraTime, markAlertsRead, togglePlaceAlert,
       addPlace, removePlace, schedules, toggleSchedule, addSchedule, removeSchedule,
-      messages, sendMessage, sites, addSite, removeSite, renameChild, addChild, requestUnlock,
+      messages, sendMessage, sites, addSite, removeSite, renameChild, addChild, requestInstall, requestUnlock,
       checkIn, sosActive, sosChildId, sosChild, sosMine, triggerSOS, clearSOS, live,
       hasOnboarded, ready, completeOnboarding, resetOnboarding, resetDemoData, wipeToSample,
       syncSnapshot: snapshot, applyRemote, readSyncRecord, setSelfChildId, setLive, linkedRoleAtStart,
@@ -964,7 +974,7 @@ export function StoreProvider({ children: node }: { children: ReactNode }) {
       adjustLimit, grantBonus, toggleApp, setAppLimit, pauseDevice, resumeDevice, resolveRequest,
       toggleTask, requestExtraTime, markAlertsRead, togglePlaceAlert,
       addPlace, removePlace, schedules, toggleSchedule, addSchedule, removeSchedule,
-      messages, sendMessage, sites, addSite, removeSite, renameChild, addChild, requestUnlock,
+      messages, sendMessage, sites, addSite, removeSite, renameChild, addChild, requestInstall, requestUnlock,
       checkIn, sosActive, sosChildId, sosChild, sosMine, triggerSOS, clearSOS, live,
       hasOnboarded, ready, completeOnboarding, resetOnboarding, resetDemoData, wipeToSample,
       snapshot, applyRemote, readSyncRecord, setRole, setLive, linkedRoleAtStart],
@@ -998,3 +1008,4 @@ export function fmtDuration(min: number) {
   if (m === 0) return `${h}h`;
   return `${h}h ${m}m`;
 }
+
