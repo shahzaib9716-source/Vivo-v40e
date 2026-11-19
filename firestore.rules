@@ -406,6 +406,13 @@ service cloud.firestore {
             && request.resource.data.minutes <= 1440 && request.resource.data.blocked is bool;
           allow delete: if isParent(fid);
         }
+        match /management/{report} {
+          allow get: if report == 'latest' && (isParent(fid) || isChildOf(fid, cid));
+          allow create, update: if report == 'latest' && isChildOf(fid, cid)
+            && request.resource.data.keys().hasOnly(['by', 'message', 'receivedAt'])
+            && nonEmptyText(request.resource.data.message, 240)
+            && request.resource.data.by == request.auth.uid && request.resource.data.receivedAt == request.time;
+        }
         match /usage/{report} {
           allow get: if report == 'latest' && (isParent(fid) || isChildOf(fid, cid));
           allow create, update: if report == 'latest' && isChildOf(fid, cid)

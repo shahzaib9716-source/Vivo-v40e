@@ -61,12 +61,15 @@ object ManagedPolicy {
       ScheduleWindow.active(window.getInt("start"), window.getInt("end"), window.getInt("mask"), mondayBasedDay, minute)
     }
     val desired = mutableSetOf<String>()
+    var ineligible = 0
     for (i in 0 until rules.length()) {
       val rule = rules.getJSONObject(i)
       val pkg = rule.getString("pkg")
-      if (pkg in protected) continue
-      val app = try { pm.getApplicationInfo(pkg, 0) } catch (_: android.content.pm.PackageManager.NameNotFoundException) { continue }
-      if (app.flags and ApplicationInfo.FLAG_SYSTEM != 0) continue
+      val app = try { pm.getApplicationInfo(pkg, 0) } catch (_: android.content.pm.PackageManager.NameNotFoundException) { null }
+      if (pkg in protected || app == null || app.flags and ApplicationInfo.FLAG_SYSTEM != 0) {
+        ineligible++
+        continue
+      }
       val limit = rule.getInt("minutes")
       if ((allowed && screenMs >= config.getInt("dailyMinutes") * 60000L) || scheduled || config.getBoolean("paused") || rule.getBoolean("blocked") || (allowed && limit > 0 && (usage[pkg] ?: 0L) >= limit * 60000L)) desired.add(pkg)
     }
@@ -84,11 +87,12 @@ object ManagedPolicy {
       failed = failed + rejected
     }
     saved.edit().putStringSet("held", held).commit()
-    return when {
-      failed.isNotEmpty() -> "Android declined changes for " + failed.joinToString()
-      !allowed -> "Managed blocks applied. Enable Usage access for timed limits."
-      else -> "Managed policy applied. Suspended packages: " + held.size
-    }
+    return buildList {
+      add("Suspended packages: " + held.size + ".")
+      if (failed.isNotEmpty()) add("Android declined changes for " + failed.size + " packages.")
+      if (ineligible > 0) add("Ineligible or unavailable packages: " + ineligible + ".")
+      if (!allowed) add("Timed limits require Usage access.")
+    }.joinToString(" ")
   }
 }
 

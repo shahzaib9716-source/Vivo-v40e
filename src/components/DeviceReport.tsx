@@ -5,9 +5,12 @@ import { useEffect, useState } from 'react';
 import { Card, Text } from '@/components/ui';
 import { listenPolicy, policyCollection, listenUsage, type AppUsage, type PackageRule } from '@/sync/androidDevice';
 
+import { listenManagement } from '@/sync/managementReport';
 import type { UsageDay } from '@/sync/usageWeek';
 
 export function DeviceReport({ family, child, manage = false }: { family: string; child: string; manage?: boolean }) {
+  const [deviceStatus, setDeviceStatus] = useState('Waiting for device status…');
+  useEffect(() => manage ? listenManagement(family, child, setDeviceStatus) : undefined, [manage, family, child]);
   const [days, setDays] = useState<UsageDay[]>([]);
   const [apps, setApps] = useState<AppUsage[]>([]);
   const [status, setStatus] = useState('Loading shared report…');
@@ -39,6 +42,7 @@ export function DeviceReport({ family, child, manage = false }: { family: string
       <Text>{Math.floor(days.reduce((sum, day) => sum + day.ms, 0) / 60000)} foreground min across {days.length} shared {days.length === 1 ? 'day' : 'days'}. Each day includes usage up to its last shared report.</Text>
       {days.map(day => <Text key={day.day}>{day.day} · {Math.floor(day.ms / 60000)} min</Text>)}
     </View>}
+    {manage && <Text accessibilityLiveRegion="polite">{deviceStatus}</Text>}
     {manage && <Text>On device-owner phones, limits and pauses apply to enrolled, eligible apps. Android checks usage periodically. Open Haven on the child phone to receive changed rules.</Text>}
     {Array.from(rows.values()).map(a => {
       const rule = rules.find(r => r.pkg === a.pkg);
