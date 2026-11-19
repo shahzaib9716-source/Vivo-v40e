@@ -44,3 +44,22 @@ jobs:
       - name: Synchronization regression tests
         run: npm run test:sync
 
+
+  native-device:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v5
+      - run: npm ci --no-audit --no-fund
+      - run: npx --no-install expo prebuild --platform android --no-install
+      - run: ./gradlew :haven-device:testDebugUnitTest
+        working-directory: android

@@ -13,7 +13,7 @@ import { spacing } from '@/theme';
  * that would come from such readings are examples, and these notes say so on the screens that show
  * them. Outside a family (sample mode) everything is sample data and the notes stay away.
  */
-type Topic = 'location' | 'usage' | 'rules' | 'saved' | 'demo';
+type Topic = 'location' | 'usage' | 'rules' | 'saved' | 'schedules' | 'demo';
 
 const TEXT: Record<Topic, { title: string; detail: string }> = {
   location: {
@@ -30,6 +30,10 @@ const TEXT: Record<Topic, { title: string; detail: string }> = {
     title: 'Rules are agreements',
     detail:
       'The daily limit, app rules and a screen-time break sync to your child’s Haven app. Eligible apps can be suspended on device-owner Android phones.',
+  },
+  schedules: {
+    title: 'Family schedules',
+    detail: 'Schedules use the child phone’s local time. On a device-owner Android installation they suspend enrolled eligible apps at the next policy check. Android controls check timing.',
   },
   saved: {
     title: 'Saved for your family, not enforced',

@@ -52,6 +52,14 @@ object ManagedPolicy {
     val allowed = requireNotNull(c.getSystemService(AppOpsManager::class.java)).checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), c.packageName) == AppOpsManager.MODE_ALLOWED
     var screenMs = 0L
     val usage = if (allowed) readUsage(c) { screenMs = it }.associate { it["pkg"] as String to it["ms"] as Long } else emptyMap()
+    val now = java.util.Calendar.getInstance()
+    val mondayBasedDay = (now.get(java.util.Calendar.DAY_OF_WEEK) + 5) % 7
+    val minute = now.get(java.util.Calendar.HOUR_OF_DAY) * 60 + now.get(java.util.Calendar.MINUTE)
+    val windows = config.optJSONArray("windows")
+    val scheduled = windows != null && (0 until windows.length()).any { index ->
+      val window = windows.getJSONObject(index)
+      ScheduleWindow.active(window.getInt("start"), window.getInt("end"), window.getInt("mask"), mondayBasedDay, minute)
+    }
     val desired = mutableSetOf<String>()
     for (i in 0 until rules.length()) {
       val rule = rules.getJSONObject(i)
@@ -60,7 +68,7 @@ object ManagedPolicy {
       val app = try { pm.getApplicationInfo(pkg, 0) } catch (_: android.content.pm.PackageManager.NameNotFoundException) { continue }
       if (app.flags and ApplicationInfo.FLAG_SYSTEM != 0) continue
       val limit = rule.getInt("minutes")
-      if ((allowed && screenMs >= config.getInt("dailyMinutes") * 60000L) || config.getBoolean("paused") || rule.getBoolean("blocked") || (allowed && limit > 0 && (usage[pkg] ?: 0L) >= limit * 60000L)) desired.add(pkg)
+      if ((allowed && screenMs >= config.getInt("dailyMinutes") * 60000L) || scheduled || config.getBoolean("paused") || rule.getBoolean("blocked") || (allowed && limit > 0 && (usage[pkg] ?: 0L) >= limit * 60000L)) desired.add(pkg)
     }
     val held = saved.getStringSet("held", emptySet()).orEmpty().toMutableSet()
     val manager = requireNotNull(c.getSystemService(DevicePolicyManager::class.java))
