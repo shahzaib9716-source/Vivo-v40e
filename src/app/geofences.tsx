@@ -119,7 +119,7 @@ export default function Geofences() {
         <Feather name="shield" size={14} color={colors.textFaint} style={styles.noteIcon} />
         <Text variant="small" tone="faint" style={styles.flex}>
           {live
-            ? 'This version of Haven does not read location. Your child can see exactly what is shared under “What’s shared”.'
+            ? 'Saved places do not trigger arrival or departure alerts. Your child controls GPS reports from Me.'
             : 'Location sharing is never hidden. Your child can always see that it is on under “What’s shared”.'}
         </Text>
       </View>

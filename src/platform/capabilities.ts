@@ -9,10 +9,7 @@ import { Platform } from 'react-native';
  * system lets an app do to the phone itself, and that is described here in one place, so screens ask
  * this module instead of testing `Platform.OS` themselves.
  *
- * This version contains no native device-management module: it reads nothing from the phone and
- * locks nothing on it, on either platform. `implemented` is therefore false for every device
- * feature below. When one is built, it becomes a native module behind this same list (and a new
- * build, not an over-the-air update), and `platform` already says where it can exist.
+ * Native availability and device enrollment are separate. The last policy result appears under App Limits.
  */
 
 export type DeviceFeature = 'usage' | 'blocking' | 'location' | 'notifications';
@@ -62,7 +59,7 @@ const TITLES: Record<DeviceFeature, string> = {
 
 /** Device features in a fixed order, described for the platform this app is running on. */
 export function deviceFeatures(): FeatureInfo[] {
-  return (Object.keys(TITLES) as DeviceFeature[]).map((key) => ({ key, title: TITLES[key], implemented: (key === 'location' || key === 'usage') && os === 'android' && !!requireOptionalNativeModule('HavenDevice'), ...NOTES[key][os] }));
+  return (Object.keys(TITLES) as DeviceFeature[]).map((key) => ({ key, title: TITLES[key], implemented: (key === 'location' || key === 'usage' || key === 'blocking') && os === 'android' && !!requireOptionalNativeModule('HavenDevice'), ...NOTES[key][os] }));
 }
 
 /** True when this build really does `feature` on this phone. Screens use it to decide what to show as real. */

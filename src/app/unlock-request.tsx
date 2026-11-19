@@ -27,7 +27,7 @@ export default function UnlockRequest() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
-  const { childSelf, requests, requestUnlock } = useStore();
+  const { childSelf, requests, requestUnlock, live } = useStore();
 
   const [sentApp, setSentApp] = useState<ManagedApp | null>(null);
   const returnTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -101,10 +101,10 @@ export default function UnlockRequest() {
             <Feather name="unlock" size={30} color={colors.success} />
           </View>
           <Text variant="h2" center>
-            Nothing is blocked
+            {live ? 'No apps listed here' : 'Nothing is blocked'}
           </Text>
           <Text variant="body" tone="muted" center style={styles.emptyBody}>
-            All of your apps are open right now. If your family blocks one, you can ask about it here.
+            {live ? 'For a managed Android restriction, message your parent and include the app name.' : 'All of your apps are open right now. If your family blocks one, you can ask about it here.'}
           </Text>
           <Button label="Got it" variant="secondary" onPress={leave} full style={styles.emptyButton} />
         </Card>

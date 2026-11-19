@@ -40,7 +40,7 @@ export default function AboutVersion() {
       <SectionLabel>Device capabilities</SectionLabel>
       <Card padded={false} style={styles.group}>
         {features.map((item) => (
-          <View key={item.key} accessible accessibilityLabel={`${item.implemented ? 'Works' : 'Not in this version'}: ${item.title}. ${item.note}`} style={styles.row}>
+          <View key={item.key} accessible accessibilityLabel={`${item.implemented ? 'Included in this build' : 'Not in this version'}: ${item.title}. ${item.note}`} style={styles.row}>
             <View style={[styles.icon, { backgroundColor: colors.surfaceSunken }]}>
               <Feather name={item.implemented ? 'check' : 'minus'} size={18} color={colors.textMuted} />
             </View>

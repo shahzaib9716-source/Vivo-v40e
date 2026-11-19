@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { router } from 'expo-router';
-import { Pressable, ScrollView, View, StyleSheet } from 'react-native';
+import { Alert, Linking, Platform, Pressable, ScrollView, View, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -138,6 +138,12 @@ export default function Location() {
 
           <View style={{ paddingHorizontal: spacing.xl, marginTop: spacing.xl }}>
             <View style={styles.actions}>
+              {live && location && <ActionTile icon="map-pin" label="Open in Maps" color={categoryColors.location} onPress={async () => {
+                const point = location.latitude + ',' + location.longitude;
+                const url = Platform.OS === 'android' ? 'geo:' + point + '?q=' + point : 'https://maps.google.com/?q=' + point;
+                try { await Linking.openURL(url); }
+                catch { Alert.alert('Maps unavailable', 'Use the coordinates shown above in your maps app.'); }
+              }} />}
               {!live && <ActionTile icon="navigation" label="Directions" color={categoryColors.location} onPress={() => run('directions')} />}
               <ActionTile icon={live ? 'message-circle' : 'bell'} label={live ? 'Message child' : 'Ping device'} color={colors.accent} onPress={() => live ? (router.push as any)(`/messages?childId=${activeChildId}`) : run('ping')} />
               {!live && <ActionTile icon="clock" label="History" color={colors.info} onPress={() => (router.push as any)('/location-history')} />}
