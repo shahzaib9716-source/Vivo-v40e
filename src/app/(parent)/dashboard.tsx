@@ -77,7 +77,7 @@ export default function Dashboard() {
   // After a request is resolved its card leaves and the next one slides into the same spot, so a
   // quick second tap would land on a different request. Ignore presses for half a second.
   const lastResolve = useRef(0);
-  const requestsScrollRef = useRef<ScrollView>(null);
+  const requestsScrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const requestsY = useRef(0);
   const resolve = (id: string, approve: boolean) => {
     const now = Date.now();
