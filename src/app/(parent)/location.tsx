@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { router } from 'expo-router';
 import { Pressable, ScrollView, View, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
@@ -9,6 +9,8 @@ import { Avatar, Card, IconBadge, MockMap, Row, SectionLabel, Text } from '@/com
 import { nowLabel, updatedAgoOf, useNow, useStore } from '@/state/store';
 import { categoryColors, radius, spacing, useTheme } from '@/theme';
 import { SampleNote } from '@/components/SampleNote';
+import { useLink } from '@/sync/link';
+import { listenChildLocation, type ChildLocation } from '@/sync/location';
 
 // Child chips are about 34pt tall; extend the press target to 44pt.
 const CHIP_HIT_SLOP = { top: 5, bottom: 5 };
@@ -25,6 +27,15 @@ export default function Location() {
   const { colors } = useTheme();
   const { children, activeChild, activeChildId, setActiveChildId, places, live } = useStore();
   const [action, setAction] = useState<DemoAction | null>(null);
+  const link = useLink();
+  const [location, setLocation] = useState<ChildLocation | null>(null);
+  const [locationError, setLocationError] = useState(false);
+  useEffect(() => {
+    setLocation(null);
+    setLocationError(false);
+    if (!live || !link.familyId || link.role !== 'parent') return;
+    return listenChildLocation(link.familyId, activeChildId, setLocation, () => setLocationError(true));
+  }, [live, link.familyId, link.role, activeChildId]);
   const now = useNow();
 
   const firstName = activeChild.name.split(' ')[0];
@@ -73,9 +84,13 @@ export default function Location() {
               {live ? (
                 <View style={{ height: 260, alignItems: 'center', justifyContent: 'center', padding: spacing.xl, backgroundColor: colors.surface }}>
                   <Feather name="map-pin" size={34} color={colors.textMuted} />
-                  <Text variant="title" center style={{ marginTop: spacing.md }}>Location not available</Text>
+                  <Text variant="title" center style={{ marginTop: spacing.md }}>{location ? 'Latest shared location' : 'Location not available'}</Text>
                   <Text variant="small" tone="muted" center style={{ marginTop: spacing.sm }}>
-                    This child device has not shared GPS coordinates. The map will be available after location sharing is implemented and enabled on the child's phone.
+                    {location
+                      ? `${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)} · accuracy ±${Math.round(location.accuracyM)}m · reported ${new Date(location.capturedAt).toLocaleString()}`
+                      : locationError
+                        ? 'Unable to read location. Check family access and connectivity.'
+                        : 'No GPS report has been shared by this child device yet. Location sharing requires permission on the child phone.'}
                   </Text>
                 </View>
               ) : (
