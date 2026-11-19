@@ -30,3 +30,13 @@ test('GPS status distinguishes fix age, cache, missing measurements and clock sk
   assert.equal(locationStatus(now + 1, false, now, false), 'Last report · check device clocks');
   assert.equal(locationStatus(now, true, now, true), 'Location unavailable');
 });
+
+test('weekly snapshots replace same-day reports and expire by calendar date', async () => {
+  const { recordDay, readDays } = await import('../../src/sync/usageWeek.ts');
+  const row = (day, ms) => ({ day, ms });
+  const days = [row('2026-10-31', 100), row('2026-11-01', 200), row('2026-11-07', 300)];
+  assert.deepEqual(recordDay(days, '2026-11-07', 400), [days[1], row('2026-11-07', 400)]);
+  assert.deepEqual(recordDay(days, '2026-11-15', 0), [row('2026-11-15', 0)]);
+  assert.deepEqual(readDays([days[0], days[0]]), []);
+  assert.throws(() => recordDay([], 'invalid', 1));
+});

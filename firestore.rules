@@ -409,7 +409,8 @@ service cloud.firestore {
         match /usage/{report} {
           allow get: if report == 'latest' && (isParent(fid) || isChildOf(fid, cid));
           allow create, update: if report == 'latest' && isChildOf(fid, cid)
-            && request.resource.data.keys().hasOnly(['apps', 'measuredAt', 'screenMs', 'by', 'receivedAt'])
+            && request.resource.data.keys().hasOnly(['apps', 'measuredAt', 'screenMs', 'by', 'receivedAt', 'days'])
+            && (!('days' in request.resource.data) || (request.resource.data.days is list && request.resource.data.days.size() <= 7))
             && request.resource.data.apps is list && request.resource.data.apps.size() <= 1000
             && (!('screenMs' in request.resource.data) || (request.resource.data.screenMs is int && request.resource.data.screenMs >= 0 && request.resource.data.screenMs <= 93600000))
             && request.resource.data.measuredAt is int && request.resource.data.measuredAt > 0
