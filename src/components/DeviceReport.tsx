@@ -1,7 +1,7 @@
 import { Button, TextInput, View } from 'react-native';
 import { doc, runTransaction } from 'firebase/firestore';
 import { db } from '@/sync/remote';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { BarChart, Card, SegmentedControl, Text } from '@/components/ui';
 import { listenPolicy, policyCollection, listenUsage, type AppUsage, type PackageRule } from '@/sync/androidDevice';
 
@@ -30,10 +30,12 @@ export function DeviceReport({ family, child, manage = false, view = 'all' }: { 
   const [rules, setRules] = useState<PackageRule[]>([]);
   const [feedback, setFeedback] = useState('');
   const [saving, setSaving] = useState(false);
+  const saveInFlight = useRef(false);
   const [limitEditor, setLimitEditor] = useState<{ pkg: string; value: string } | null>(null);
   useEffect(() => manage ? listenPolicy(family, child, setRules, e => setFeedback(e.message)) : undefined, [family, child, manage]);
-  async function save(pkg: string, action: 'limit' | 'block' | 'remove', minutes = 0) {
-    if (saving) return;
+  async function save(pkg: string, action: 'limit' | 'block' | 'allow' | 'remove', minutes = 0) {
+    if (saveInFlight.current) return;
+    saveInFlight.current = true;
     setSaving(true);
     try {
       const ref = doc(policyCollection(family, child), pkg);
@@ -41,12 +43,12 @@ export function DeviceReport({ family, child, manage = false, view = 'all' }: { 
         const old = (await tx.get(ref)).data();
         if (action === 'remove') tx.delete(ref);
         else tx.set(ref, { minutes: action === 'limit' ? minutes : old?.minutes ?? 0,
-          blocked: action === 'block' ? !old?.blocked : old?.blocked ?? false });
+          blocked: action === 'limit' ? old?.blocked ?? false : action === 'block' });
       });
       setFeedback('Rule saved on the server. Check the child’s next device report for enforcement.');
       setLimitEditor(null);
     } catch { setFeedback('Could not save the rule. Check family access and retry.'); }
-    finally { setSaving(false); }
+    finally { saveInFlight.current = false; setSaving(false); }
   }
   const validLimit = limitEditor && /^\d{1,4}$/.test(limitEditor.value) && Number(limitEditor.value) <= 1440;
   const ranked = view === 'summary' ? [] : rankAppActivity(apps, view, search, weekly);
@@ -74,7 +76,7 @@ export function DeviceReport({ family, child, manage = false, view = 'all' }: { 
         <Text>{a.label} · {Math.floor((weekly ? (a.weeklyMs ?? 0) : a.ms) / 60000)} min{'\n'}{a.pkg}</Text>
         {a.lastUsedAt && !manage ? <Text variant="small" tone="muted">Last observed {new Date(a.lastUsedAt).toLocaleString()}</Text> : null}
         {manage && <>
-          <Button disabled={saving} title={rule?.blocked ? 'Allow app' : 'Block app'} onPress={() => save(a.pkg, 'block')} />
+          <Button disabled={saving} title={rule?.blocked ? 'Allow app' : 'Block app'} onPress={() => save(a.pkg, rule?.blocked ? 'allow' : 'block')} />
           <Button disabled={saving} title={rule?.minutes ? rule.minutes + ' min daily · change' : 'Set a daily limit'}
             onPress={() => setLimitEditor({ pkg: a.pkg, value: String(rule?.minutes ?? '') })} />
           {limitEditor?.pkg === a.pkg && <View style={{ gap: 4 }}>
