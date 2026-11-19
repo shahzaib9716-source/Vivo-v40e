@@ -58,7 +58,15 @@ object ManagedPolicy {
     requireNotNull(c.getSystemService(android.view.inputmethod.InputMethodManager::class.java)).enabledInputMethodList.forEach { protected.add(it.packageName) }
     val allowed = requireNotNull(c.getSystemService(AppOpsManager::class.java)).checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), c.packageName) == AppOpsManager.MODE_ALLOWED
     var screenMs = 0L
-    val usage = if (allowed) readUsage(c) { screenMs = it }.associate { it["pkg"] as String to it["ms"] as Long } else emptyMap()
+    val usage = if (allowed) {
+      try {
+        readUsage(c) { screenMs = it }.associate { it["pkg"] as String to it["ms"] as Long }
+      } catch (_: IllegalStateException) {
+        null
+      } catch (_: SecurityException) {
+        null
+      }
+    } else null
     val now = java.util.Calendar.getInstance()
     val mondayBasedDay = (now.get(java.util.Calendar.DAY_OF_WEEK) + 5) % 7
     val minute = now.get(java.util.Calendar.HOUR_OF_DAY) * 60 + now.get(java.util.Calendar.MINUTE)
@@ -78,7 +86,15 @@ object ManagedPolicy {
         continue
       }
       val limit = rule.getInt("minutes")
-      if ((allowed && screenMs >= config.getInt("dailyMinutes") * 60000L) || scheduled || config.getBoolean("paused") || rule.getBoolean("blocked") || (allowed && limit > 0 && (usage[pkg] ?: 0L) >= limit * 60000L)) desired.add(pkg)
+      if (shouldSuspendApp(
+        blocked = rule.getBoolean("blocked"),
+        paused = config.getBoolean("paused"),
+        scheduled = scheduled,
+        dailyMinutes = config.getInt("dailyMinutes"),
+        appMinutes = limit,
+        screenMs = if (usage != null) screenMs else null,
+        appMs = usage?.get(pkg)
+      )) desired.add(pkg)
     }
     val held = saved.getStringSet("held", emptySet()).orEmpty().toMutableSet()
     val manager = requireNotNull(c.getSystemService(DevicePolicyManager::class.java))
@@ -90,7 +106,8 @@ object ManagedPolicy {
       add("Suspended packages: " + result.held.size + ".")
       if (failed.isNotEmpty()) add("Android declined changes for " + failed.size + " packages.")
       if (ineligible > 0) add("Ineligible or unavailable packages: " + ineligible + ".")
-      if (!allowed) add("Timed limits require Usage access.")
+      if (!allowed) add("Timed limits require Usage Access.")
+      else if (usage == null) add("Timed limits could not be checked. Unlock the device and check Usage Access.")
     }.joinToString(" ")
   }
 }
