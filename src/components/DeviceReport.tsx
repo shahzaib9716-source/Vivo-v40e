@@ -2,7 +2,7 @@ import { Button, TextInput, View } from 'react-native';
 import { doc, runTransaction } from 'firebase/firestore';
 import { db } from '@/sync/remote';
 import { useEffect, useState } from 'react';
-import { BarChart, Card, Text } from '@/components/ui';
+import { BarChart, Card, SegmentedControl, Text } from '@/components/ui';
 import { listenPolicy, policyCollection, listenUsage, type AppUsage, type PackageRule } from '@/sync/androidDevice';
 
 import { listenManagement } from '@/sync/managementReport';
@@ -13,6 +13,8 @@ import type { UsageDay } from '@/sync/usageWeek';
 export function DeviceReport({ family, child, manage = false, view = 'all' }: { family: string; child: string; manage?: boolean; view?: AppActivityFilter | 'summary' }) {
   const { colors } = useTheme();
   const [search, setSearch] = useState('');
+  const [range, setRange] = useState('Day');
+  const weekly = !manage && range === 'Week';
   const [hasReport, setHasReport] = useState(false);
   const [deviceStatus, setDeviceStatus] = useState('Waiting for device status…');
   useEffect(() => manage ? listenManagement(family, child, setDeviceStatus) : undefined, [manage, family, child]);
@@ -40,7 +42,7 @@ export function DeviceReport({ family, child, manage = false, view = 'all' }: { 
       setFeedback('Rule saved.');
     } catch { setFeedback('Could not save the rule. Check family access and retry.'); }
   }
-  const ranked = view === 'summary' ? [] : rankAppActivity(apps, view, search);
+  const ranked = view === 'summary' ? [] : rankAppActivity(apps, view, search, weekly);
   const rows = new Map(ranked.map(a => [a.pkg, a]));
   if (manage) for (const r of rules) if (!rows.has(r.pkg)) rows.set(r.pkg, { pkg: r.pkg, ms: 0, label: r.pkg });
   return <Card><Text variant="title">Device usage</Text><Text>{status}</Text>
@@ -53,15 +55,17 @@ export function DeviceReport({ family, child, manage = false, view = 'all' }: { 
     {manage && <Text accessibilityLiveRegion="polite">{deviceStatus}</Text>}
     {manage && <Text>On device-owner phones, limits and pauses apply to enrolled, eligible apps. Android checks usage periodically. Open Haven on the child phone to receive changed rules.</Text>}
     {hasReport && !manage && view !== 'summary' && <View style={{ gap: 6 }}>
-      <Text>{view === 'all' ? 'Visible launchable apps' : 'Recognized apps'} · Foreground usage on the report day</Text>
+      <Text>{view === 'all' ? 'Visible launchable apps' : 'Recognized apps'} · {weekly ? 'Observed foreground usage across seven child-local days' : 'Foreground usage on the report day'}</Text>
+      <SegmentedControl options={['Day', 'Week']} value={range} onChange={setRange} accessibilityLabel="App usage range" />
       <TextInput accessibilityLabel="Search apps" placeholder="Search apps or packages" placeholderTextColor={colors.textFaint}
         value={search} onChangeText={setSearch} style={{ color: colors.text, paddingVertical: 8 }} />
-      {rows.size === 0 && <Text>{search.trim() ? 'No apps match this search.' : 'No matching apps in this report.'}</Text>}
+      {rows.size === 0 && <Text>{search.trim() ? 'No apps match this search.' : weekly ? 'No weekly usage observations for these apps.' : 'No matching apps in this report.'}</Text>}
     </View>}
     {Array.from(rows.values()).map(a => {
       const rule = rules.find(r => r.pkg === a.pkg);
       return <View key={a.pkg} style={{ paddingVertical: 8, gap: 4 }}>
-        <Text>{a.label} · {Math.floor(a.ms / 60000)} min{'\n'}{a.pkg}</Text>
+        <Text>{a.label} · {Math.floor((weekly ? (a.weeklyMs ?? 0) : a.ms) / 60000)} min{'\n'}{a.pkg}</Text>
+        {a.lastUsedAt && !manage ? <Text variant="small" tone="muted">Last observed {new Date(a.lastUsedAt).toLocaleString()}</Text> : null}
         {manage && <>
           <Button title={rule?.blocked ? 'Allow app' : 'Block app'} onPress={() => save(a.pkg, 'block')} />
           <Button title={'Daily limit: ' + (rule?.minutes ? rule.minutes + ' min' : 'none') + ' · change'} onPress={() => save(a.pkg, 'limit')} />

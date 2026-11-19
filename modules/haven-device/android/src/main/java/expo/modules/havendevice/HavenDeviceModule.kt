@@ -119,10 +119,10 @@ internal fun readUsage(context: Context, week: UsageWeek? = null, end: Long = Sy
       val event = UsageEvents.Event()
       val active = mutableMapOf<String, MutableSet<String>>()
       val opened = mutableMapOf<String, Long>()
-      val totals = mutableMapOf<String, Long>()
+      val totals = mutableMapOf<String, AppUsageWindow>()
       fun close(pkg: String, at: Long) {
         val from = opened.remove(pkg) ?: return
-        totals[pkg] = (totals[pkg] ?: 0L) + (at - maxOf(start, from)).coerceAtLeast(0L)
+        totals.getOrPut(pkg) { AppUsageWindow(start, week?.start) }.add(from, at)
       }
       var foregroundMs = 0L
       var previous = week?.start ?: start
@@ -130,12 +130,18 @@ internal fun readUsage(context: Context, week: UsageWeek? = null, end: Long = Sy
         events.getNextEvent(event)
         val pkg = event.packageName
         val at = event.timeStamp
+        if (event.eventType == UsageEvents.Event.DEVICE_STARTUP) {
+          opened.keys.toList().forEach { close(it, previous) }
+          active.clear()
+          previous = at
+          continue
+        }
         if (opened.isNotEmpty()) {
           foregroundMs += (at - maxOf(start, previous)).coerceAtLeast(0L)
           week?.add(previous, at)
         }
         previous = at
-        if (event.eventType in listOf(UsageEvents.Event.SCREEN_NON_INTERACTIVE, UsageEvents.Event.DEVICE_SHUTDOWN)) {
+        if (event.eventType == UsageEvents.Event.SCREEN_NON_INTERACTIVE || event.eventType == UsageEvents.Event.DEVICE_SHUTDOWN) {
           opened.keys.toList().forEach { close(it, at) }
           active.clear()
         } else if (pkg in apps) {
@@ -158,5 +164,6 @@ internal fun readUsage(context: Context, week: UsageWeek? = null, end: Long = Sy
       }
       screenTime(foregroundMs)
       opened.keys.toList().forEach { close(it, end) }
-      return apps.map { (pkg, label) -> mapOf("pkg" to pkg, "label" to label, "ms" to (totals[pkg] ?: 0L)) }.sortedByDescending { it["ms"] as Long }
+      return apps.map { (pkg, label) -> (totals[pkg] ?: AppUsageWindow(start, week?.start)).toReport(pkg, label) }
+        .sortedByDescending { it["ms"] as Long }
 }

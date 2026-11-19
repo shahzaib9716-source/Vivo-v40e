@@ -14,3 +14,10 @@ test('usage ranking classifies by exact package and supports label and package s
   assert.deepEqual(rankAppActivity(reports, 'all', 'EXAMPLE.'), [reports[1]]);
   assert.equal(reports[0].pkg, 'com.whatsapp');
 });
+
+test('week ranking uses reported weekly totals and omits apps with missing history', () => {
+  const recent = { pkg: 'com.whatsapp', label: 'WhatsApp', ms: 5000 };
+  const older = { pkg: 'com.instagram.android', label: 'Instagram', ms: 0, weeklyMs: 9000 };
+  assert.deepEqual(rankAppActivity([recent, older], 'social', '', true), [older]);
+  assert.deepEqual(rankAppActivity([recent, older], 'social'), [recent, older]);
+});
