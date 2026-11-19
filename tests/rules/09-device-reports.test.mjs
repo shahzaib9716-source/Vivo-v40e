@@ -1,6 +1,8 @@
+import assert from 'node:assert/strict';
+import { decideExtraTime } from '../../src/sync/extraTime.ts';
 import { before, after, beforeEach, test } from 'node:test';
 import { getDoc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
-import { harness, A, ref, allowed, refused } from './helpers.mjs';
+import { harness, A, FAM_A, ref, allowed, refused } from './helpers.mjs';
 
 const h = harness();
 before(() => h.start());
@@ -48,4 +50,17 @@ test('install approval follows the existing parent-only decision path', async ()
   await allowed(setDoc(at('kid1', path), { kind: 'install_app', label: 'Chess', detail: 'Family approval', status: 'pending', by: h.a.kid1.selfId, at: serverTimestamp() }));
   await refused(setDoc(at('kid1', path), { status: 'approved', resolvedBy: h.a.kid1.selfId, resolvedAt: serverTimestamp() }, { merge: true }));
   await allowed(setDoc(at('founder', path), { status: 'approved', resolvedBy: h.a.founder.selfId, resolvedAt: serverTimestamp() }, { merge: true }));
+});
+
+test('concurrent approvals grant the requested time once', async () => {
+  const id = 'moreTime';
+  const parent = h.a.founder;
+  const child = ref(parent, A('children/c1'));
+  const limit = (await getDoc(child)).get('limitMin');
+  await setDoc(at('kid1', 'requests/' + id), { kind: 'extra_time', label: 'More time', detail: '', minutes: 15, status: 'pending', by: h.a.kid1.selfId, at: serverTimestamp() });
+  const decide = actor => decideExtraTime(actor.db, FAM_A, 'c1', id, actor.selfId, true);
+  await assert.rejects(() => decide(h.a.kid1));
+  const outcomes = await Promise.all([decide(parent), decide(h.a.parent2)]);
+  assert.deepEqual(outcomes.sort(), ['Already answered.', 'Time request approved.']);
+  assert.equal((await getDoc(child)).get('limitMin'), Math.min(1440, limit + 15));
 });
