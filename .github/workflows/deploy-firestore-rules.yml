@@ -1,0 +1,73 @@
+name: Deploy Firestore Rules
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - firestore.rules
+      - firebase.json
+      - tests/rules/**
+      - .github/workflows/deploy-firestore-rules.yml
+  push:
+    branches: [main]
+    paths:
+      - firestore.rules
+      - firebase.json
+      - tests/rules/**
+      - .github/workflows/deploy-firestore-rules.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: haven-firestore-production
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Validate Firestore rules against emulator
+        run: npx --yes firebase-tools@14 emulators:exec --only firestore --project demo-haven "npm run test:rules"
+      - name: Verify deployment configuration
+        shell: bash
+        run: |
+          node -e "const f=require('./firebase.json'); if(f.firestore?.rules!=='firestore.rules') process.exit(1)"
+          if grep -q "owner@example.com" firestore.rules; then
+            echo "::error::Replace placeholder owner@example.com with the verified Haven founder email before production deployment."
+            exit 1
+          fi
+
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: firebase-production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Authenticate to Google Cloud using GitHub OIDC
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/533607156115/locations/global/workloadIdentityPools/haven-github-pool/providers/haven-github
+          service_account: haven-github-deployer@vivo-v40e-3ab5f.iam.gserviceaccount.com
+      - name: Deploy only Firestore security rules
+        run: npx --yes firebase-tools@14 deploy --only firestore:rules --project vivo-v40e-3ab5f --non-interactive
