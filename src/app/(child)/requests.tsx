@@ -73,7 +73,7 @@ export default function ChildRequests() {
 
   const unlockDetail =
     blockedCount === 0
-      ? 'Nothing is blocked right now'
+      ? (live ? 'No app unlock requests available in this list' : 'Nothing is blocked right now')
       : `${blockedCount} blocked ${blockedCount === 1 ? 'app' : 'apps'} you can ask about`;
 
   return (
