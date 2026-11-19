@@ -9,7 +9,7 @@ interface DeviceModule {
   applyPolicy(payload: string): Promise<string>;
   clearPolicy(): Promise<void>;
   currentFix(): Promise<{ latitude: number; longitude: number; accuracyM: number; measuredAt: number }>;
-  readUsage(): Promise<{ apps: AppUsage[]; screenMs: number; measuredAt: number }>;
+  readUsage(): Promise<{ apps: AppUsage[]; screenMs: number; measuredAt: number; days?: UsageDay[] }>;
   openUsageSettings(): Promise<void>;
 }
 export const device = requireOptionalNativeModule<DeviceModule>('HavenDevice');
@@ -26,13 +26,13 @@ export async function requestFix() {
 
 const usageRef = (family: string, child: string) => doc(db(), 'families', family, 'children', child, 'usage', 'latest');
 
-export function shareUsage(family: string, child: string, by: string, apps: AppUsage[], measuredAt: number, screenMs: number) {
+export function shareUsage(family: string, child: string, by: string, apps: AppUsage[], measuredAt: number, screenMs: number, observed?: UsageDay[]) {
   if (apps.length > 1000) throw Error('The device exceeds the 1,000-app report limit.');
   return runTransaction(db(), async tx => {
     const ref = usageRef(family, child);
     const previous = (await tx.get(ref)).data();
     if (previous && previous.measuredAt > measuredAt) throw Error('A newer usage report has already been shared.');
-    const days = recordDay(previous?.days, localDay(measuredAt), screenMs);
+    const days = recordDay(previous?.days, localDay(measuredAt), screenMs, observed);
     tx.set(ref, { apps, measuredAt, screenMs, days, by, receivedAt: serverTimestamp() });
   });
 }

@@ -40,3 +40,28 @@ test('weekly snapshots replace same-day reports and expire by calendar date', as
   assert.deepEqual(readDays([days[0], days[0]]), []);
   assert.throws(() => recordDay([], 'invalid', 1));
 });
+
+test('Android retained events fill missing days without erasing a longer previous observation', async () => {
+  const { recordDay } = await import('../../src/sync/usageWeek.ts');
+  const row = (day, ms) => ({ day, ms });
+  const old = [row('2026-11-12', 10), row('2026-11-15', 100)];
+  const events = [row('2026-11-13', 40), row('2026-11-15', 80), row('2026-11-16', 120)];
+  assert.deepEqual(recordDay(old, '2026-11-19', 20, events), [events[0], old[1], events[2], row('2026-11-19', 20)]);
+});
+
+test('automatic usage refresh checks consent both before reading and before publishing', async () => {
+  const { refreshUsage } = await import('../../src/sync/usageRefresh.ts');
+  let enabled = false;
+  let reads = 0;
+  const writes = [];
+  const publish = async row => { writes.push(row); };
+  const read = async () => ++reads;
+  assert.equal(await refreshUsage(() => enabled, read, publish), false);
+  assert.equal(reads, 0);
+  enabled = true;
+  assert.equal(await refreshUsage(() => enabled, async () => { enabled = false; return read(); }, publish), false);
+  assert.deepEqual(writes, []);
+  enabled = true;
+  assert.equal(await refreshUsage(() => enabled, read, publish), true);
+  assert.deepEqual(writes, [2]);
+});

@@ -34,8 +34,10 @@ class HavenDeviceModule : Module() {
     AsyncFunction("readUsage") {
       check(usageAllowed()) { "Enable Usage access for Haven in Android Settings." }
       var screenMs = 0L
-      val apps = readUsage(context) { screenMs = it }
-      mapOf("apps" to apps, "screenMs" to screenMs, "measuredAt" to System.currentTimeMillis())
+      val end = System.currentTimeMillis()
+      val week = UsageWeek(end)
+      val apps = readUsage(context, week, end) { screenMs = it }
+      mapOf("apps" to apps, "screenMs" to screenMs, "measuredAt" to end, "days" to week.days())
     }
     AsyncFunction("applyPolicy") { payload: String ->
       ManagedPolicy.update(context, payload)
@@ -75,16 +77,16 @@ class HavenDeviceModule : Module() {
   }
 }
 
-internal fun readUsage(context: Context, screenTime: (Long) -> Unit = {}): List<Map<String, Any>> {
+internal fun readUsage(context: Context, week: UsageWeek? = null, end: Long = System.currentTimeMillis(), screenTime: (Long) -> Unit = {}): List<Map<String, Any>> {
       val pm = context.packageManager
       val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
       val apps = pm.queryIntentActivities(launcher, 0).associate { it.activityInfo.packageName to it.loadLabel(pm).toString() }
-      val end = System.currentTimeMillis()
       val start = java.util.Calendar.getInstance().apply {
+        timeInMillis = end
         set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0)
         set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
       }.timeInMillis
-      val events = requireNotNull(context.getSystemService(UsageStatsManager::class.java)).queryEvents(start - 86400000L, end)
+      val events = requireNotNull(context.getSystemService(UsageStatsManager::class.java)).queryEvents((week?.start ?: start) - 86400000L, end)
       checkNotNull(events) { "Unlock this phone before reading usage." }
       val event = UsageEvents.Event()
       val active = mutableMapOf<String, MutableSet<String>>()
@@ -95,13 +97,16 @@ internal fun readUsage(context: Context, screenTime: (Long) -> Unit = {}): List<
         totals[pkg] = (totals[pkg] ?: 0L) + (at - maxOf(start, from)).coerceAtLeast(0L)
       }
       var foregroundMs = 0L
-      var previous = start
+      var previous = week?.start ?: start
       while (events.hasNextEvent()) {
         events.getNextEvent(event)
         val pkg = event.packageName
         val at = event.timeStamp
-        if (opened.isNotEmpty()) foregroundMs += (at - previous).coerceAtLeast(0L)
-        previous = maxOf(start, at)
+        if (opened.isNotEmpty()) {
+          foregroundMs += (at - maxOf(start, previous)).coerceAtLeast(0L)
+          week?.add(previous, at)
+        }
+        previous = at
         if (event.eventType in listOf(UsageEvents.Event.SCREEN_NON_INTERACTIVE, UsageEvents.Event.DEVICE_SHUTDOWN)) {
           opened.keys.toList().forEach { close(it, at) }
           active.clear()
@@ -119,7 +124,10 @@ internal fun readUsage(context: Context, screenTime: (Long) -> Unit = {}): List<
           }
         }
       }
-      if (opened.isNotEmpty()) foregroundMs += (end - previous).coerceAtLeast(0L)
+      if (opened.isNotEmpty()) {
+        foregroundMs += (end - maxOf(previous, start)).coerceAtLeast(0L)
+        week?.add(previous, end)
+      }
       screenTime(foregroundMs)
       opened.keys.toList().forEach { close(it, end) }
       return apps.map { (pkg, label) -> mapOf("pkg" to pkg, "label" to label, "ms" to (totals[pkg] ?: 0L)) }.sortedByDescending { it["ms"] as Long }

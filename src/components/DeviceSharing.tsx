@@ -1,3 +1,4 @@
+import { useUsageSharing } from './UsageSharing';
 import { PolicyStatus } from '@/sync/policyStatus';
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Button, View, AppState } from 'react-native';
@@ -7,6 +8,7 @@ import { device, requestFix, shareUsage, clearUsage } from '@/sync/androidDevice
 import { reportChildLocation, clearChildLocation } from '@/sync/location';
 
 export function DeviceSharing({ family, child, uid }: { family: string; child: string; uid: string }) {
+  const automatic = useUsageSharing();
   const management = useContext(PolicyStatus);
   const [sharing, setSharing] = useState(false);
   const focused = useRef(false);
@@ -82,14 +84,23 @@ export function DeviceSharing({ family, child, uid }: { family: string; child: s
       }, 'Location shared.');
     }} />
     <Button title="Clear shared location" disabled={busy} onPress={() => run(() => { stop(); return clearChildLocation(family, child); }, 'Location cleared.')} />
-    <Text>Usage reports include launchable apps, their package names, and foreground time since midnight on this phone. Sharing also keeps daily totals for up to seven days. Clear shared usage removes these totals.</Text>
+    <Text>Usage reports include launchable apps, their package names, and foreground time since midnight on this phone. Sharing includes up to seven days of foreground totals available from Android. Clear shared usage removes these totals.</Text>
     <Button title="Open Android usage access" disabled={busy} onPress={() => run(() => native.openUsageSettings(), 'Return here and tap Share app usage.')} />
     <Button title="Share app usage" disabled={busy} onPress={() => run(async () => {
       const report = await native.readUsage();
       foreground();
-      await shareUsage(family, child, uid, report.apps, report.measuredAt, report.screenMs);
+      await shareUsage(family, child, uid, report.apps, report.measuredAt, report.screenMs, report.days);
     }, 'Usage report shared.')} />
-    <Button title="Clear shared usage" disabled={busy} onPress={() => run(() => clearUsage(family, child), 'Usage report cleared.')} />
+    {automatic && <>
+      <Text>If enabled, Haven refreshes usage when this linked child app opens or reconnects and every 15 minutes while open. This choice is saved on this phone.</Text>
+      <Button title={automatic.enabled ? 'Stop automatic usage sharing' : 'Enable automatic usage sharing'} disabled={busy || !automatic.ready}
+        onPress={() => run(() => automatic.setEnabled(!automatic.enabled), 'Sharing setting saved.')} />
+      <Text accessibilityLiveRegion="polite">{automatic.status}</Text>
+    </>}
+    <Button title="Clear shared usage" disabled={busy || !automatic?.ready} onPress={() => run(async () => {
+      await automatic?.setEnabled(false);
+      await clearUsage(family, child);
+    }, 'Usage report cleared.')} />
     <Text>{management}</Text>
     <Text accessibilityLiveRegion="polite">{status}</Text>
   </View></Card>;

@@ -19,9 +19,14 @@ export function readDays(value: unknown): UsageDay[] {
   return Array.from(entries, ([day, ms]) => ({ day, ms })).sort((a, b) => a.day.localeCompare(b.day));
 }
 
-export function recordDay(history: unknown, day: string, ms: number) {
+export function recordDay(history: unknown, day: string, ms: number, observed?: UsageDay[]) {
   const midnight = Date.parse(day + 'T00:00:00Z');
   if (!Number.isFinite(midnight) || !readDays([{ day, ms }]).length) throw Error('Invalid usage day.');
   const cutoff = new Date(midnight - 6 * dayMs).toISOString().slice(0, 10);
-  return [...readDays(history).filter(row => row.day >= cutoff && row.day < day), { day, ms }];
+  const prior = new Map<string, number>();
+  for (const row of [...readDays(history), ...readDays(observed)]) {
+    if (row.day >= cutoff && row.day < day) prior.set(row.day, Math.max(prior.get(row.day) ?? 0, row.ms));
+  }
+  prior.set(day, ms);
+  return readDays(Array.from(prior, ([day, ms]) => ({ day, ms })));
 }

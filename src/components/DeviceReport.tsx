@@ -39,7 +39,7 @@ export function DeviceReport({ family, child, manage = false }: { family: string
   return <Card><Text variant="title">Device usage</Text><Text>{status}</Text>
     {!manage && days.length > 0 && <View style={{ gap: 4 }}>
       <Text variant="title">7 days ending {days[days.length - 1].day}</Text>
-      <Text>{Math.floor(days.reduce((sum, day) => sum + day.ms, 0) / 60000)} foreground min across {days.length} shared {days.length === 1 ? 'day' : 'days'}. Each day includes usage up to its last shared report.</Text>
+      <Text>{Math.floor(days.reduce((sum, day) => sum + day.ms, 0) / 60000)} foreground min across {days.length} shared {days.length === 1 ? 'day' : 'days'}. Totals include available foreground events. Days without recorded usage may be missing.</Text>
       {days.map(day => <Text key={day.day}>{day.day} · {Math.floor(day.ms / 60000)} min</Text>)}
     </View>}
     {manage && <Text accessibilityLiveRegion="polite">{deviceStatus}</Text>}
