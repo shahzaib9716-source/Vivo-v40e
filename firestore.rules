@@ -395,6 +395,29 @@ service cloud.firestore {
           allow delete: if false;
         }
 
+        // Explicit, permissioned location reports from the enrolled child device.
+        // A report contains no background tracking history and cannot be written by a parent.
+        match /location/{docId} {
+          allow get: if docId == 'latest' && (isParent(fid) || isChildOf(fid, cid));
+          allow list: if false;
+          allow create, update: if docId == 'latest'
+            && isChildOf(fid, cid)
+            && request.resource.data.keys().hasOnly(['latitude', 'longitude', 'accuracyM', 'capturedAt', 'by'])
+            && request.resource.data.keys().hasAll(['latitude', 'longitude', 'accuracyM', 'capturedAt', 'by'])
+            && request.resource.data.latitude is number
+            && request.resource.data.latitude >= -90
+            && request.resource.data.latitude <= 90
+            && request.resource.data.longitude is number
+            && request.resource.data.longitude >= -180
+            && request.resource.data.longitude <= 180
+            && request.resource.data.accuracyM is number
+            && request.resource.data.accuracyM >= 0
+            && request.resource.data.accuracyM <= 100000
+            && request.resource.data.capturedAt == request.time
+            && request.resource.data.by == request.auth.uid;
+          allow delete: if isChildOf(fid, cid);
+        }
+
         // Requests: the child asks, a parent answers once.
         match /requests/{rid} {
           allow read: if isParent(fid) || isChildOf(fid, cid);
