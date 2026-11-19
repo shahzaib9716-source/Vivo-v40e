@@ -8,6 +8,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar, Button, Card, IconBadge, ProgressRing, Text } from '@/components/ui';
 import { useStore, alertText, fmtDuration, agoOf, requestTitle, timeOf, updatedAgoOf, useNow } from '@/state/store';
+import { decideExtraTime } from '@/sync/extraTime';
+import { db } from '@/sync/remote';
 import { useLink } from '@/sync/link';
 import { categoryColors, radius, shadow, spacing, useTheme } from '@/theme';
 import { OfflineBanner } from '@/components/OfflineBanner';
@@ -79,12 +81,26 @@ export default function Dashboard() {
   const lastResolve = useRef(0);
   const requestsScrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
   const requestsY = useRef(0);
-  const resolve = useCallback((id: string, approve: boolean) => {
+  const [decision, setDecision] = useState('');
+  const resolve = useCallback(async (id: string, childId: string, kind: string, approve: boolean) => {
     const now = Date.now();
     if (now - lastResolve.current < 500) return;
     lastResolve.current = now;
-    resolveRequest(id, approve);
-  }, [resolveRequest]);
+    if (!live || kind !== 'extra_time') {
+      resolveRequest(id, approve);
+      return;
+    }
+    if (!link.familyId || !link.account || link.role !== 'parent') {
+      setDecision('Reconnect the parent account to answer this request.');
+      return;
+    }
+    setDecision('Saving decision…');
+    try {
+      setDecision(await decideExtraTime(db(), link.familyId, childId, id, link.account.uid, approve));
+    } catch {
+      setDecision('Could not confirm the decision. Reconnect and retry.');
+    }
+  }, [resolveRequest, live, link.familyId, link.account, link.role]);
 
   const [hello, setHello] = useState(greeting);
   useFocusEffect(
@@ -304,6 +320,7 @@ export default function Dashboard() {
               actionLabel={pending.length > REQUEST_PREVIEW ? (showAllRequests ? 'Show less' : `Show all ${pending.length}`) : undefined}
               onAction={() => setShowAllRequests((all) => !all)}
             />
+            {decision && <Text accessibilityLiveRegion="polite">{decision}</Text>}
             {live && pending.some((r) => r.kind === 'extra_time') ? (
               <Text variant="small" tone="muted" style={{ marginBottom: spacing.sm }}>
                 Approving extra time raises the daily limit by that much, until you lower it again.
@@ -336,8 +353,8 @@ export default function Dashboard() {
                       </View>
                     </View>
                     <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md }}>
-                      <Button label="Approve" size="sm" onPress={() => resolve(r.id, true)} style={{ flex: 1 }} />
-                      <Button label="Decline" size="sm" variant="secondary" onPress={() => resolve(r.id, false)} style={{ flex: 1 }} />
+                      <Button label="Approve" size="sm" onPress={() => resolve(r.id, r.childId, r.kind, true)} style={{ flex: 1 }} />
+                      <Button label="Decline" size="sm" variant="secondary" onPress={() => resolve(r.id, r.childId, r.kind, false)} style={{ flex: 1 }} />
                     </View>
                   </Card>
                 );

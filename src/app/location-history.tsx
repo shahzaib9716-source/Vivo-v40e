@@ -172,7 +172,7 @@ export default function LocationHistory() {
       </Card>
 
       <Text variant="tiny" tone="faint" center style={{ marginTop: spacing.lg }}>
-        Sample history for this demo. This version of Haven does not read or keep location.
+        Sample history for this demo. Shared GPS check-ins appear on Location. Only the latest shared fix is kept.
       </Text>
     </Screen>
   );
