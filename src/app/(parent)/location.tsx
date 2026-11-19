@@ -28,14 +28,16 @@ export default function Location() {
   const { children, activeChild, activeChildId, setActiveChildId, places, live } = useStore();
   const [action, setAction] = useState<DemoAction | null>(null);
   const link = useLink();
-  const [location, setLocation] = useState<ChildLocation | null>(null);
-  const [locationError, setLocationError] = useState(false);
+  const scope = live && link.role === 'parent' && link.familyId && activeChildId ? link.familyId + '/' + activeChildId : '';
+  const [report, setReport] = useState<{ scope: string; value: ChildLocation | null; error: boolean }>();
+  const location = report?.scope === scope ? report.value : null;
+  const locationError = report?.scope === scope && report.error;
   useEffect(() => {
-    setLocation(null);
-    setLocationError(false);
-    if (!live || !activeChildId || !link.familyId || link.role !== 'parent') return;
-    return listenChildLocation(link.familyId, activeChildId, setLocation, () => { setLocation(null); setLocationError(true); });
-  }, [live, link.familyId, link.role, activeChildId]);
+    if (!scope || !link.familyId) return;
+    return listenChildLocation(link.familyId, activeChildId,
+      value => setReport({ scope, value, error: false }),
+      () => setReport({ scope, value: null, error: true }));
+  }, [scope, link.familyId, activeChildId]);
   const now = useNow();
 
   const firstName = activeChild.name.split(' ')[0];

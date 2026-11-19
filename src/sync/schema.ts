@@ -348,7 +348,7 @@ const requests: ListSpec<'requests'> = {
   slice: 'requests',
   ...childCollection('requests'),
   doc: {
-    kind: oneOf('extra_time', 'unlock_app', 'bedtime'),
+    kind: oneOf('extra_time', 'unlock_app', 'install_app', 'bedtime'),
     label: nonEmptyText(80),
     detail: text(200),
     minutes: { rule: { type: 'number', int: true, above: 0, max: 240 }, optional: true },
@@ -800,3 +800,4 @@ export function listenersFor(ctx: Pick<SyncCtx, 'familyId' | 'role' | 'childId'>
   plans.push({ key: 'sos', slice: 'sos', kind: 'doc', path: SOS.path(ctx.familyId) });
   return plans;
 }
+

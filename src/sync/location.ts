@@ -27,9 +27,9 @@ export async function reportChildLocation(
   if (!familyId || !childId || !uid || !valid(latitude, longitude, accuracyM)) {
     throw new Error('Invalid location report');
   }
-  await runTransaction(db(), async tx => { tx.set(doc(db(), path(familyId, childId)), {
-    latitude, longitude, accuracyM, capturedAt: serverTimestamp(), by: uid,
-  }); });
+  await runTransaction(db(), async tx => {
+    tx.set(doc(db(), path(familyId, childId)), { latitude, longitude, accuracyM, capturedAt: serverTimestamp(), by: uid });
+  });
 }
 
 export function listenChildLocation(

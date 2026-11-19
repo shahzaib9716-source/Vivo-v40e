@@ -397,11 +397,21 @@ service cloud.firestore {
 
         // Explicit, permissioned location reports from the enrolled child device.
         // A report contains no background tracking history and cannot be written by a parent.
+        match /packageRules/{pkg} {
+          allow read: if isParent(fid) || isChildOf(fid, cid);
+          allow create, update: if isParent(fid) && pkg.size() <= 255
+            && pkg.matches('[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z][a-zA-Z0-9_]*)+')
+            && request.resource.data.keys().hasOnly(['minutes', 'blocked'])
+            && request.resource.data.minutes is int && request.resource.data.minutes >= 0
+            && request.resource.data.minutes <= 1440 && request.resource.data.blocked is bool;
+          allow delete: if isParent(fid);
+        }
         match /usage/{report} {
           allow get: if report == 'latest' && (isParent(fid) || isChildOf(fid, cid));
           allow create, update: if report == 'latest' && isChildOf(fid, cid)
-            && request.resource.data.keys().hasOnly(['apps', 'measuredAt', 'by', 'receivedAt'])
+            && request.resource.data.keys().hasOnly(['apps', 'measuredAt', 'screenMs', 'by', 'receivedAt'])
             && request.resource.data.apps is list && request.resource.data.apps.size() <= 1000
+            && (!('screenMs' in request.resource.data) || (request.resource.data.screenMs is int && request.resource.data.screenMs >= 0 && request.resource.data.screenMs <= 93600000))
             && request.resource.data.measuredAt is int && request.resource.data.measuredAt > 0
             && request.resource.data.by == request.auth.uid && request.resource.data.receivedAt == request.time;
           allow delete: if report == 'latest' && isChildOf(fid, cid);
@@ -436,7 +446,7 @@ service cloud.firestore {
             && idOk(rid)
             && request.resource.data.keys().hasOnly(['kind', 'label', 'detail', 'minutes', 'appId', 'status', 'at', 'by'])
             && request.resource.data.keys().hasAll(['kind', 'label', 'detail', 'status', 'at', 'by'])
-            && request.resource.data.kind in ['extra_time', 'unlock_app', 'bedtime']
+            && request.resource.data.kind in ['extra_time', 'unlock_app', 'install_app', 'bedtime']
             && nonEmptyText(request.resource.data.label, 80)
             && text(request.resource.data.detail, 200)
             && (!('minutes' in request.resource.data)

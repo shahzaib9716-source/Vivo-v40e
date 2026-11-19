@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import { PolicyStatus } from '@/sync/policyStatus';
+import { useContext, useEffect, useRef, useState } from 'react';
 import { Button, View, AppState } from 'react-native';
 import { Card, Text } from '@/components/ui';
-import { device, requestFix, shareUsage, clearUsage } from '@/sync/device';
+import { device, requestFix, shareUsage, clearUsage } from '@/sync/androidDevice';
 import { reportChildLocation, clearChildLocation } from '@/sync/location';
 
 export function DeviceSharing({ family, child, uid }: { family: string; child: string; uid: string }) {
+  const management = useContext(PolicyStatus);
   const mounted = useRef(false);
   const locked = useRef(false);
   const [busy, setBusy] = useState(false);
@@ -36,11 +38,12 @@ export function DeviceSharing({ family, child, uid }: { family: string; child: s
     <Text>Usage reports include launchable apps, their package names, and foreground time since midnight on this phone.</Text>
     <Button title="Open Android usage access" disabled={busy} onPress={() => run(() => native.openUsageSettings(), 'Return here and tap Share app usage.')} />
     <Button title="Share app usage" disabled={busy} onPress={() => run(async () => {
-      const apps = await native.readUsage();
+      const report = await native.readUsage();
       foreground();
-      await shareUsage(family, child, uid, apps, Date.now());
+      await shareUsage(family, child, uid, report.apps, report.measuredAt, report.screenMs);
     }, 'Usage report shared.')} />
     <Button title="Clear shared usage" disabled={busy} onPress={() => run(() => clearUsage(family, child), 'Usage report cleared.')} />
+    <Text>{management}</Text>
     <Text accessibilityLiveRegion="polite">{status}</Text>
   </View></Card>;
 }

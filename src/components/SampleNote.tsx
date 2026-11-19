@@ -19,17 +19,17 @@ const TEXT: Record<Topic, { title: string; detail: string }> = {
   location: {
     title: 'Example map and places',
     detail:
-      'This version of Haven does not read where a phone is. The map, routes and “arrived / left” times here are examples. Check-ins and SOS from your child are real.',
+      'Saved places and routes are examples. The latest shared coordinates come from the child’s Android phone.',
   },
   usage: {
     title: 'Example usage numbers',
     detail:
-      'This version of Haven does not measure screen time or app use, and does not read which apps are on a phone: the apps and usage shown here are examples. The limits you set are real and appear on your child’s phone.',
+      'Usage figures on this screen are examples. Open Reports for the latest Android usage report shared by your child.',
   },
   rules: {
     title: 'Rules are agreements',
     detail:
-      'The daily limit, app rules and a screen-time break sync to your child’s Haven app. They do not lock the Android device, block other apps or filter web traffic.',
+      'The daily limit, app rules and a screen-time break sync to your child’s Haven app. Eligible apps can be suspended on device-owner Android phones.',
   },
   saved: {
     title: 'Saved for your family, not enforced',
@@ -48,3 +48,4 @@ export function SampleNote({ about, style }: { about: Topic; style?: StyleProp<V
   const text = TEXT[about];
   return <InlineNote tone="neutral" icon="info" title={text.title} detail={text.detail} style={[{ marginBottom: spacing.lg }, style]} />;
 }
+

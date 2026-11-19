@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Button, TextInput, Pressable, StyleSheet, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
@@ -33,7 +33,8 @@ function statusTint(colors: Colors, status: Status) {
 
 export default function ChildRequests() {
   const { colors } = useTheme();
-  const { childSelf, requests, requestExtraTime, live } = useStore();
+  const { childSelf, requests, requestExtraTime, requestInstall, live } = useStore();
+  const [appName, setAppName] = useState('');
   const toast = useToast();
 
   const mine = requests.filter((r) => r.childId === childSelf.id);
@@ -86,6 +87,12 @@ export default function ChildRequests() {
         </Text>
       </View>
 
+       {live && <Card>
+        <SectionLabel>Ask to install an app</SectionLabel>
+        <Text>Send the app name to your parent. After approval, installation is manual.</Text>
+        <TextInput accessibilityLabel="App name" placeholder="App name" maxLength={80} value={appName} onChangeText={setAppName} style={{ color: colors.text, padding: 12 }} />
+        <Button title="Request approval" disabled={!appName.trim()} onPress={() => { requestInstall(appName); setAppName(''); }} />
+      </Card>}
       <SectionLabel>More screen time</SectionLabel>
       <View style={styles.tiles}>
         {QUICK.map((minutes) => (
@@ -283,3 +290,4 @@ const styles = StyleSheet.create({
   badge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.pill },
   badgeDot: { width: 6, height: 6, borderRadius: radius.pill },
 });
+

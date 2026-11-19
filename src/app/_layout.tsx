@@ -1,6 +1,6 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Platform, useColorScheme } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -8,9 +8,12 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { APP_NAME } from '@/config/variant';
 import { StoreProvider, useStore } from '@/state/store';
 import { LinkProvider, useLink } from '@/sync/link';
+import { ManagedDevicePolicy } from '@/components/ManagedDevicePolicy';
+import { PolicyStatus } from '@/sync/policyStatus';
 import { palette } from '@/theme';
 
 export default function RootLayout() {
+  const [policyStatus, setPolicyStatus] = useState('');
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
 
   useEffect(() => {
@@ -28,7 +31,8 @@ export default function RootLayout() {
         <StoreProvider>
           <LinkProvider>
             <ThemeProvider value={navTheme}>
-              <Screens scheme={scheme} />
+              <ManagedDevicePolicy onStatus={setPolicyStatus} />
+              <PolicyStatus.Provider value={policyStatus}><Screens scheme={scheme} /></PolicyStatus.Provider>
               <StatusBar style="auto" />
             </ThemeProvider>
           </LinkProvider>
@@ -113,3 +117,4 @@ function Screens({ scheme }: { scheme: 'light' | 'dark' }) {
     </Stack>
   );
 }
+
