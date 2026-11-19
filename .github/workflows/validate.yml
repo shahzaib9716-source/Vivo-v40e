@@ -78,4 +78,4 @@ jobs:
           distribution: temurin
           java-version: '21'
       - run: npm ci --no-audit --no-fund
-      - run: npx --yes firebase-tools@14 emulators:exec --only firestore,auth --project demo-haven "npm run test:live"
+      - run: npx --yes firebase-tools@15.37.0 emulators:exec --only firestore,auth --project demo-haven "npm run test:live"
