@@ -1,0 +1,36 @@
+name: Haven Device Admin Test APK
+
+on:
+  push:
+    branches: [feat/device-admin-foundation]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v5
+      - run: npm ci --no-audit --no-fund
+      - run: npx --no-install expo prebuild --platform android --no-install
+      - name: Assemble test APK
+        run: ./gradlew :app:assembleDebug --no-daemon
+        working-directory: android
+      - name: Publish test APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: haven-device-admin-test-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7
