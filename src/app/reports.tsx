@@ -1,3 +1,5 @@
+import { DeviceReport } from '@/components/DeviceReport';
+import { useLink } from '@/sync/link';
 import { useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -148,6 +150,15 @@ function topCategory(child: Child) {
 }
 
 export default function Reports() {
+  const { activeChild, live } = useStore();
+  const link = useLink();
+  if (!live) return <SampleReports />;
+  return <Screen><Header back title="Usage report" subtitle={activeChild.name} />
+    {link.role === 'parent' && link.familyId && <DeviceReport key={link.familyId + '/' + activeChild.id} family={link.familyId} child={activeChild.id} />}
+  </Screen>;
+}
+
+function SampleReports() {
   const { colors } = useTheme();
   const { activeChild } = useStore();
   const [range, setRange] = useState<Range>('Week');
@@ -282,3 +293,4 @@ const styles = StyleSheet.create({
   appIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   hl: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm },
 });
+

@@ -33,8 +33,8 @@ export default function Location() {
   useEffect(() => {
     setLocation(null);
     setLocationError(false);
-    if (!live || !link.familyId || link.role !== 'parent') return;
-    return listenChildLocation(link.familyId, activeChildId, setLocation, () => setLocationError(true));
+    if (!live || !activeChildId || !link.familyId || link.role !== 'parent') return;
+    return listenChildLocation(link.familyId, activeChildId, setLocation, () => { setLocation(null); setLocationError(true); });
   }, [live, link.familyId, link.role, activeChildId]);
   const now = useNow();
 
@@ -106,7 +106,7 @@ export default function Location() {
                   <>
                     <Text variant="title">{activeChild.checkInAt != null ? `${firstName} checked in ${updatedAgoOf(activeChild, now)}` : `${firstName} has not checked in yet`}</Text>
                     <Text variant="small" tone="muted">
-                      Time only: this version does not read where the phone is
+                      Check-ins record the time. GPS reports are shared separately.
                     </Text>
                   </>
                 ) : (
@@ -227,3 +227,4 @@ const styles = StyleSheet.create({
   actionTile: { flex: 1, alignItems: 'center', paddingVertical: spacing.md, borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth },
   note: { marginTop: spacing.md },
 });
+

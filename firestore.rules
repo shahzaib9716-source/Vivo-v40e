@@ -397,6 +397,16 @@ service cloud.firestore {
 
         // Explicit, permissioned location reports from the enrolled child device.
         // A report contains no background tracking history and cannot be written by a parent.
+        match /usage/{report} {
+          allow get: if report == 'latest' && (isParent(fid) || isChildOf(fid, cid));
+          allow create, update: if report == 'latest' && isChildOf(fid, cid)
+            && request.resource.data.keys().hasOnly(['apps', 'measuredAt', 'by', 'receivedAt'])
+            && request.resource.data.apps is list && request.resource.data.apps.size() <= 1000
+            && request.resource.data.measuredAt is int && request.resource.data.measuredAt > 0
+            && request.resource.data.by == request.auth.uid && request.resource.data.receivedAt == request.time;
+          allow delete: if report == 'latest' && isChildOf(fid, cid);
+        }
+
         match /location/{docId} {
           allow get: if docId == 'latest' && (isParent(fid) || isChildOf(fid, cid));
           allow list: if false;
@@ -591,3 +601,4 @@ service cloud.firestore {
     }
   }
 }
+

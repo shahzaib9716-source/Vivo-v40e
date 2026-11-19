@@ -1,4 +1,4 @@
-import { doc, onSnapshot, serverTimestamp, setDoc, deleteDoc } from 'firebase/firestore';
+import { doc, onSnapshot, serverTimestamp, runTransaction } from 'firebase/firestore';
 import { db } from './remote';
 
 export interface ChildLocation {
@@ -27,9 +27,9 @@ export async function reportChildLocation(
   if (!familyId || !childId || !uid || !valid(latitude, longitude, accuracyM)) {
     throw new Error('Invalid location report');
   }
-  await setDoc(doc(db(), path(familyId, childId)), {
+  await runTransaction(db(), async tx => { tx.set(doc(db(), path(familyId, childId)), {
     latitude, longitude, accuracyM, capturedAt: serverTimestamp(), by: uid,
-  });
+  }); });
 }
 
 export function listenChildLocation(
@@ -55,5 +55,6 @@ export function listenChildLocation(
 
 export async function clearChildLocation(familyId: string, childId: string): Promise<void> {
   if (!familyId || !childId) throw new Error('A linked family and child are required');
-  await deleteDoc(doc(db(), path(familyId, childId)));
+  await runTransaction(db(), async tx => { tx.delete(doc(db(), path(familyId, childId))); });
 }
+
