@@ -42,7 +42,7 @@ service cloud.firestore {
     // them, and one of them checks that every entry is lower case.
     // ------------------------------------------------------------------------------------------
     function ownerEmails() {
-      return ['owner@example.com'];
+      return ['dispatch.johnsmith@gmail.com'];
     }
 
     // ---- Identity ----------------------------------------------------------------------------
