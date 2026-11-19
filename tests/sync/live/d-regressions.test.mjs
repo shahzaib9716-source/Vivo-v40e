@@ -19,7 +19,6 @@ let fam;
 let F;
 let cid;
 let maxId;
-const extras = [];
 
 const kidOf = (v, id) => v.store.children.find((c) => c.id === id);
 const inFlight = async (phone) => (await phone.fx(false)).some((e) => e.kind === 'write' && e.state === 'sent');
@@ -123,7 +122,6 @@ test('a check-in made offline does not undo what the parent changed meanwhile', 
  */
 async function joinKillRestart(label, trap) {
   const phone = makePhone(`d-kill-${label}`, { platform: 'android', deviceName: `Phone ${label}` });
-  extras.push(phone);
   const first = await phone.launch();
   assert.ok(showsSample(first.store));
   const offer = ok(await parent.link('createPairingCode', 'child'), 'createPairingCode');
@@ -152,7 +150,16 @@ async function joinKillRestart(label, trap) {
   assert.deepEqual([v.store.sites, v.store.messages, v.store.requests, v.store.alerts], [[], [], [], []], 'no sample sites, messages, requests or alerts are left');
   assert.equal(v.store.selfId, v.link.childId);
   assert.deepEqual(syncedOf(v.store, { slices: ['places', 'schedules', 'tasks'] }), syncedOf((await parent.view()).store, { slices: ['places', 'schedules', 'tasks'] }));
-  return { stateOnDisk, code: offer.code, phone, pairingLeft: (await server.doc(`pairing/${offer.code}`)) !== null };
+  // The phones that were killed while joining tidy their used code away after the restart. Two
+  // things can then be printed by the SDK, neither of them the app's doing:
+  // - the first life's delete did get out, so the second is refused (deleting what is not there is
+  //   refused by the rules); the app takes that as "done";
+  // - the Firestore emulator trips over the dead first life's listener on the code: it applies the
+  //   delete, answers UNKNOWN, and refuses the SDK's second try for the same reason as above.
+  await phone.unmount();
+  await noAppErrors([phone], [/UNKNOWN: Application error processing RPC/, ...REFUSAL_NOISE]);
+  await phone.dispose();
+  return { stateOnDisk, code: offer.code, pairingLeft: (await server.doc(`pairing/${offer.code}`)) !== null };
 }
 
 test('a phone killed right before its link record is written joins on the next start and uploads nothing', async () => {
@@ -429,13 +436,6 @@ test('two children keep separate identities and threads', async () => {
 
 test('nothing went wrong inside the apps', async () => {
   await noAppErrors([parent, tablet, max]);
-  // The phones that were killed while joining tidy their used code away after the restart. Two
-  // things can then be printed by the SDK, neither of them the app's doing:
-  // - the first life's delete did get out, so the second is refused (deleting what is not there is
-  //   refused by the rules); the app takes that as "done";
-  // - the Firestore emulator trips over the dead first life's listener on the code: it applies the
-  //   delete, answers UNKNOWN, and refuses the SDK's second try for the same reason as above.
-  await noAppErrors(extras, [/UNKNOWN: Application error processing RPC/, ...REFUSAL_NOISE]);
   // Zoe's phone was offline for a while: the SDK says so on its own.
   await noAppErrors([zoe], OFFLINE_NOISE);
 });
