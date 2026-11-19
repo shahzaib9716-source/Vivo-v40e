@@ -22,17 +22,18 @@ export function UsageSharingProvider({ children }: { children: ReactNode }) {
     ? ['haven.usage-consent.v1', familyId, childId, uid].join('/') : '';
   const [preference, setPreference] = useState({ key: '', enabled: false });
   const [status, setStatus] = useState('');
+  const scope = useRef('');
   const generation = useRef(0);
   const pending = useRef<Promise<void> | null>(null);
   const enabled = Boolean(key && preference.key === key && preference.enabled);
 
   useEffect(() => {
     let current = true;
-    setStatus('');
+    scope.current = key;
     if (key) readKey(key).then(value => {
-      if (current) setPreference({ key, enabled: value === 'on' });
+      if (current) { setPreference({ key, enabled: value === 'on' }); setStatus(''); }
     });
-    return () => { current = false; generation.current++; };
+    return () => { current = false; scope.current = ''; };
   }, [key]);
 
   const setEnabled = useCallback(async (value: boolean) => {
@@ -42,6 +43,7 @@ export function UsageSharingProvider({ children }: { children: ReactNode }) {
     const saved = await writeKey(key, value ? 'on' : 'off');
     if (!saved) throw Error('Could not save the sharing setting on this phone. Please retry.');
     if (!value) await pending.current;
+    if (scope.current !== key) return;
     setPreference({ key, enabled: value });
     setStatus(value ? 'Automatic usage sharing enabled.' : 'Automatic usage sharing off.');
   }, [key]);
