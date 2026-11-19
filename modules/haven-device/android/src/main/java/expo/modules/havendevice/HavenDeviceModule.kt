@@ -130,12 +130,18 @@ internal fun readUsage(context: Context, week: UsageWeek? = null, end: Long = Sy
         events.getNextEvent(event)
         val pkg = event.packageName
         val at = event.timeStamp
+        if (event.eventType == UsageEvents.Event.DEVICE_STARTUP) {
+          opened.keys.toList().forEach { close(it, previous) }
+          active.clear()
+          previous = at
+          continue
+        }
         if (opened.isNotEmpty()) {
           foregroundMs += (at - maxOf(start, previous)).coerceAtLeast(0L)
           week?.add(previous, at)
         }
         previous = at
-        if (event.eventType == UsageEvents.Event.SCREEN_NON_INTERACTIVE || event.eventType == UsageEvents.Event.DEVICE_SHUTDOWN || event.eventType == UsageEvents.Event.DEVICE_STARTUP) {
+        if (event.eventType == UsageEvents.Event.SCREEN_NON_INTERACTIVE || event.eventType == UsageEvents.Event.DEVICE_SHUTDOWN) {
           opened.keys.toList().forEach { close(it, at) }
           active.clear()
         } else if (pkg in apps) {
