@@ -1,3 +1,4 @@
+import { ChildDevicePermissions } from '@/components/ChildDevicePermissions';
 import { DeviceSharing } from '@/components/DeviceSharing';
 import { useState } from 'react';
 import { router } from 'expo-router';
@@ -96,6 +97,7 @@ export default function ChildProfileTab() {
        {live && link.role === 'child' && link.familyId && link.childId && link.account && (
         <DeviceSharing key={[link.familyId, link.childId, link.account.uid].join('/')} family={link.familyId} child={link.childId} uid={link.account.uid} />
       )}
+      {live && link.role === 'child' && <ChildDevicePermissions />}
       <SectionLabel>My family</SectionLabel>
       <Card padded={false} style={styles.group}>
         <Row

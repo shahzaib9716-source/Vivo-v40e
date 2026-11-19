@@ -2,8 +2,11 @@ package expo.modules.havendevice
 
 import android.Manifest
 import android.app.AppOpsManager
+import android.app.NotificationManager
+import android.app.admin.DevicePolicyManager
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -13,6 +16,7 @@ import android.os.CancellationSignal
 import android.os.Handler
 import android.os.Looper
 import android.os.Process
+import android.os.PowerManager
 import android.provider.Settings
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
@@ -28,6 +32,30 @@ class HavenDeviceModule : Module() {
 
   override fun definition() = ModuleDefinition {
     Name("HavenDevice")
+    AsyncFunction("permissionStatus") {
+      val ctx = context
+      val policy = requireNotNull(ctx.getSystemService(DevicePolicyManager::class.java))
+      mapOf(
+        "usage" to usageAllowed(),
+        "location" to (ctx.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+          ctx.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED),
+        "admin" to policy.isAdminActive(ComponentName(ctx, HavenAdmin::class.java)),
+        "owner" to policy.isDeviceOwnerApp(ctx.packageName),
+        "notifications" to requireNotNull(ctx.getSystemService(NotificationManager::class.java)).areNotificationsEnabled(),
+        "batteryExempt" to requireNotNull(ctx.getSystemService(PowerManager::class.java)).isIgnoringBatteryOptimizations(ctx.packageName)
+      )
+    }
+    AsyncFunction("openAdminActivation") {
+      val ctx = context
+      val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
+        .putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, ComponentName(ctx, HavenAdmin::class.java))
+        .putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, "Optional Android administration. App restrictions require Device Owner enrollment.")
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      ctx.startActivity(intent)
+    }
+    AsyncFunction("openBatterySettings") {
+      context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
     AsyncFunction("openUsageSettings") {
       context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }

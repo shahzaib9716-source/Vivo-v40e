@@ -5,7 +5,19 @@ import { localDay, readDays, recordDay, type UsageDay } from './usageWeek';
 import { db } from './remote';
 
 export interface AppUsage { pkg: string; label: string; ms: number }
+export interface DevicePermissions {
+  usage: boolean;
+  location: boolean;
+  admin: boolean;
+  owner: boolean;
+  notifications: boolean;
+  batteryExempt: boolean;
+}
+
 interface DeviceModule {
+  permissionStatus?(): Promise<DevicePermissions>;
+  openAdminActivation?(): Promise<void>;
+  openBatterySettings?(): Promise<void>;
   applyPolicy(payload: string): Promise<string>;
   clearPolicy(): Promise<void>;
   currentFix(): Promise<{ latitude: number; longitude: number; accuracyM: number; measuredAt: number }>;
