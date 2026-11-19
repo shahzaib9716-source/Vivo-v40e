@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { domainCounts, parseActivityImport } from '../../src/sync/activityImport.ts';
+import { domainCounts, parseActivityImport, scanImportedActivity } from '../../src/sync/activityImport.ts';
 
 test('Chrome imports omit query strings, deduplicate and rank real domains', () => {
   const rows = [
@@ -25,4 +25,11 @@ test('YouTube imports accept only supported watch URLs with exported timestamps'
   assert.equal(actual[0].at, Date.parse(time));
   assert.equal(actual[0].title, 'Watched an example');
   assert.throws(() => parseActivityImport('[]', 'chrome'));
+});
+
+test('keyword rules match source fields, consolidate duplicates and distinguish whole words', () => {
+  const row = { key: '1', host: 'example.com', page: 'https://example.com/private', title: 'Shopping for ART supplies', at: 1 };
+  assert.deepEqual(scanImportedActivity([row], 'art,ART,shop,private', true)[0].matched, ['art']);
+  assert.deepEqual(scanImportedActivity([row], 'shop,example.com', false)[0].matched, ['shop', 'example.com']);
+  assert.deepEqual(scanImportedActivity([row], 'suppl,private', true), []);
 });

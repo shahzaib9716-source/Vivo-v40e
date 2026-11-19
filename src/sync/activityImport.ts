@@ -50,3 +50,16 @@ export function domainCounts(records: readonly ImportedActivity[]) {
   for (const record of records) domains.set(record.host, (domains.get(record.host) ?? 0) + 1);
   return Array.from(domains, ([host, count]) => ({ host, count })).sort((a, b) => b.count - a.count || a.host.localeCompare(b.host));
 }
+
+export function scanImportedActivity(records: readonly ImportedActivity[], input: string, wholeWords: boolean) {
+  const terms = [...new Set(input.split(/[,\n]/).map(term => term.trim().toLowerCase()).filter(Boolean))].slice(0, 30);
+  const matchers = terms.filter(term => term.length <= 80).map(term => {
+    const escaped = Array.from(term, char => '\\^$.*+?()[]{}|'.includes(char) ? '\\' + char : char).join('');
+    return { term, pattern: wholeWords ? new RegExp('(?:^|[^\\p{L}\\p{N}_])' + escaped + '(?=$|[^\\p{L}\\p{N}_])', 'u') : null };
+  });
+  return records.flatMap(record => {
+    const text = (record.title + ' ' + record.host).toLowerCase();
+    const matched = matchers.filter(({ term, pattern }) => pattern ? pattern.test(text) : text.includes(term)).map(({ term }) => term);
+    return matched.length ? [{ ...record, matched }] : [];
+  });
+}

@@ -167,7 +167,6 @@ interface Decision {
 const SOURCE_STATUS: Record<string, string> = {
   calls: 'Call activity requires an eligible Android call-log integration. Family check-ins remain available in Haven.',
   messages: 'SMS activity requires an eligible Android SMS integration. Family chat is available in Haven.',
-  keywords: 'Keyword alerts need an explicitly authorized content source before rules can run.',
 };
 
 export default function FeatureScreen() {
@@ -175,9 +174,9 @@ export default function FeatureScreen() {
   const { live, activeChild } = useStore();
   const link = useLink();
   const category = key === 'social' ? 'social' : key === 'video' || key === 'video-usage' ? 'video' : key === 'app-usage' ? 'all' : null;
-  if (live && link.role === 'parent' && (key === 'web' || key === 'browsing' || key === 'video-import')) {
+  if (live && link.role === 'parent' && (key === 'web' || key === 'browsing' || key === 'video-import' || key === 'keywords' || key === 'video-keywords')) {
     return <ImportedActivityReport key={link.familyId + '/' + activeChild.id + '/' + key}
-      child={activeChild.name} source={key === 'video-import' ? 'youtube' : 'chrome'} initialDomains={key === 'web'} />;
+      child={activeChild.name} source={key === 'video-import' || key === 'video-keywords' ? 'youtube' : 'chrome'} initialDomains={key === 'web'} scan={key === 'keywords' || key === 'video-keywords'} />;
   }
   if (live && category) {
     const title = key === 'social' ? 'Social Apps' : category === 'video' ? 'Video-app usage' : 'App Usage';
@@ -185,6 +184,7 @@ export default function FeatureScreen() {
       <Header back title={title} subtitle={activeChild.name} />
       {category === 'video' && <Card>
         <Text>This report shows Android foreground app usage. Import an authorized YouTube export to view watch records.</Text>
+        <Button label="Scan a YouTube export for keywords" variant="secondary" onPress={() => router.push('/feature/video-keywords')} />
         <Button label="Open watch history import" variant="secondary" onPress={() => router.push('/feature/video-import')} />
       </Card>}
       {link.role === 'parent' && link.familyId && <DeviceReport key={link.familyId + '/' + activeChild.id + '/' + category}

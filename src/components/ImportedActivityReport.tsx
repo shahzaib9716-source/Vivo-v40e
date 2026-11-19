@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { TextInput, View } from 'react-native';
 import { Button, Card, Header, Screen, Text } from '@/components/ui';
-import { domainCounts, parseActivityImport, type ActivitySource, type ImportedActivity } from '@/sync/activityImport';
+import { domainCounts, parseActivityImport, scanImportedActivity, type ActivitySource, type ImportedActivity } from '@/sync/activityImport';
 import { useTheme } from '@/theme';
 
-export function ImportedActivityReport({ initialDomains, source, child }: { initialDomains?: boolean; source: ActivitySource; child: string }) {
+export function ImportedActivityReport({ initialDomains, source, child, scan = false }: { initialDomains?: boolean; source: ActivitySource; child: string; scan?: boolean }) {
   const { colors } = useTheme();
   const [input, setInput] = useState('');
   const [entries, setEntries] = useState<ImportedActivity[]>([]);
@@ -14,11 +14,15 @@ export function ImportedActivityReport({ initialDomains, source, child }: { init
   const [days, setDays] = useState(0);
   const [now] = useState(Date.now);
   const [visible, setVisible] = useState(50);
+  const [keywords, setKeywords] = useState('');
+  const [wholeWords, setWholeWords] = useState(true);
   const model = source === 'chrome' ? 'Chrome Takeout Browser History JSON' : 'English YouTube Takeout watch-history JSON';
   const query = search.trim().toLowerCase();
   const cutoff = days ? now - days * 86400000 : 0;
   const filtered = entries.filter(entry => entry.at >= cutoff && [entry.host, entry.page, entry.title].some(value => value.toLowerCase().includes(query)));
   const counts = domains ? domainCounts(filtered) : [];
+  const matches = scan ? scanImportedActivity(filtered, keywords, wholeWords) : [];
+  const resultCount = scan ? matches.length : domains ? counts.length : filtered.length;
 
   function importActivity() {
     try {
@@ -32,7 +36,7 @@ export function ImportedActivityReport({ initialDomains, source, child }: { init
   }
 
   return <Screen>
-    <Header back title={source === 'youtube' ? 'Video Watch History' : domains ? 'Web Activity' : 'Browsing History'} subtitle={child} />
+    <Header back title={scan ? 'Keyword alerts from imports' : source === 'youtube' ? 'Video Watch History' : domains ? 'Web Activity' : 'Browsing History'} subtitle={child} />
     <Card><View style={{ gap: 10 }}>
       <Text>Paste {model} that you have permission to view. Up to 1,000 recent entries stay on this screen until you clear them or leave it.</Text>
       <Text>Coverage is limited to the supplied export. Browser query strings are omitted. Times are shown in this phone’s time zone.</Text>
@@ -47,15 +51,25 @@ export function ImportedActivityReport({ initialDomains, source, child }: { init
         value={search} onChangeText={setSearch} style={{ color: colors.text }} />
       <Button label={days ? 'Last ' + days + ' days · change' : 'All export dates · change'}
         onPress={() => setDays(days === 0 ? 7 : days === 7 ? 30 : 0)} variant="secondary" />
-      {source === 'chrome' && <Button label={domains ? 'Show pages' : 'Show domains'} onPress={() => { setDomains(!domains); setVisible(50); }} variant="secondary" />}
-      {domains ? counts.slice(0, visible).map(row => <Text key={row.host}>{row.host} · {row.count}</Text>) : filtered.slice(0, visible).map(row => (
+      {scan && <>
+        <Text>Scan imported titles and domains. Choose up to 30 keywords, separated by commas or new lines. Matches stay in this session.</Text>
+        <TextInput accessibilityLabel="Keywords" multiline maxLength={2430} placeholder="Add keywords" placeholderTextColor={colors.textFaint}
+          value={keywords} onChangeText={setKeywords} style={{ color: colors.text }} />
+        <Button label={wholeWords ? 'Whole words · change' : 'Contains · change'} onPress={() => setWholeWords(!wholeWords)} variant="secondary" />
+        <Text>{matches.length} matching records</Text>
+      </>}
+      {!scan && source === 'chrome' && <Button label={domains ? 'Show pages' : 'Show domains'} onPress={() => { setDomains(!domains); setVisible(50); }} variant="secondary" />}
+      {scan ? matches.slice(0, visible).map(row => <View key={row.key}>
+        <Text>{row.title || row.host} · {new Date(row.at).toLocaleString()}</Text>
+        <Text variant="small" tone="muted">Matched {row.matched.join(', ')}</Text>
+      </View>) : domains ? counts.slice(0, visible).map(row => <Text key={row.host}>{row.host} · {row.count}</Text>) : filtered.slice(0, visible).map(row => (
         <View key={row.key} style={{ gap: 4 }}>
           {row.title && <Text>{row.title}</Text>}
           <Text variant="small" tone="muted">{row.page} · {new Date(row.at).toLocaleString()}</Text>
         </View>
       ))}
-      {(domains ? counts.length : filtered.length) > visible && <Button label="Show more" onPress={() => setVisible(visible + 50)} variant="secondary" />}
-      <Button label="Clear imported activity" onPress={() => { setEntries([]); setInput(''); setSearch(''); setError(''); setDays(0); }} variant="secondary" />
+      {resultCount > visible && <Button label="Show more" onPress={() => setVisible(visible + 50)} variant="secondary" />}
+      <Button label="Clear imported activity" onPress={() => { setEntries([]); setInput(''); setSearch(''); setKeywords(''); setError(''); setDays(0); }} variant="secondary" />
     </View></Card>}
   </Screen>;
 }
