@@ -97,7 +97,20 @@ class FamilySharingTest {
           }
           ready()
         }
-        screen.onActivity { tap(it, "Take photo") }
+        screen.onActivity { a ->
+          tap(a, "Take photo in 5 seconds")
+          tap(a, "Cancel photo timer")
+          assertTrue(buttons(a.window.decorView).single { it.text == "Take photo in 5 seconds" }.isEnabled)
+        }
+        if (front) {
+          screen.onActivity { tap(it, "Take photo in 5 seconds") }
+          screen.moveToState(Lifecycle.State.CREATED)
+          screen.moveToState(Lifecycle.State.RESUMED)
+          ready()
+          screen.onActivity { tap(it, "Take photo in 5 seconds") }
+        } else {
+          screen.onActivity { tap(it, "Take photo") }
+        }
         val result = screen.result
         assertEquals(Activity.RESULT_OK, result.resultCode)
         val bytes = Base64.decode(requireNotNull(result.resultData?.getStringExtra("jpeg")), Base64.NO_WRAP)

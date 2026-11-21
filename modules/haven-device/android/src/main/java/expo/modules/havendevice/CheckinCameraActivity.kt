@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.CountDownTimer
 import android.os.Bundle
 import android.widget.Button
 import android.widget.FrameLayout
@@ -21,6 +22,8 @@ class CheckinCameraActivity : ComponentActivity() {
   private lateinit var frame: FrameLayout
   private lateinit var status: TextView
   private lateinit var shutter: Button
+  private lateinit var timerButton: Button
+  private var timer: CountDownTimer? = null
   private lateinit var switch: Button
   private lateinit var allow: Button
   private var provider: ProcessCameraProvider? = null
@@ -46,6 +49,9 @@ class CheckinCameraActivity : ComponentActivity() {
     allow = button("Allow camera") { permission.launch(Manifest.permission.CAMERA) }
     switch = button("Switch camera") { front = !front; refresh() }
     shutter = button("Take photo") { capture() }
+    timerButton = button("Take photo in 5 seconds") {
+      if (timer == null) startTimer() else cancelTimer()
+    }
     button("Cancel") { finish() }
     setContentView(layout)
   }
@@ -65,13 +71,48 @@ class CheckinCameraActivity : ComponentActivity() {
     super.onPause()
   }
 
+  override fun onWindowFocusChanged(hasFocus: Boolean) {
+    super.onWindowFocusChanged(hasFocus)
+    if (!hasFocus) cancelTimer()
+  }
+
+  private val lensLabel: String get() = if (front) "Front camera" else "Back camera"
+
+  private fun cancelTimer() {
+    if (timer == null) return
+    timer?.cancel()
+    timer = null
+    timerButton.text = "Take photo in 5 seconds"
+    status.text = lensLabel
+  }
+
+  private fun startTimer() {
+    if (!resumed || !hasWindowFocus() || !shutter.isEnabled) return
+    val session = generation
+    timerButton.text = "Cancel photo timer"
+    timer = object : CountDownTimer(5000L, 1000L) {
+      override fun onTick(remaining: Long) {
+        val seconds = (remaining + 999L) / 1000L
+        status.text = "$lensLabel · Photo in $seconds"
+      }
+
+      override fun onFinish() {
+        cancelTimer()
+        if (session == generation) capture()
+      }
+    }
+    timer?.start()
+  }
+
   private fun release() {
+    cancelTimer()
     generation++
     surface?.previewStreamState?.removeObservers(this)
     surface = null
     bound?.let { provider?.unbind(it) }
     bound = null
     frame.removeAllViews()
+    timerButton.isEnabled = false
     shutter.isEnabled = false
     switch.isEnabled = false
   }
@@ -109,10 +150,14 @@ class CheckinCameraActivity : ComponentActivity() {
         bound = use
         camera.bindToLifecycle(this, selector, use)
         switch.isEnabled = hasFront && hasBack
-        val lens = if (front) "Front camera" else "Back camera"
-        status.text = lens
+        status.text = lensLabel
         preview.previewStreamState.observe(this) {
-          if (current == generation) shutter.isEnabled = it == PreviewView.StreamState.STREAMING
+          if (current == generation) {
+            val streaming = it == PreviewView.StreamState.STREAMING
+            if (!streaming) cancelTimer()
+            shutter.isEnabled = streaming
+            timerButton.isEnabled = streaming
+          }
         }
       } catch (e: Exception) {
         release()
@@ -123,9 +168,11 @@ class CheckinCameraActivity : ComponentActivity() {
 
   private fun capture() {
     if (!resumed || !hasWindowFocus() || !shutter.isEnabled) return
+    cancelTimer()
     val photo = surface?.bitmap
     if (photo == null) { status.text = "Preview is not ready. Try again."; return }
     shutter.isEnabled = false
+    timerButton.isEnabled = false
     switch.isEnabled = false
     val current = generation
     Thread {
