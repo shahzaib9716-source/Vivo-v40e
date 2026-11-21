@@ -153,7 +153,8 @@ export function isAlert(v: unknown): v is Alert {
 }
 
 export function isPlace(v: unknown): v is Place {
-  return isRecord(v) && isId(v.id) && isStr(v.name) && isStr(v.icon) && isNum(v.radius) && isBool(v.arrive) && isBool(v.leave);
+  return isRecord(v) && isId(v.id) && isStr(v.name) && isStr(v.icon) && isNum(v.radius) && ((v.latitude === undefined && v.longitude === undefined) ||
+    (isNum(v.latitude) && Math.abs(v.latitude) <= 90 && isNum(v.longitude) && Math.abs(v.longitude) <= 180)) && isBool(v.arrive) && isBool(v.leave);
 }
 
 export function isRewardTask(v: unknown): v is RewardTask {

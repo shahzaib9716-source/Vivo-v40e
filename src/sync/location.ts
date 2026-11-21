@@ -34,6 +34,7 @@ export async function reportChildLocation(
   accuracyM: number,
   measuredAt: number,
   saveCheckin = false,
+  transitions: readonly string[] = [],
 ): Promise<void> {
   if (!familyId || !childId || !uid || !valid(latitude, longitude, accuracyM) || !Number.isSafeInteger(measuredAt) || measuredAt <= 0) {
     throw new Error('Invalid location report');
@@ -42,6 +43,12 @@ export async function reportChildLocation(
   await inOrder(key, () => runTransaction(db(), async tx => {
     const fix = { latitude, longitude, accuracyM, measuredAt, capturedAt: serverTimestamp(), by: uid };
     tx.set(doc(db(), key), fix);
+    if (transitions.length) {
+      tx.set(doc(collection(db(), 'families', familyId, 'alerts')), {
+        kind: 'checkin', childId, icon: 'map-pin', color: '#2E8BFF', title: 'Place update',
+        body: transitions.join(' · ').slice(0, 240), unread: true, at: serverTimestamp(), by: uid,
+      });
+    }
     if (saveCheckin) {
       const slot = String(new Date(measuredAt).getUTCHours());
       tx.set(doc(db(), historyPath(familyId, childId), slot), fix);

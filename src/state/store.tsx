@@ -79,6 +79,8 @@ export interface Alert {
 }
 
 export interface Place {
+  latitude?: number;
+  longitude?: number;
   id: string;
   name: string;
   icon: string;

@@ -474,7 +474,7 @@ const alerts: ListSpec<'alerts'> = {
 // ---- places, schedules, sites: parent-owned family rules -------------------------------------
 // rules: read any member; create/update a parent with the exact shape; delete a parent.
 
-const PLACE_FIELDS = ['name', 'icon', 'radius', 'arrive', 'leave'] as const;
+const PLACE_FIELDS = ['latitude', 'longitude', 'name', 'icon', 'radius', 'arrive', 'leave'] as const;
 
 const places: ListSpec<'places'> = {
   slice: 'places',
@@ -482,6 +482,8 @@ const places: ListSpec<'places'> = {
   doc: {
     name: nonEmptyText(60),
     icon: text(40),
+    latitude: { rule: { type: 'number', min: -90, max: 90 }, optional: true },
+    longitude: { rule: { type: 'number', min: -180, max: 180 }, optional: true },
     radius: { rule: { type: 'number', above: 0, max: 100000 } },
     arrive: bool,
     leave: bool,

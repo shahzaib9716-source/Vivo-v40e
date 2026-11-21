@@ -7,7 +7,11 @@ import { Card, Text } from '@/components/ui';
 import { device, requestFix, shareUsage, clearUsage } from '@/sync/androidDevice';
 import { reportChildLocation, clearChildLocation, clearCheckins } from '@/sync/location';
 
+import { useStore } from '@/state/store';
+import { crossings } from '@/sync/placeCrossing';
+
 export function DeviceSharing({ family, child, uid }: { family: string; child: string; uid: string }) {
+  const { places } = useStore();
   const automatic = useUsageSharing();
   const management = useContext(PolicyStatus);
   const [sharing, setSharing] = useState(false);
@@ -32,12 +36,14 @@ export function DeviceSharing({ family, child, uid }: { family: string; child: s
     const token = generation.current;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let disposed = false;
+    let previous: Awaited<ReturnType<typeof requestFix>> | undefined;
     const active = () => !disposed && token === generation.current && AppState.currentState === 'active';
     async function report() {
       try {
         const fix = await device!.currentFix();
         if (!active()) return;
-        await reportChildLocation(family, child, uid, fix.latitude, fix.longitude, fix.accuracyM, fix.measuredAt);
+        await reportChildLocation(family, child, uid, fix.latitude, fix.longitude, fix.accuracyM, fix.measuredAt, false, crossings(places, previous, fix));
+        previous = fix;
         if (active()) {
           setStatus('Foreground location sharing is on.');
           timer = setTimeout(report, 60000);
@@ -50,7 +56,7 @@ export function DeviceSharing({ family, child, uid }: { family: string; child: s
     }
     timer = setTimeout(report, 60000);
     return () => { disposed = true; clearTimeout(timer); };
-  }, [sharing, family, child, uid, stop]);
+  }, [sharing, family, child, uid, stop, places]);
   if (!device) return null;
   const native = device;
   async function run(work: () => Promise<void>, success: string) {
@@ -67,7 +73,7 @@ export function DeviceSharing({ family, child, uid }: { family: string; child: s
   }
   return <Card><View style={{ gap: 8 }}>
     <Text variant="title">Share from this phone</Text>
-    <Text>Your paired parent can see the latest report until you clear or replace it.</Text>
+    <Text>Your paired parent can see the latest report until you clear or replace it. While sharing every minute, crossings of saved family places can create arrival and departure alerts.</Text>
     <Button title="Share my current location once" disabled={busy || sharing} onPress={() => run(async () => {
       const fix = await requestFix();
       foreground();
