@@ -5,10 +5,11 @@ import { Pressable, View } from 'react-native';
 
 import { InlineNote } from '@/components/InlineNote';
 import { InlineConfirm } from '@/components/RuleForm';
-import { Avatar, Card, Header, Row, Screen, SectionLabel, Text, Toggle } from '@/components/ui';
+import { Avatar, Card, Header, Row, Screen, SectionLabel, SegmentedControl, Text, Toggle } from '@/components/ui';
 import { APP_NAME } from '@/config/variant';
 import { useLink } from '@/sync/link';
 import { useStore } from '@/state/store';
+import { useAppearance } from '@/theme/appearance';
 import { spacing, useTheme } from '@/theme';
 
 /** Rows that have nothing behind them in this build. Tapping one says so right under its group. */
@@ -31,6 +32,8 @@ const EDIT_HIT_SLOP = { top: 14, bottom: 14, left: 12, right: 12 };
 
 export default function Settings() {
   const { colors } = useTheme();
+  const { preference, save } = useAppearance();
+  const [appearanceError, setAppearanceError] = useState(false);
   const { setRole, resetOnboarding, resetDemoData, live } = useStore();
   const link = useLink();
   // Also while the link is still being worked out at start: a reset then would be taken for edits.
@@ -119,6 +122,12 @@ export default function Settings() {
         </Pressable>
       </Card>
       {note(['profile'])}
+
+      <SectionLabel>Appearance</SectionLabel>
+      <SegmentedControl accessibilityLabel="App appearance" options={['System', 'Light', 'Dark']} value={preference} onChange={value => {
+        if (value === 'System' || value === 'Light' || value === 'Dark') void save(value).then(saved => setAppearanceError(!saved));
+      }} />
+      {appearanceError && <Text accessibilityLiveRegion="polite">Appearance changed for this session. This phone could not save the preference.</Text>}
 
       <SectionLabel>Notifications</SectionLabel>
       <Card padded={false} style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.xl }}>

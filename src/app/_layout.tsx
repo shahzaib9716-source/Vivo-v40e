@@ -1,7 +1,7 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { Platform, useColorScheme } from 'react-native';
+import { Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -11,11 +11,16 @@ import { LinkProvider, useLink } from '@/sync/link';
 import { ManagedDevicePolicy } from '@/components/ManagedDevicePolicy';
 import { UsageSharingProvider } from '@/components/UsageSharing';
 import { PolicyStatus } from '@/sync/policyStatus';
-import { palette } from '@/theme';
+import { AppearanceProvider } from '@/theme/appearance';
+import { palette, useTheme } from '@/theme';
 
 export default function RootLayout() {
+  return <AppearanceProvider><AppLayout /></AppearanceProvider>;
+}
+
+function AppLayout() {
   const [policyStatus, setPolicyStatus] = useState('');
-  const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
+  const { mode: scheme } = useTheme();
 
   useEffect(() => {
     if (Platform.OS === 'web' && typeof document !== 'undefined') document.title = APP_NAME;
@@ -36,7 +41,7 @@ export default function RootLayout() {
               <PolicyStatus.Provider value={policyStatus}>
                 <UsageSharingProvider><Screens scheme={scheme} /></UsageSharingProvider>
               </PolicyStatus.Provider>
-              <StatusBar style="auto" />
+              <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
             </ThemeProvider>
           </LinkProvider>
         </StoreProvider>

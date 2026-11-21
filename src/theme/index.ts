@@ -1,3 +1,4 @@
+import { useAppearance } from './appearance';
 import { useColorScheme } from 'react-native';
 
 /**
@@ -135,6 +136,8 @@ export function shadow(level: 1 | 2 | 3 = 1) {
 }
 
 export function useTheme() {
-  const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
+  const system = useColorScheme();
+  const { preference } = useAppearance();
+  const scheme = preference === 'Dark' || (preference === 'System' && system === 'dark') ? 'dark' : 'light';
   return { mode: scheme, colors: palette[scheme] };
 }
