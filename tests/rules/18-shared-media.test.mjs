@@ -31,3 +31,16 @@ test('profile picture editing belongs to the family parent', async () => {
   await refused(setDoc(target('founder'), { jpeg: 'wrong' }));
   await allowed(deleteDoc(target('founder')));
 });
+
+test('only the enrolled child can publish a timed trip fix, with an authenticated author and bounded coordinates', async () => {
+  const target = (who, slot = '12') => ref(h.a[who], A('children/c1/tripPoints/' + slot));
+  const point = { by: h.a.kid1.uid, latitude: 0, longitude: 1, accuracyM: 10, measuredAt: Date.now(), session: 'tripDemo', capturedAt: serverTimestamp() };
+  await allowed(setDoc(target('kid1'), point));
+  await allowedRead(getDoc(target('founder')));
+  await refused(setDoc(target('founder'), { ...point, by: h.a.founder.uid }));
+  await refused(getDoc(target('kid2')));
+  await refused(setDoc(target('kid1', '240'), point));
+  await refused(setDoc(target('kid1'), { ...point, latitude: 100 }));
+  await refused(setDoc(target('kid1'), { ...point, session: '../other' }));
+  await allowed(deleteDoc(target('kid1')));
+});

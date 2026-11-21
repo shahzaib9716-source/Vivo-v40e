@@ -11,9 +11,11 @@ import { useStore } from '@/state/store';
 import { lowBattery, usePowerThreshold } from '@/sync/power';
 import { CrossingSession } from '@/sync/placeCrossing';
 
+import { TripControlsView, useTripActive } from './SharedTrip';
 import { FamilyCheckins } from './PhotoCheckin';
 
 export function DeviceSharing({ family, child, uid }: { family: string; child: string; uid: string }) {
+  const tripActive = useTripActive();
   const { places } = useStore();
   const threshold = usePowerThreshold(family, child)?.percent ?? 0;
   const automatic = useUsageSharing();
@@ -84,9 +86,10 @@ export function DeviceSharing({ family, child, uid }: { family: string; child: s
   }
   return <Card><View style={{ gap: 8 }}>
     <FamilyCheckins key={family + '/' + child + '/' + uid} family={family} child={child} author={uid} />
+    <TripControlsView threshold={threshold} otherSharing={sharing} />
     <Text variant="title">Share from this phone</Text>
     <Text>Your paired parent can see the latest report until you clear or replace it. While sharing every minute, crossings of saved family places can create arrival and departure alerts.</Text>
-    <Button title="Share my current location once" disabled={busy || sharing} onPress={() => run(async () => {
+    <Button title="Share my current location once" disabled={busy || sharing || tripActive} onPress={() => run(async () => {
       const fix = await requestFix();
       foreground();
       await reportChildLocation(family, child, uid, fix.latitude, fix.longitude, fix.accuracyM, fix.measuredAt);
@@ -98,7 +101,7 @@ export function DeviceSharing({ family, child, uid }: { family: string; child: s
       await reportChildLocation(family, child, uid, fix.latitude, fix.longitude, fix.accuracyM, fix.measuredAt, true);
     }, 'Check-in saved.')} />
     <Button title="Clear saved check-ins" disabled={busy} onPress={() => run(() => clearCheckins(family, child), 'Check-in history cleared.')} />
-    <Button title={sharing ? 'Stop location updates' : 'Share every minute while Me is open'} disabled={busy} onPress={() => {
+    <Button title={sharing ? 'Stop location updates' : 'Share every minute while Me is open'} disabled={busy || tripActive} onPress={() => {
       if (sharing) { stop(); setStatus('Location updates stopped.'); return; }
       run(async () => {
         const fix = await requestFix();
@@ -108,7 +111,7 @@ export function DeviceSharing({ family, child, uid }: { family: string; child: s
         if (mounted.current && token === generation.current) { firstFix.current = fix; setSharing(true); }
       }, 'Location shared.');
     }} />
-    <Button title="Clear shared location" disabled={busy} onPress={() => run(() => { stop(); return clearChildLocation(family, child); }, 'Location cleared.')} />
+    <Button title="Clear shared location" disabled={busy || tripActive} onPress={() => run(() => { stop(); return clearChildLocation(family, child); }, 'Location cleared.')} />
     <Text>Usage reports include launchable apps, their package names, and foreground time since midnight on this phone. Sharing includes up to seven days of foreground totals available from Android. Clear shared usage removes these totals.</Text>
     <Button title="Open Android usage access" disabled={busy} onPress={() => run(() => native.openUsageSettings(), 'Return here and tap Share app usage.')} />
     <Button title="Share app usage" disabled={busy} onPress={() => run(async () => {

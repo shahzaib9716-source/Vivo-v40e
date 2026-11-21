@@ -51,6 +51,19 @@ class HavenDeviceModule : Module() {
 
   override fun definition() = ModuleDefinition {
     Name("HavenDevice")
+    Events("onTrip")
+    OnCreate { TripService.receive = { event -> sendEvent("onTrip", event) } }
+    AsyncFunction("startTrip") { scope: String, session: String, threshold: Int ->
+      val activity = requireNotNull(appContext.currentActivity)
+      check(activity.hasWindowFocus()) { "Open the trip screen to start sharing." }
+      check(TripService.visibleChannel(activity)) { "Enable Haven trip notifications before sharing." }
+      val intent = Intent(activity, TripService::class.java).putExtra("scope", scope)
+        .putExtra("session", session).putExtra("threshold", threshold)
+      if (Build.VERSION.SDK_INT >= 26) activity.startForegroundService(intent) else activity.startService(intent)
+      Unit
+    }
+    AsyncFunction("endTrip") { context.stopService(Intent(context, TripService::class.java)); Unit }
+    AsyncFunction("tripScope") { TripService.activeScope }
     AsyncFunction("takeCheckinPhoto") { promise: Promise ->
       val activity = appContext.currentActivity
       android.os.Handler(android.os.Looper.getMainLooper()).post {
@@ -106,7 +119,10 @@ class HavenDeviceModule : Module() {
         } catch (e: Exception) { request?.reject("E_PHOTO", "Unable to prepare the camera preview.", e) }
       }
     }
-    OnDestroy { mediaRequest?.reject("E_MEDIA", "Media session ended.", null); mediaRequest = null; photoRequest?.reject("E_CAMERA", "Camera session ended.", null); photoRequest = null }
+    OnDestroy {
+      TripService.receive = null
+      appContext.reactContext?.let { it.stopService(Intent(it, TripService::class.java)) }
+      mediaRequest?.reject("E_MEDIA", "Media session ended.", null); mediaRequest = null; photoRequest?.reject("E_CAMERA", "Camera session ended.", null); photoRequest = null }
     AsyncFunction("permissionStatus") {
       val ctx = context
       val policy = requireNotNull(ctx.getSystemService(DevicePolicyManager::class.java))

@@ -16,7 +16,21 @@ export interface DevicePermissions {
   screeningEnabled?: boolean;
 }
 
+export interface TripEvent {
+  event: 'started' | 'fix' | 'stopped';
+  scope: string;
+  session: string;
+  message: string;
+  latitude?: number;
+  longitude?: number;
+  accuracyM?: number;
+  measuredAt?: number;
+}
 interface DeviceModule {
+  addListener?(name: 'onTrip', listener: (event: TripEvent) => void): { remove(): void };
+  startTrip?(scope: string, session: string, threshold: number): Promise<void>;
+  endTrip?(): Promise<void>;
+  tripScope?(): Promise<string | null>;
   chooseCheckinImage?(): Promise<string | null>;
   recordVoiceNote?(): Promise<string | null>;
   playVoiceNote?(audio: string): Promise<void>;

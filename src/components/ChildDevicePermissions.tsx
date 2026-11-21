@@ -41,7 +41,7 @@ export function ChildDevicePermissions() {
           <Text>Usage Access · {label(values?.usage, 'Granted', 'Required for usage reports')}</Text>
           <Button title="Open Usage Access" onPress={() => open(async () => device?.openUsageSettings())} />
           <Text>Foreground location · {label(values?.location, 'Granted', 'Required for GPS sharing')}</Text>
-          <Text>Background location · Haven shares GPS from the open child screen.</Text>
+          <Text>Trip sharing · A trip you start can continue for 30 minutes with a visible Android notification.</Text>
           <Text>Notifications · {label(values?.notifications, 'Allowed', 'Disabled')}</Text>
           <Button title="Open Haven app settings" onPress={() => open(Linking.openSettings)} />
           {device.requestScreeningRole && values && <>

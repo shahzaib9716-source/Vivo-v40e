@@ -1,4 +1,4 @@
-import { collection, doc, onSnapshot, serverTimestamp, runTransaction } from 'firebase/firestore';
+import { collection, doc, getDocsFromServer, limit, onSnapshot, query, serverTimestamp, runTransaction, writeBatch } from 'firebase/firestore';
 import type { DocumentSnapshot } from 'firebase/firestore';
 import { db } from './remote';
 
@@ -35,6 +35,7 @@ export async function reportChildLocation(
   measuredAt: number,
   saveCheckin = false,
   transitions: readonly string[] = [],
+  trip?: string,
 ): Promise<void> {
   if (!familyId || !childId || !uid || !valid(latitude, longitude, accuracyM) || !Number.isSafeInteger(measuredAt) || measuredAt <= 0) {
     throw new Error('Invalid location report');
@@ -43,6 +44,10 @@ export async function reportChildLocation(
   await inOrder(key, () => runTransaction(db(), async tx => {
     const fix = { latitude, longitude, accuracyM, measuredAt, capturedAt: serverTimestamp(), by: uid };
     tx.set(doc(db(), key), fix);
+    if (trip) {
+      const slot = String(Math.floor(measuredAt / 60000) % 240);
+      tx.set(doc(db(), 'families', familyId, 'children', childId, 'tripPoints', slot), { ...fix, session: trip });
+    }
     if (transitions.length) {
       tx.set(doc(collection(db(), 'families', familyId, 'alerts')), {
         kind: 'checkin', childId, icon: 'map-pin', color: '#2E8BFF', title: 'Place update',
@@ -97,4 +102,32 @@ export function clearCheckins(family: string, child: string) {
   return inOrder(path(family, child), () => runTransaction(db(), async tx => {
     for (let hour = 0; hour < 24; hour++) tx.delete(doc(db(), historyPath(family, child), String(hour)));
   }));
+}
+
+
+export interface TripPoint extends ChildLocation { session: string }
+
+export function listenTripPoints(family: string, child: string, receive: (points: TripPoint[], cached: boolean) => void, fail: (error: Error) => void) {
+  return onSnapshot(collection(db(), 'families', family, 'children', child, 'tripPoints'), { includeMetadataChanges: true }, snapshot => {
+    const points: TripPoint[] = [];
+    for (const entry of snapshot.docs) {
+      const point = readFix(entry);
+      const session = entry.get('session');
+      if (point && typeof session === 'string') points.push({ ...point, session });
+    }
+    receive(points.sort((a, b) => (a.measuredAt ?? a.receivedAt) - (b.measuredAt ?? b.receivedAt)), snapshot.metadata.fromCache);
+  }, fail);
+}
+
+export function clearTripPoints(family: string, child: string) {
+  return inOrder(path(family, child), async () => {
+    const page = query(collection(db(), 'families', family, 'children', child, 'tripPoints'), limit(60));
+    for (;;) {
+      const records = await getDocsFromServer(page);
+      if (records.empty) return;
+      const batch = writeBatch(db());
+      for (const record of records.docs) batch.delete(record.ref);
+      await batch.commit();
+    }
+  });
 }
