@@ -37,6 +37,9 @@ interface DeviceModule {
   takeCheckinPhoto?(): Promise<string | null>;
   permissionStatus?(): Promise<DevicePermissions>;
   batteryPercent?(): Promise<number>;
+  familyCallConsent?(scope: string): Promise<boolean>;
+  setFamilyCallConsent?(scope: string, allow: boolean): Promise<void>;
+  applyFamilyCallRule?(scope: string, block: boolean | null): Promise<void>;
   requestScreeningRole?(): Promise<void>;
   setScreeningEnabled?(value: boolean): Promise<void>;
   openAdminActivation?(): Promise<void>;

@@ -1,3 +1,5 @@
+import { HandsetCallConsent } from '@/components/FamilyCallSettings';
+import { useLink } from '@/sync/link';
 import { useCallback, useState } from 'react';
 import { AppState, Button, Linking, Platform, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
@@ -5,6 +7,7 @@ import { Card, SectionLabel, Text } from '@/components/ui';
 import { device, type DevicePermissions } from '@/sync/androidDevice';
 
 export function ChildDevicePermissions() {
+  const link = useLink();
   const [status, setStatus] = useState<{ values: DevicePermissions; checkedAt: number }>();
   const [error, setError] = useState('');
   const refresh = useCallback(async () => {
@@ -45,12 +48,13 @@ export function ChildDevicePermissions() {
           <Text>Notifications · {label(values?.notifications, 'Allowed', 'Disabled')}</Text>
           <Button title="Open Haven app settings" onPress={() => open(Linking.openSettings)} />
           {device.requestScreeningRole && values && <>
-            <Text>Call screening · {values.screeningRole && values.screeningEnabled ? 'Blocking incoming numbers outside contacts' : 'Off'}</Text>
+            <Text>Local call setting · {values.screeningRole && values.screeningEnabled ? 'Blocking incoming numbers outside contacts' : 'Off'}</Text>
             <Text>Android sends eligible incoming numbers outside your contacts to Haven. Calls with hidden caller ID follow your dialer settings.</Text>
             {values.screeningRole ? <Button title={values.screeningEnabled ? 'Turn off non-contact call blocking' : 'Block incoming non-contact calls'}
               onPress={() => open(async () => { await device?.setScreeningEnabled?.(!values.screeningEnabled); await refresh(); })} />
               : <Button title="Choose call screening app" onPress={() => open(async () => device?.requestScreeningRole?.())} />}
           </>}
+          {link.role === 'child' && link.familyId && link.childId && link.account && <HandsetCallConsent key={link.familyId + '/' + link.childId + '/' + link.account.uid} scope={[link.familyId, link.childId, link.account.uid].join('/')} />}
           <Text>Device Administrator · {label(values?.admin, 'Active', 'Inactive')}</Text>
           {values && !values.admin && device.openAdminActivation && <Button title="Review Android administrator activation" onPress={() => open(async () => device?.openAdminActivation?.())} />}
           <Text>Device Owner · {label(values?.owner, 'Enrolled', 'Enrollment required for enforcement')}</Text>

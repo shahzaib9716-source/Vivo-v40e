@@ -144,6 +144,9 @@ class HavenDeviceModule : Module() {
     AsyncFunction("batteryPercent") {
       context.getSystemService(android.os.BatteryManager::class.java)?.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)?.takeIf { it in 0..100 } ?: -1
     }
+    AsyncFunction("familyCallConsent") { scope: String -> FamilyCallRule.optedIn(context, scope) }
+    AsyncFunction("setFamilyCallConsent") { scope: String, allow: Boolean -> FamilyCallRule.consent(context, scope, allow) }
+    AsyncFunction("applyFamilyCallRule") { scope: String, block: Boolean? -> FamilyCallRule.apply(context, scope, block) }
     AsyncFunction("requestScreeningRole") {
       check(Build.VERSION.SDK_INT >= 29) { "Call screening requires Android 10 or later." }
       val manager = requireNotNull(context.getSystemService(RoleManager::class.java))

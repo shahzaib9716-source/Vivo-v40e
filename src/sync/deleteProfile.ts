@@ -89,7 +89,7 @@ export async function finishProfileDeletion(db: Firestore, family: string, child
     await removeEnrollment(db, base, child, member.ref);
   }
   for (const group of ['live', 'settings', 'packageRules', 'unlock', 'photos', 'location',
-    'checkins', 'management', 'usage', 'requests', 'messages', 'voice', 'tripPoints', 'checkinRequests']) {
+    'checkins', 'management', 'usage', 'requests', 'messages', 'voice', 'tripPoints', 'checkinRequests', 'callStatus']) {
     await drain(db, collection(profile, group));
   }
   await drain(db, query(collection(base, 'alerts'), where('childId', '==', child)));

@@ -438,7 +438,7 @@ service cloud.firestore {
 
         match /{group}/{entry} {
           allow list, delete: if group in ['live', 'settings', 'packageRules', 'unlock', 'photos',
-              'location', 'checkins', 'management', 'usage', 'requests', 'messages', 'voice', 'tripPoints', 'checkinRequests']
+              'location', 'checkins', 'management', 'usage', 'requests', 'messages', 'voice', 'tripPoints', 'checkinRequests', 'callStatus']
             && isParent(fid) && retired(fid, cid);
         }
 
@@ -464,6 +464,19 @@ service cloud.firestore {
             && request.resource.data.minutes is int && request.resource.data.minutes >= 0
             && request.resource.data.minutes <= 1440 && request.resource.data.blocked is bool;
           allow delete: if isParent(fid);
+        }
+        match /settings/calls {
+          allow get: if isParent(fid) || isChildOf(fid, cid);
+          allow create, update: if isParent(fid) && childExists(fid, cid)
+            && request.resource.data.keys().hasOnly(['blockNonContacts']) && request.resource.data.blockNonContacts is bool;
+          allow delete: if isParent(fid);
+        }
+        match /callStatus/{uid} {
+          allow get: if isParent(fid) || (isChildOf(fid, cid) && uid == request.auth.uid);
+          allow create, update: if isChildOf(fid, cid) && uid == request.auth.uid
+            && request.resource.data.keys().hasOnly(['state', 'by', 'at'])
+            && request.resource.data.state in ['handset', 'permission', 'blocked', 'allowed']
+            && request.resource.data.by == uid && request.resource.data.at == request.time;
         }
         match /settings/offline {
           allow get: if isParent(fid) || isChildOf(fid, cid);
