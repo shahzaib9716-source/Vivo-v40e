@@ -1,10 +1,13 @@
 """Exercise two independently installed Haven apps against the local Firebase emulators."""
+from functools import cache
 import json
 import re
 import subprocess
 import time
 import urllib.request
 import xml.etree.ElementTree as ET
+
+import uiautomator2 as u2
 
 AUTH = 'http://127.0.0.1:9099'
 PROJECT = 'demo-haven'
@@ -32,17 +35,20 @@ def show(side, path=''):
         adb('shell', 'am', 'start', '-W', '-a', 'android.intent.action.MAIN', '-c', 'android.intent.category.LAUNCHER', '-f', '0x10200000', '-n', package + '/.MainActivity')
 
 
-def node(pattern, *, edit=False, enabled=False, last_match=False):
+@cache
+def reader():
+    device = u2.connect()
+    device.jsonrpc.setConfigurator({'waitForIdleTimeout': 0, 'waitForSelectorTimeout': 0})
+    return device
+
+
+def node(pattern, *, edit=False, enabled=False, last_match=False, scroll=False):
     deadline = time.monotonic() + 55
     pattern = re.compile(pattern)
     last = []
+    attempts = 0
     while time.monotonic() < deadline:
-        dump = adb('exec-out', 'uiautomator', 'dump', '/dev/tty')
-        start, end = dump.find('<hierarchy'), dump.rfind('</hierarchy>')
-        if start < 0 or end < start:
-            time.sleep(0.4)
-            continue
-        root = ET.fromstring(dump[start:end + len('</hierarchy>')])
+        root = ET.fromstring(reader().dump_hierarchy())
         last = []
         nodes = list(root.iter('node'))
         for el in reversed(nodes) if last_match else nodes:
@@ -60,12 +66,21 @@ def node(pattern, *, edit=False, enabled=False, last_match=False):
                     x1, y1, x2, y2 = map(int, re.findall(r'\d+', attrs['bounds']))
                     if x2 > x1 and y2 > y1:
                         return match, (str((x1 + x2) // 2), str((y1 + y2) // 2))
+        attempts += 1
+        if scroll and attempts % 5 == 0:
+            x, y1, y2 = ('540', '1810', '810')
+            if (attempts // 5) % 4 >= 2:
+                y1, y2 = y2, y1
+            adb('shell', 'input', 'swipe', x, y1, x, y2, '350')
         time.sleep(0.4)
+    if not last:
+        focus = [line.strip() for line in adb('shell', 'dumpsys', 'window').splitlines() if 'mCurrentFocus=' in line]
+        last.extend(focus)
     raise AssertionError(f'Control {pattern.pattern!r} missing. Last controls: {last[-32:]}')
 
 
 def tap(pattern, **opts):
-    _, pos = node(pattern, enabled=True, **opts)
+    _, pos = node(pattern, enabled=True, scroll=True, **opts)
     adb('shell', 'input', 'tap', *pos)
 
 
@@ -103,7 +118,8 @@ def run():
     node('Your family is ready')
     show('parent', 'pairing')
     tap('A child’s phone(?:,.*)?')
-    code = node(r'Pairing code: ((?:[A-Z2-9] ){7}[A-Z2-9])')[0][1].replace(' ', '')
+    display, _ = node(r'(?:Pairing code: ((?:[A-Z2-9] ){7}[A-Z2-9])|([A-Z2-9]{4}-[A-Z2-9]{4}))')
+    code = (display[1] or display[2]).replace(' ', '').replace('-', '')
     show('child')
     fill('Pairing code', code)
     tap('Link this phone')

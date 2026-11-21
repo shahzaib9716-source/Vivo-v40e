@@ -8,9 +8,67 @@ on:
       - 'tests/ui/same-handset.py'
 permissions:
   contents: read
+  actions: read
 
 jobs:
+  previous-build:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.match.outputs.run }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 6
+      - name: Find existing APKs for test-only changes
+        id: match
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: python
+        run: |
+          import json, os, subprocess
+          from pathlib import Path
+          import yaml
+
+          def output(*args):
+              return subprocess.check_output(args, text=True).strip()
+
+          def workflow_inputs(source):
+              workflow = yaml.safe_load(source)
+              job = dict(workflow['jobs']['apk'])
+              for key in ('needs', 'if'):
+                  job.pop(key, None)
+              return [workflow.get('env'), workflow.get('defaults'), job]
+
+          path = '.github/workflows/paired-android.yml'
+          expected = workflow_inputs(Path(path).read_text())
+          endpoint = 'repos/' + os.environ['GITHUB_REPOSITORY'] + '/actions/runs'
+          names = {f'Haven-{side}-{target}' for side in ('parent', 'child') for target in ('phone', 'integration')}
+          for commit in output('git', 'rev-list', '--first-parent', '--skip=1', '--max-count=4', 'HEAD').splitlines():
+              changed = output('git', 'diff', '--name-only', commit, 'HEAD').splitlines()
+              if any(p != path and not p.startswith('tests/ui/') for p in changed):
+                  break
+              old = subprocess.run(['git', 'show', commit + ':' + path], capture_output=True, text=True)
+              if old.returncode or workflow_inputs(old.stdout) != expected:
+                  break
+              try:
+                  runs = json.loads(output('gh', 'api', endpoint + '?head_sha=' + commit))['workflow_runs']
+                  for run in runs:
+                      if run['path'] != path or run['head_branch'] != os.environ['GITHUB_HEAD_REF']:
+                          continue
+                      artifacts = json.loads(output('gh', 'api', endpoint + '/' + str(run['id']) + '/artifacts'))['artifacts']
+                      if names <= {a['name'] for a in artifacts if not a['expired']}:
+                          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                              print('run=' + str(run['id']), file=f)
+                          print('Verified APK build inputs match run', run['id'])
+                          raise SystemExit(0)
+              except subprocess.CalledProcessError:
+                  break
+
   apk:
+    needs: previous-build
+    if: needs.previous-build.outputs.run == ''
     runs-on: ubuntu-latest
     timeout-minutes: 65
     strategy:
@@ -61,7 +119,8 @@ jobs:
           if-no-files-found: error
 
   same-phone:
-    needs: apk
+    needs: [previous-build, apk]
+    if: ${{ !cancelled() && needs.previous-build.result == 'success' && (needs.apk.result == 'success' || needs.previous-build.outputs.run != '') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -75,6 +134,8 @@ jobs:
           java-version: 21
       - uses: actions/download-artifact@v6
         with:
+          github-token: ${{ github.token }}
+          run-id: ${{ needs.previous-build.outputs.run || github.run_id }}
           pattern: Haven-*-integration
           merge-multiple: true
           path: apks
@@ -83,6 +144,9 @@ jobs:
           sudo rm -rf /usr/share/dotnet /usr/local/.ghcup /opt/ghc /usr/local/share/boost
           sudo chmod a+rw /dev/kvm
           npm ci --include=dev --no-audit --no-fund
+          python3 -m venv "$RUNNER_TEMP/haven-ui"
+          "$RUNNER_TEMP/haven-ui/bin/pip" install uiautomator2==3.3.3
+          echo "$RUNNER_TEMP/haven-ui/bin" >> "$GITHUB_PATH"
           npx --yes firebase-tools@14 setup:emulators:firestore
       - uses: reactivecircus/android-emulator-runner@v2
         with:
