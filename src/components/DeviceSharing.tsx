@@ -11,7 +11,7 @@ import { useStore } from '@/state/store';
 import { lowBattery, usePowerThreshold } from '@/sync/power';
 import { CrossingSession } from '@/sync/placeCrossing';
 
-import { PhotoCheckin } from './PhotoCheckin';
+import { FamilyCheckins } from './PhotoCheckin';
 
 export function DeviceSharing({ family, child, uid }: { family: string; child: string; uid: string }) {
   const { places } = useStore();
@@ -83,7 +83,7 @@ export function DeviceSharing({ family, child, uid }: { family: string; child: s
     if (!focused.current || !mounted.current || AppState.currentState !== 'active') throw Error('Open Haven to share this report.');
   }
   return <Card><View style={{ gap: 8 }}>
-    <PhotoCheckin key={family + '/' + child + '/' + uid} family={family} child={child} author={uid} />
+    <FamilyCheckins key={family + '/' + child + '/' + uid} family={family} child={child} author={uid} />
     <Text variant="title">Share from this phone</Text>
     <Text>Your paired parent can see the latest report until you clear or replace it. While sharing every minute, crossings of saved family places can create arrival and departure alerts.</Text>
     <Button title="Share my current location once" disabled={busy || sharing} onPress={() => run(async () => {

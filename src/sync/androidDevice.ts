@@ -17,6 +17,9 @@ export interface DevicePermissions {
 }
 
 interface DeviceModule {
+  chooseCheckinImage?(): Promise<string | null>;
+  recordVoiceNote?(): Promise<string | null>;
+  playVoiceNote?(audio: string): Promise<void>;
   takeCheckinPhoto?(): Promise<string | null>;
   permissionStatus?(): Promise<DevicePermissions>;
   batteryPercent?(): Promise<number>;

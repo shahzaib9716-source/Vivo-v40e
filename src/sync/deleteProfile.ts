@@ -6,12 +6,11 @@ import type { DocumentReference, Firestore, Query } from 'firebase/firestore';
 export async function deleteProfile(db: Firestore, family: string, child: string) {
   const base = doc(db, 'families', family);
   const profile = doc(base, 'children', child);
-  const job = doc(base, 'childDeletions', child);
   await runTransaction(db, async tx => {
-    if ((await tx.get(job)).exists()) return;
-    if (!(await tx.get(profile)).exists()) throw Error('This profile no longer exists.');
-    tx.set(job, { pending: true });
-    tx.delete(profile);
+    const current = await tx.get(profile);
+    if (!current.exists()) throw Error('This profile no longer exists.');
+    if (current.get('retired') === true) return;
+    tx.set(profile, { retired: true, pending: true });
   });
 }
 
@@ -82,8 +81,7 @@ async function removeEnrollment(db: Firestore, family: DocumentReference, child:
 export async function finishProfileDeletion(db: Firestore, family: string, child: string) {
   const base = doc(db, 'families', family);
   const profile = doc(base, 'children', child);
-  const job = doc(base, 'childDeletions', child);
-  const stillPending = await runTransaction(db, async tx => (await tx.get(job)).get('pending') === true);
+  const stillPending = await runTransaction(db, async tx => (await tx.get(profile)).get('pending') === true);
   if (!stillPending) return;
 
   const enrolled = query(collection(base, 'members'), where('childId', '==', child));
@@ -91,7 +89,7 @@ export async function finishProfileDeletion(db: Firestore, family: string, child
     await removeEnrollment(db, base, child, member.ref);
   }
   for (const group of ['live', 'settings', 'packageRules', 'unlock', 'photos', 'location',
-    'checkins', 'management', 'usage', 'requests', 'messages']) {
+    'checkins', 'management', 'usage', 'requests', 'messages', 'voice']) {
     await drain(db, collection(profile, group));
   }
   await drain(db, query(collection(base, 'alerts'), where('childId', '==', child)));
@@ -99,6 +97,6 @@ export async function finishProfileDeletion(db: Firestore, family: string, child
     const sos = doc(base, 'signals', 'sos');
     const signal = await tx.get(sos);
     if (signal.get('childId') === child) tx.delete(sos);
-    tx.set(job, { pending: false });
+    tx.set(profile, { retired: true, pending: false });
   });
 }

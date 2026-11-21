@@ -14,7 +14,6 @@ export function ProfileDeletionProvider({ children }: { children: ReactNode }) {
   const { role, status, familyId, account } = useLink();
   const [message, setMessage] = useState('');
   useEffect(() => {
-    setMessage('');
     if (role !== 'parent' || status !== 'linked' || !familyId) return;
     const family = familyId;
     let active = true;
@@ -42,7 +41,7 @@ export function ProfileDeletionProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    const pending = query(collection(db(), 'families', family, 'childDeletions'), where('pending', '==', true));
+    const pending = query(collection(db(), 'families', family, 'children'), where('pending', '==', true));
     const stop = onSnapshot(pending, { includeMetadataChanges: true }, snapshot => {
       if (snapshot.metadata.fromCache || snapshot.metadata.hasPendingWrites) return;
       jobs = snapshot.docs.map(record => record.id);
@@ -50,11 +49,11 @@ export function ProfileDeletionProvider({ children }: { children: ReactNode }) {
         hadJobs = true;
         setMessage('Removing deleted profiles’ saved data…');
         void clean();
-      } else if (hadJobs) setMessage('Deleted profiles and their saved family data have been removed.');
+      } else setMessage(hadJobs ? 'Deleted profiles and their saved family data have been removed.' : '');
     }, () => setMessage('Unable to check profile cleanup. Reopen Haven when connected.'));
     return () => { active = false; stop(); clearTimeout(timer); };
   }, [role, status, familyId, account?.uid]);
-  return <Progress.Provider value={message}>{children}</Progress.Provider>;
+  return <Progress.Provider value={role === 'parent' && status === 'linked' ? message : ''}>{children}</Progress.Provider>;
 }
 
 export function ProfileDeletionStatus() {

@@ -5,7 +5,10 @@
   <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
   <queries><intent><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent><intent><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.HOME"/></intent></queries>
   <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+  <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+  <uses-feature android:name="android.hardware.microphone" android:required="false"/>
   <application>
+    <activity android:name="expo.modules.havendevice.VoiceNoteActivity" android:exported="false" android:configChanges="orientation|screenSize|keyboardHidden"/>
     <service android:name="expo.modules.havendevice.HavenCallScreening" android:exported="true" android:permission="android.permission.BIND_SCREENING_SERVICE">
       <intent-filter><action android:name="android.telecom.CallScreeningService"/></intent-filter>
     </service>

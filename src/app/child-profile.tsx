@@ -5,13 +5,14 @@ import { router } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { InlineConfirm, TextField } from '@/components/RuleForm';
+import { ProfilePicture } from '@/components/ProfilePicture';
 import { Avatar, Button, Card, Header, IconBadge, PlaceholderNotice, Row, Screen, SectionLabel, StatTile, Text } from '@/components/ui';
 import { useStore, fmtDuration } from '@/state/store';
 import { categoryColors, spacing, useTheme } from '@/theme';
 
 import { ParentUnlock } from '@/components/ParentUnlock';
 import { DeleteChildProfile } from '@/components/ProfileDeletion';
-import { PhotoCheckin } from '@/components/PhotoCheckin';
+import { FamilyCheckins } from '@/components/PhotoCheckin';
 import { PowerSetting } from '@/components/PowerSetting';
 import { useLink } from '@/sync/link';
 
@@ -126,7 +127,9 @@ export default function ChildProfile() {
           <Header back />
 
           <View style={styles.hero}>
-            <Avatar name={activeChild.name} size={88} ring />
+            {live && link.role === 'parent' && link.familyId && activeChild.id
+              ? <ProfilePicture key={link.familyId + '/' + activeChild.id} family={link.familyId} child={activeChild.id} name={activeChild.name} size={88} edit />
+              : <Avatar name={activeChild.name} size={88} ring />}
             <Text variant="h1" center numberOfLines={2} style={styles.name}>
               {activeChild.name}
             </Text>
@@ -135,7 +138,7 @@ export default function ChildProfile() {
             </Text>
           </View>
 
-          {live && link.role === 'parent' && link.familyId && <PhotoCheckin key={link.familyId + '/' + activeChildId} family={link.familyId} child={activeChildId} />}
+          {live && link.role === 'parent' && link.familyId && <FamilyCheckins key={link.familyId + '/' + activeChildId} family={link.familyId} child={activeChildId} />}
           {live && link.role === 'parent' && link.familyId && link.account && <ParentUnlock key={'pin-' + activeChildId} parent family={link.familyId} child={activeChildId} uid={link.account.uid} />}
           {live && link.role === 'parent' && link.familyId && <PowerSetting key={activeChildId} family={link.familyId} child={activeChildId} />}
           {live ? (

@@ -15,7 +15,7 @@ test('only a parent can atomically retire an existing child in their own family'
     await refused(deleteProfile(h.a[who].db, FAM_A, 'c1'));
   }
   await refused(deleteDoc(ref(parent, A('children/c1'))));
-  await refused(setDoc(ref(parent, A('childDeletions/c1')), { pending: true }));
+  await refused(setDoc(ref(parent, A('children/c1')), { pending: true }));
   await allowed(deleteProfile(parent.db, FAM_A, 'c1'));
   await refused(setDoc(ref(parent, A('children/c1')), make.child()));
   await refused(setDoc(ref(parent, A('children/c1/settings/power')), { percent: 20 }));
@@ -41,7 +41,7 @@ test('cleanup resumes after revocation, drains multiple pages, and preserves sib
   for (const path of ['children/c2/photos/latest', 'children/c2/messages/m4', 'devices/devKid2', 'members/' + U.kid2, 'alerts/n3']) {
     assert.ok(await h.peek(A(path)), path);
   }
-  assert.deepEqual(await h.peek(A('childDeletions/c1')), { pending: false });
+  assert.deepEqual(await h.peek(A('children/c1')), { retired: true, pending: false });
 });
 
 test('a stale enrollment cannot remove an account pointer that names another family', async () => {

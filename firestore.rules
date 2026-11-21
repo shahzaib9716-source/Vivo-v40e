@@ -107,17 +107,21 @@ service cloud.firestore {
       return isChild(fid) && myRecord(fid).childId == cid;
     }
 
-    function childExists(fid, cid) {
-      return exists(/databases/$(database)/documents/families/$(fid)/children/$(cid));
+    function profilePath(fid, cid) {
+      return /databases/$(database)/documents/families/$(fid)/children/$(cid);
     }
 
-    function deletionPath(fid, cid) {
-      return /databases/$(database)/documents/families/$(fid)/childDeletions/$(cid);
+    function childExists(fid, cid) {
+      return get(profilePath(fid, cid)).data.get('retired', false) == false;
+    }
+
+    function retired(fid, cid) {
+      return get(profilePath(fid, cid)).data.get('retired', false) == true;
     }
 
     function retiredMember(fid, uid) {
       let member = get(memberPath(fid, uid)).data;
-      return member.role == 'child' && exists(deletionPath(fid, member.childId));
+      return member.role == 'child' && retired(fid, member.childId);
     }
 
     // ---- Small helpers -----------------------------------------------------------------------
@@ -331,7 +335,7 @@ service cloud.firestore {
           && (request.resource.data.role == 'parent'
                 ? request.resource.data.childId == null
                 : (request.resource.data.childId is string
-                    && existsAfter(/databases/$(database)/documents/families/$(fid)/children/$(request.resource.data.childId))));
+                    && getAfter(profilePath(fid, request.resource.data.childId)).data.get('retired', false) == false));
 
         // A parent may relabel a member or point a child device at another child profile.
         // The role, and how the member got in, never change.
@@ -391,14 +395,6 @@ service cloud.firestore {
           && data.ord is number;
       }
 
-      match /childDeletions/{cid} {
-        allow read: if isParent(fid);
-        allow create: if isParent(fid) && idOk(cid) && childExists(fid, cid)
-          && !existsAfter(/databases/$(database)/documents/families/$(fid)/children/$(cid))
-          && request.resource.data == {'pending': true};
-        allow update: if isParent(fid) && request.resource.data == {'pending': false};
-      }
-
       match /children/{cid} {
         function pinPath() {
           return /databases/$(database)/documents/families/$(fid)/children/$(cid)/unlock/pin;
@@ -430,17 +426,20 @@ service cloud.firestore {
         }
         allow get: if isParent(fid) || isChildOf(fid, cid);
         allow list: if isParent(fid);
-        allow create: if isParent(fid) && idOk(cid) && !exists(deletionPath(fid, cid)) && childShapeOk(request.resource.data);
-        allow update: if isParent(fid) && childShapeOk(request.resource.data);
+        allow create: if isParent(fid) && idOk(cid) && childShapeOk(request.resource.data);
+        allow update: if isParent(fid) && resource.data.get('retired', false) == false
+          && (childShapeOk(request.resource.data) || request.resource.data == {'retired': true, 'pending': true});
+        allow update: if isParent(fid) && resource.data.get('retired', false) == true
+          && request.resource.data == {'retired': true, 'pending': false};
         allow update: if isChildOf(fid, cid) && resource.data.bedtime == true
           && request.resource.data.bedtime == false && onlyChanged(['bedtime'])
           && redeemable() && !existsAfter(pinPath()) && !existsAfter(attemptPath());
-        allow delete: if isParent(fid) && existsAfter(deletionPath(fid, cid));
+        allow delete: if false;
 
         match /{group}/{entry} {
           allow list, delete: if group in ['live', 'settings', 'packageRules', 'unlock', 'photos',
-              'location', 'checkins', 'management', 'usage', 'requests', 'messages']
-            && isParent(fid) && exists(deletionPath(fid, cid));
+              'location', 'checkins', 'management', 'usage', 'requests', 'messages', 'voice']
+            && isParent(fid) && retired(fid, cid);
         }
 
         // What the child's own device reports. Today: the time of its last check-in.
@@ -471,6 +470,30 @@ service cloud.firestore {
           allow create, update: if isParent(fid) && childExists(fid, cid) && request.resource.data.keys().hasOnly(['enabled'])
             && request.resource.data.enabled is bool;
           allow delete: if isParent(fid);
+        }
+        match /photos/avatar {
+          allow get: if isParent(fid) || isChildOf(fid, cid);
+          allow create, update: if isParent(fid) && childExists(fid, cid)
+            && request.resource.data.keys().hasOnly(['jpeg']) && boundedJpeg(request.resource.data.jpeg);
+          allow delete: if isParent(fid);
+        }
+        function boundedJpeg(jpeg) {
+          return jpeg is string && jpeg.size() <= 240000 && jpeg.matches('/9j/[A-Za-z0-9+/=]+');
+        }
+        match /photos/screen {
+          allow get: if isParent(fid) || isChildOf(fid, cid);
+          allow create, update: if isChildOf(fid, cid) && request.resource.data.keys().hasOnly(['jpeg', 'by', 'at'])
+            && boundedJpeg(request.resource.data.jpeg) && request.resource.data.by == request.auth.uid
+            && request.resource.data.at == request.time;
+          allow delete: if isChildOf(fid, cid);
+        }
+        match /voice/latest {
+          allow get: if isParent(fid) || isChildOf(fid, cid);
+          allow create, update: if isChildOf(fid, cid) && request.resource.data.keys().hasOnly(['audio', 'by', 'at'])
+            && request.resource.data.audio is string && request.resource.data.audio.size() <= 240000
+            && request.resource.data.audio.matches('[A-Za-z0-9+/]+={0,2}')
+            && request.resource.data.by == request.auth.uid && request.resource.data.at == request.time;
+          allow delete: if isChildOf(fid, cid);
         }
         match /photos/latest {
           allow get: if isParent(fid) || isChildOf(fid, cid);
@@ -602,7 +625,7 @@ service cloud.firestore {
 
         allow create: if idOk(aid)
           && alertShapeOk(request.resource.data)
-          && (request.resource.data.childId == null || !exists(deletionPath(fid, request.resource.data.childId)))
+          && (request.resource.data.childId == null || !exists(profilePath(fid, request.resource.data.childId)) || childExists(fid, request.resource.data.childId))
           && request.resource.data.unread == true
           && request.resource.data.at == request.time
           && request.resource.data.by == request.auth.uid
@@ -718,7 +741,7 @@ service cloud.firestore {
                           || resource.data.childId == myRecord(fid).childId)));
 
         allow delete: if signal == 'sos' && isParent(fid) && resource.data.childId is string
-          && exists(deletionPath(fid, resource.data.childId));
+          && retired(fid, resource.data.childId);
       }
     }
 
