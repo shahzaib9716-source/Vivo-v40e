@@ -47,6 +47,32 @@ class FamilySharingTest {
     assertTrue(check())
   }
 
+  @Test fun copiesTheVisibleHavenWindowAndRejectsProtectedContent() {
+    ActivityScenario.launch<VoiceNoteActivity>(Intent(context, VoiceNoteActivity::class.java)).use { screen ->
+      screen.onActivity { a ->
+        a.setContentView(View(a).apply { setBackgroundColor(android.graphics.Color.MAGENTA) })
+      }
+      instrumentation.waitForIdleSync()
+      fun capture(): Result<String> {
+        val completed = java.util.concurrent.CompletableFuture<Result<String>>()
+        screen.onActivity { a -> HavenWindow.capture(a) { completed.complete(it) } }
+        return completed.get(10, java.util.concurrent.TimeUnit.SECONDS)
+      }
+      awaitState {
+        val jpeg = capture().getOrNull()
+        if (jpeg == null) false else {
+          val bytes = Base64.decode(jpeg, Base64.NO_WRAP)
+          val bitmap = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+          val pixel = bitmap.getPixel(bitmap.width / 2, bitmap.height / 2)
+          bitmap.recycle()
+          android.graphics.Color.red(pixel) > 245 && android.graphics.Color.blue(pixel) > 245 && android.graphics.Color.green(pixel) < 10
+        }
+      }
+      screen.onActivity { it.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE) }
+      assertTrue(capture().isFailure)
+    }
+  }
+
   @Test fun cameraReturnsAPrivateJpegFromEachLensAndSupportsCancel() {
     grant(Manifest.permission.CAMERA)
     val intent = Intent(context, CheckinCameraActivity::class.java)

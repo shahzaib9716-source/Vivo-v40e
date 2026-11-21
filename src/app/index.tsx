@@ -7,14 +7,14 @@ import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withTimi
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Logo, Text } from '@/components/ui';
-import { SIDE_HOME, SPLASH_BG, type AppSide } from '@/config/variant';
+import { BUILD_SIDE, SIDE_HOME, SPLASH_BG, type AppSide } from '@/config/variant';
 import { useStore } from '@/state/store';
 import { useLink } from '@/sync/link';
 import { radius, shadow, spacing, useTheme } from '@/theme';
 
 export default function Welcome() {
   const { colors, mode } = useTheme();
-  const { role, setRole, hasOnboarded, ready } = useStore();
+  const { role, setRole, hasOnboarded, ready, live, linkedRoleAtStart } = useStore();
   const link = useLink();
 
   // Which side to open. A device that is in a family has the role the server gave it; otherwise it
@@ -23,7 +23,7 @@ export default function Welcome() {
 
   // Right after a start the link layer is still reading what this device is. Wait for that briefly
   // before offering a choice, so a linked phone never shows the chooser first.
-  const undecided = link.configured && link.status === 'connecting' && side === null;
+  const undecided = link.configured && link.status === 'connecting' && (BUILD_SIDE ? !link.role && !linkedRoleAtStart : side === null);
   const [waited, setWaited] = useState(false);
   /** Set by the chooser: it does its own navigation, so the redirect below must not run as well. */
   const [chosen, setChosen] = useState(false);
@@ -36,6 +36,12 @@ export default function Welcome() {
   // Hold on the splash colour until the saved flag is read, so a returning user never sees the intro flash.
   if (!ready || (undecided && !waited)) {
     return <View style={{ flex: 1, backgroundColor: mode === 'dark' ? SPLASH_BG.dark : SPLASH_BG.light }} />;
+  }
+
+  if (BUILD_SIDE) {
+    const saved = link.status === 'connecting' ? linkedRoleAtStart : null;
+    if (live && (link.role ?? saved) === BUILD_SIDE) return <Redirect href={SIDE_HOME[BUILD_SIDE] as any} />;
+    return <Redirect href={BUILD_SIDE === 'parent' ? '/account' : '/link-device'} />;
   }
 
   // First run: show the introduction before the role chooser.
@@ -195,4 +201,3 @@ const styles = StyleSheet.create({
   footerWrap: { marginTop: 'auto' },
   footer: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.lg },
 });
-

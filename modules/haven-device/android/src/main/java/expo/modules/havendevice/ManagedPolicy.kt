@@ -33,15 +33,7 @@ object ManagedPolicy {
 
   @Synchronized fun update(c: Context, payload: String): String {
     if (!owner(c)) return "Family agreements only. Android device-owner enrollment is required for enforcement."
-    val next = JSONObject(payload)
-    val previous = prefs(c).getString("policy", null)?.let { JSONObject(it) }
-    if (!next.has("adultSites") && previous?.has("adultSites") == true && next.optString("scope") == previous.optString("scope")) {
-      next.put("adultSites", previous.getBoolean("adultSites"))
-    }
-    if (!next.has("offlinePause") && previous?.has("offlinePause") == true && next.optString("scope") == previous.optString("scope")) {
-      next.put("offlinePause", previous.getBoolean("offlinePause"))
-    }
-    check(prefs(c).edit().putString("policy", next.toString()).commit())
+    check(prefs(c).edit().putString("policy", payload).commit())
     val job = JobInfo.Builder(JOB, ComponentName(c, PolicyJob::class.java))
       .setPeriodic(15 * 60 * 1000L).setPersisted(true).build()
     val scheduler = requireNotNull(c.getSystemService(JobScheduler::class.java))
@@ -63,6 +55,7 @@ object ManagedPolicy {
     val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
     val protected = pm.queryIntentActivities(home, 0).map { it.activityInfo.packageName }.toMutableSet()
     protected.add(c.packageName)
+    if (c.packageName == "com.haven.familysafety.child") protected.add("com.haven.familysafety.parent")
     requireNotNull(c.getSystemService(android.telecom.TelecomManager::class.java)).defaultDialerPackage?.let { protected.add(it) }
     requireNotNull(c.getSystemService(android.view.inputmethod.InputMethodManager::class.java)).enabledInputMethodList.forEach { protected.add(it.packageName) }
     val allowed = requireNotNull(c.getSystemService(AppOpsManager::class.java)).checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), c.packageName) == AppOpsManager.MODE_ALLOWED
@@ -84,11 +77,6 @@ object ManagedPolicy {
       val window = windows.getJSONObject(index)
       ScheduleWindow.active(window.getInt("start"), window.getInt("end"), window.getInt("mask"), mondayBasedDay, minute)
     }
-    val offlinePause = config.optBoolean("offlinePause") && runCatching {
-      val network = requireNotNull(c.getSystemService(android.net.ConnectivityManager::class.java))
-      val active = network.activeNetwork
-      active == null || network.getNetworkCapabilities(active)?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED) == false
-    }.getOrDefault(false)
     val desired = mutableSetOf<String>()
     var ineligible = 0
     for (i in 0 until rules.length()) {
@@ -102,7 +90,7 @@ object ManagedPolicy {
       val limit = rule.getInt("minutes")
       if (shouldSuspendApp(
         blocked = rule.getBoolean("blocked"),
-        paused = config.getBoolean("paused") || offlinePause,
+        paused = config.getBoolean("paused"),
         scheduled = scheduled,
         dailyMinutes = config.getInt("dailyMinutes"),
         appMinutes = limit,
@@ -128,14 +116,8 @@ object ManagedPolicy {
           "allowed" -> exceptions.add(host)
         }
       }
-      runCatching {
-        if (config.optBoolean("adultSites")) {
-          c.assets.open("haven/adult-sites.txt").bufferedReader().useLines { lines -> lines.forEach { blocked.add(it) } }
-        }
-        check(blocked.size <= 1000 && exceptions.size <= 1000) { "Chrome supports up to 1,000 domains per list. Reduce the family list." }
-        ChromeSitePolicy.apply(c, admin(c), blocked.sorted(), exceptions.sorted(), if (config.has("safeSearch")) config.getBoolean("safeSearch") else null)
-      }
-        .getOrElse { if (blocked.size > 1000 || exceptions.size > 1000) "Chrome policy exceeds 1,000 entries. Reduce the site list." else "Chrome site rules could not be applied." }
+      runCatching { ChromeSitePolicy.apply(c, admin(c), blocked.sorted(), exceptions.sorted(), if (config.has("safeSearch")) config.getBoolean("safeSearch") else null) }
+        .getOrElse { "Chrome site rules could not be applied." }
     } else null
     val failed = result.failed
     return buildList {

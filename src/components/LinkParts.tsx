@@ -1,3 +1,4 @@
+import { BUILD_SIDE } from '@/config/variant';
 import { useNow } from '@/state/store';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -50,14 +51,14 @@ export function linkSummary(link: LinkState): { title: string; detail: string; t
       detail: 'This copy was built without a server, so each app keeps its own data on its own phone.',
       tone: 'idle',
     },
-    'signed-out': { title: 'Not linked yet', detail: 'This device shows sample data until it joins a family.', tone: 'idle' },
+    'signed-out': { title: 'Not linked yet', detail: BUILD_SIDE ? 'Link this app to open your family’s data.' : 'This device shows sample data until it joins a family.', tone: 'idle' },
     'needs-family': { title: 'Signed in, no family yet', detail: 'This account has no family yet. Create one to link devices.', tone: 'idle' },
     waiting: {
       title: 'Waiting for a parent',
       detail: link.pendingJoin ? `Ask a parent to approve this device. Both phones show the check ${link.pendingJoin.check}.` : 'Ask a parent to approve this device.',
       tone: 'idle',
     },
-    removed: { title: 'This device was removed', detail: 'A parent removed it from the family. It shows sample data again.', tone: 'warn' },
+    removed: { title: 'This device was removed', detail: BUILD_SIDE ? 'A parent removed this app from the family. Set up a new link to reconnect.' : 'A parent removed it from the family. It shows sample data again.', tone: 'warn' },
     connecting: { title: 'Connecting…', detail: 'Reaching your family’s data.', tone: 'idle' },
     linked: {
       title: others === 0 ? 'Family created' : `Linked with ${others} other ${others === 1 ? 'device' : 'devices'}`,
@@ -221,4 +222,3 @@ const styles = StyleSheet.create({
   note: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg, paddingHorizontal: spacing.xs },
   noteIcon: { marginTop: 2 },
 });
-

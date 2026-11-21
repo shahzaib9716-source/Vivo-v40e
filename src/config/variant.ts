@@ -1,12 +1,10 @@
-/**
- * Haven is one app with two sides. Which side a device shows is chosen when it is set up and,
- * once the device is in a family, fixed by the role the server gave it (see src/app/_layout.tsx).
- * It is not a build setting: Android and iOS get the same app.
- */
+import Constants from 'expo-constants';
+
 export type AppSide = 'parent' | 'child';
 
-/** The name on the home screen. */
-export const APP_NAME = 'Haven';
+const side = Constants.expoConfig?.extra?.androidSide;
+export const BUILD_SIDE: AppSide | null = side === 'parent' || side === 'child' ? side : null;
+export const APP_NAME = BUILD_SIDE === 'parent' ? 'Haven Parent' : BUILD_SIDE === 'child' ? 'Haven Child' : 'Haven';
 
 /** First screen of each side. */
 export const SIDE_HOME: Record<AppSide, string> = {

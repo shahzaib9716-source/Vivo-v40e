@@ -1,0 +1,98 @@
+name: Paired Android apps
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/paired-android.yml'
+      - 'app.config.js'
+      - 'tests/ui/same-handset.py'
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    strategy:
+      fail-fast: false
+      matrix:
+        side: [parent, child]
+        target: [phone, integration]
+    env:
+      HAVEN_ANDROID_SIDE: ${{ matrix.side }}
+      NODE_ENV: production
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v5
+      - run: npm ci --include=dev --no-audit --no-fund
+      - name: Configure local Firebase for the integration APK
+        if: matrix.target == 'integration'
+        run: |
+          echo 'HAVEN_FIREBASE_CONFIG={"apiKey":"demo-key","projectId":"demo-haven","appId":"1:1:web:1"}' >> "$GITHUB_ENV"
+          echo 'HAVEN_AUTH_EMULATOR=127.0.0.1:9099' >> "$GITHUB_ENV"
+          echo 'HAVEN_FIRESTORE_EMULATOR=127.0.0.1:8085' >> "$GITHUB_ENV"
+      - run: npx --no-install expo prebuild --platform android --no-install
+      - name: Build and verify APK
+        env:
+          ABI: ${{ matrix.target == 'phone' && 'arm64-v8a' || 'x86_64' }}
+        run: |
+          android/gradlew -p android :app:assembleRelease "-PreactNativeArchitectures=$ABI"
+          apk="Haven-${HAVEN_ANDROID_SIDE^}.apk"
+          cp android/app/build/outputs/apk/release/app-release.apk "$apk"
+          build_tools="$ANDROID_HOME/build-tools/37.0.0"
+          "$build_tools/apksigner" verify "$apk"
+          "$build_tools/aapt" dump badging "$apk" > "$RUNNER_TEMP/badging.txt"
+          grep -F "package: name='com.haven.familysafety.$HAVEN_ANDROID_SIDE'" "$RUNNER_TEMP/badging.txt"
+          grep -F "application-label:'Haven ${HAVEN_ANDROID_SIDE^}'" "$RUNNER_TEMP/badging.txt"
+          sha256sum "$apk"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: Haven-${{ matrix.side }}-${{ matrix.target }}
+          path: Haven-*.apk
+          retention-days: 7
+          if-no-files-found: error
+
+  same-phone:
+    needs: apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: actions/download-artifact@v6
+        with:
+          pattern: Haven-*-integration
+          merge-multiple: true
+          path: apks
+      - name: Prepare the runner
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/.ghcup /opt/ghc /usr/local/share/boost
+          sudo chmod a+rw /dev/kvm
+          npx --yes firebase-tools@14 setup:emulators:firestore
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          disk-size: 2048M
+          disable-animations: true
+          script: |
+            adb install apks/Haven-Parent.apk
+            adb install apks/Haven-Child.apk
+            adb reverse tcp:9099 tcp:9099
+            adb reverse tcp:8085 tcp:8085
+            npx --yes firebase-tools@14 emulators:exec --only firestore,auth --project demo-haven "python3 tests/ui/same-handset.py"

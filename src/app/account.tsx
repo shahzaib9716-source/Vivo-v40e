@@ -7,7 +7,7 @@ import { InlineNote } from '@/components/InlineNote';
 import { LinkFootnote, LinkStatusCard, useLinkAction } from '@/components/LinkParts';
 import { Field, InlineConfirm, TextField } from '@/components/RuleForm';
 import { Button, Card, Header, IconBadge, Row, Screen, SectionLabel, SegmentedControl, Text } from '@/components/ui';
-import { SIDE_HOME } from '@/config/variant';
+import { BUILD_SIDE, SIDE_HOME } from '@/config/variant';
 import { useLink } from '@/sync/link';
 import { spacing, useTheme } from '@/theme';
 
@@ -324,7 +324,7 @@ export default function AccountScreen() {
                 <Button label="Sign out on this device" icon="log-out" variant="ghost" loading={act.busy === 'signout'} onPress={() => setConfirmSignOut(true)} />
               )
             ) : null}
-            {justCreated ? <Button label="Go to the dashboard" variant="secondary" onPress={() => leave(SIDE_HOME.parent)} style={styles.gap} /> : null}
+            {(justCreated || BUILD_SIDE) ? <Button label="Go to the dashboard" variant="secondary" onPress={() => leave(SIDE_HOME.parent)} style={styles.gap} /> : null}
           </>
         )}
       </Screen>
@@ -344,3 +344,4 @@ const styles = StyleSheet.create({
   gapBottom: { marginBottom: spacing.lg },
   sectionGap: { marginTop: spacing.lg },
 });
+

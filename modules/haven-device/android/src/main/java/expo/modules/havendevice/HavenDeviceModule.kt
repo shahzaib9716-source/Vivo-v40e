@@ -73,6 +73,14 @@ class HavenDeviceModule : Module() {
     AsyncFunction("takeCheckinPhoto") { promise: Promise ->
       launchMedia(Intent(context, CheckinCameraActivity::class.java), 58110, promise)
     }
+    AsyncFunction("captureHavenWindow") { promise: Promise ->
+      val activity = appContext.currentActivity
+      if (activity == null) promise.reject("E_SCREEN", "Open the Haven screen first.", null)
+      else HavenWindow.capture(activity) { result ->
+        result.onSuccess { promise.resolve(it) }.onFailure { promise.reject("E_SCREEN", "Could not capture the visible Haven screen.", it) }
+      }
+      Unit
+    }
     AsyncFunction("chooseCheckinImage") { promise: Promise ->
       launchMedia(Intent(Intent.ACTION_OPEN_DOCUMENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE), 58111, promise)
     }
