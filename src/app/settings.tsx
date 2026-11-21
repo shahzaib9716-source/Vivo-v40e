@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { router } from 'expo-router';
 import { Pressable, View } from 'react-native';
 
+import { ChatWordSettings } from '@/components/ChatWordAlerts';
 import { MediaTransfer } from '@/components/CheckinRequests';
 import { InlineNote } from '@/components/InlineNote';
 import { InlineConfirm } from '@/components/RuleForm';
@@ -132,6 +133,7 @@ export default function Settings() {
 
       {live && link.role === 'parent' && link.familyId && <MediaTransfer key={link.familyId} family={link.familyId} />}
       <SectionLabel>Notifications</SectionLabel>
+      {live && link.role === 'parent' && link.familyId && <ChatWordSettings key={link.familyId} family={link.familyId} edit />}
       <Card padded={false} style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.xl }}>
         {live ? (
           // A real family: these switches would promise what this version does not do.

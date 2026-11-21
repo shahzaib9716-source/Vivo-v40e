@@ -8,6 +8,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { APP_NAME } from '@/config/variant';
 import { StoreProvider, useStore } from '@/state/store';
 import { LinkProvider, useLink } from '@/sync/link';
+import { FamilyWordAlerts } from '@/components/ChatWordAlerts';
 import { SyncFamilyCallRule } from '@/components/FamilyCallSettings';
 import { SharedTripProvider } from '@/components/SharedTrip';
 import { ProfileDeletionProvider } from '@/components/ProfileDeletion';
@@ -42,6 +43,7 @@ function AppLayout() {
             <ThemeProvider value={navTheme}>
               <ManagedDevicePolicy onStatus={setPolicyStatus} />
               <SyncFamilyCallRule />
+              <FamilyWordAlerts />
               <PolicyStatus.Provider value={policyStatus}>
                 <ProfileDeletionProvider><SharedTripProvider><UsageSharingProvider><Screens scheme={scheme} /></UsageSharingProvider></SharedTripProvider></ProfileDeletionProvider>
               </PolicyStatus.Provider>

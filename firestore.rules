@@ -465,6 +465,12 @@ service cloud.firestore {
             && request.resource.data.minutes <= 1440 && request.resource.data.blocked is bool;
           allow delete: if isParent(fid);
         }
+        match /settings/chatWordCursor {
+          allow get: if isParent(fid);
+          allow create, update: if isParent(fid) && childExists(fid, cid)
+            && request.resource.data.keys().hasOnly(['at', 'message', 'version'])
+            && request.resource.data.at is timestamp && idOk(request.resource.data.message) && idOk(request.resource.data.version);
+        }
         match /settings/calls {
           allow get: if isParent(fid) || isChildOf(fid, cid);
           allow create, update: if isParent(fid) && childExists(fid, cid)
@@ -721,6 +727,12 @@ service cloud.firestore {
         allow delete: if isParent(fid);
       }
 
+      match /settings/chatWords {
+        allow get: if isMember(fid);
+        allow create, update: if isParent(fid)
+          && request.resource.data.keys().hasOnly(['terms', 'since', 'version']) && idOk(request.resource.data.version)
+          && request.resource.data.terms is list && request.resource.data.terms.size() <= 30 && request.resource.data.since == request.time;
+      }
       match /settings/media {
         allow get: if isMember(fid);
         allow create, update: if isParent(fid) && request.resource.data.keys().hasOnly(['wifiOnly'])
