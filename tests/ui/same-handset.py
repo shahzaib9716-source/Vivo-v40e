@@ -120,7 +120,15 @@ def run():
     node('.*Riley.*')
     show('parent', 'messages')
     node('Riley: HandsetProof')
-    print('PASS: distinct Android UIDs, parent login, child pairing, manual approval, and delivered family message after parent restart.')
+    show('child', 'typing-practice')
+    fill('Note text', 'SharedNoteProof')
+    tap('Preview note')
+    node('Private preview')
+    tap('Send note to family chat')
+    node(r'You: Haven Child · Typed notes · [\s\S]+SharedNoteProof')
+    show('parent', 'messages')
+    node(r'Riley: Haven Child · Typed notes · [\s\S]+SharedNoteProof')
+    print('PASS: distinct Android UIDs, parent login, child pairing, manual approval, family message after parent restart, and child-reviewed typed note delivered.')
 
 
 if __name__ == '__main__':

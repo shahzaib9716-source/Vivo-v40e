@@ -147,8 +147,8 @@ export default function ChildProfileTab() {
           onPress={() => (router.push as any)('/about-version')}
         />
         <Row
-          title="Typing practice"
-          subtitle="Preview a sample typed in Haven"
+          title="Typed notes"
+          subtitle="Write a note to share in family chat"
           icon="edit-3"
           iconColor={colors.primary}
           onPress={() => router.push('/typing-practice')}
