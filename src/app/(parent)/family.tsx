@@ -3,7 +3,9 @@ import { router } from 'expo-router';
 import { Pressable, View, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 
+import { ProfilePicture } from '@/components/ProfilePicture';
 import { Avatar, Card, Row, Screen, SectionLabel, Text } from '@/components/ui';
+import { ProfileDeletionStatus } from '@/components/ProfileDeletion';
 import { linkSummary } from '@/components/LinkParts';
 import { useLink } from '@/sync/link';
 import { useStore } from '@/state/store';
@@ -64,6 +66,7 @@ export default function Family() {
       </LinearGradient>
 
       <SectionLabel>Children</SectionLabel>
+      <ProfileDeletionStatus />
       <Card padded={false} style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.xl }}>
         {children.map((c) => (
           <Row
@@ -71,7 +74,7 @@ export default function Family() {
             title={c.name}
             subtitle={`${c.deviceName} · Age ${c.age}`}
             onPress={() => openProfile(c.id)}
-            right={<Avatar name={c.name} size={36} />}
+            right={link.role === 'parent' && link.familyId ? <ProfilePicture key={link.familyId + '/' + c.id} family={link.familyId} child={c.id} name={c.name} size={36} /> : <Avatar name={c.name} size={36} />}
             chevron
           />
         ))}

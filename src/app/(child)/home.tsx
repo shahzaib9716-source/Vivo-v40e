@@ -6,6 +6,7 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ParentUnlock } from '@/components/ParentUnlock';
+import { CheckinInbox } from '@/components/CheckinRequests';
 import { LinkCard } from '@/components/child/LinkCard';
 import { Toast, useToast } from '@/components/child/Toast';
 import { Button, Card, ProgressRing, Text } from '@/components/ui';
@@ -83,6 +84,7 @@ export default function ChildHome() {
     <View style={[styles.root, { backgroundColor: colors.bg }]}>
       <SafeAreaView edges={['top']} style={styles.root}>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          {live && link.role === 'child' && link.familyId && link.childId && <CheckinInbox key={link.familyId + '/' + link.childId} family={link.familyId} child={link.childId} />}
           <View style={styles.top}>
             <View style={styles.flex}>
               <Text variant="small" tone="muted">

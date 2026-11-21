@@ -16,10 +16,31 @@ export interface DevicePermissions {
   screeningEnabled?: boolean;
 }
 
+export interface TripEvent {
+  event: 'started' | 'fix' | 'stopped';
+  scope: string;
+  session: string;
+  message: string;
+  latitude?: number;
+  longitude?: number;
+  accuracyM?: number;
+  measuredAt?: number;
+}
 interface DeviceModule {
+  addListener?(name: 'onTrip', listener: (event: TripEvent) => void): { remove(): void };
+  startTrip?(scope: string, session: string, threshold: number): Promise<void>;
+  endTrip?(): Promise<void>;
+  appCache?(clear: boolean): Promise<{ bytes: number; failures: number }>;
+  usingWifi?(): Promise<boolean>;
+  chooseCheckinImage?(): Promise<string | null>;
+  recordVoiceNote?(): Promise<string | null>;
+  playVoiceNote?(audio: string): Promise<void>;
   takeCheckinPhoto?(): Promise<string | null>;
   permissionStatus?(): Promise<DevicePermissions>;
   batteryPercent?(): Promise<number>;
+  familyCallConsent?(scope: string): Promise<boolean>;
+  setFamilyCallConsent?(scope: string, allow: boolean): Promise<void>;
+  applyFamilyCallRule?(scope: string, block: boolean | null): Promise<void>;
   requestScreeningRole?(): Promise<void>;
   setScreeningEnabled?(value: boolean): Promise<void>;
   openAdminActivation?(): Promise<void>;

@@ -3,6 +3,9 @@ import { useState } from 'react';
 import { router } from 'expo-router';
 import { Pressable, View } from 'react-native';
 
+import { AppCacheSetting } from '@/components/AppCacheSetting';
+import { ChatWordSettings } from '@/components/ChatWordAlerts';
+import { MediaTransfer } from '@/components/CheckinRequests';
 import { InlineNote } from '@/components/InlineNote';
 import { InlineConfirm } from '@/components/RuleForm';
 import { Avatar, Card, Header, Row, Screen, SectionLabel, SegmentedControl, Text, Toggle } from '@/components/ui';
@@ -129,7 +132,9 @@ export default function Settings() {
       }} />
       {appearanceError && <Text accessibilityLiveRegion="polite">Appearance changed for this session. This phone could not save the preference.</Text>}
 
+      {live && link.role === 'parent' && link.familyId && <MediaTransfer key={link.familyId} family={link.familyId} />}
       <SectionLabel>Notifications</SectionLabel>
+      {live && link.role === 'parent' && link.familyId && <ChatWordSettings key={link.familyId} family={link.familyId} edit />}
       <Card padded={false} style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.xl }}>
         {live ? (
           // A real family: these switches would promise what this version does not do.
@@ -148,6 +153,7 @@ export default function Settings() {
         )}
       </Card>
 
+      <AppCacheSetting />
       <SectionLabel>Privacy & security</SectionLabel>
       <Card padded={false} style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.xl }}>
         {live ? null : (

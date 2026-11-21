@@ -5,6 +5,7 @@ import { Feather } from '@expo/vector-icons';
 import { Card, Header, Screen, SectionLabel, SegmentedControl, Text } from '@/components/ui';
 import { Child, useStore } from '@/state/store';
 import { categoryColors, radius, spacing, useTheme } from '@/theme';
+import { TripHistory } from '@/components/TripHistory';
 import { listenCheckins, type ChildLocation } from '@/sync/location';
 import { useLink } from '@/sync/link';
 import { SampleNote } from '@/components/SampleNote';
@@ -117,7 +118,7 @@ export default function LocationHistory() {
   const { live, activeChild } = useStore();
   const link = useLink();
   if (!live) return <SampleHistory />;
-  if (link.role !== 'parent' || !link.familyId) return <Screen><Header back title="Location History" /><Text>Open history from a linked parent account.</Text></Screen>;
+  if (link.role !== 'parent' || !link.familyId || !activeChild.id) return <Screen><Header back title="Location History" /><Text>Open history from a linked parent account.</Text></Screen>;
   return <SavedHistory key={link.familyId + '/' + activeChild.id} family={link.familyId} child={activeChild} />;
 }
 
@@ -129,7 +130,8 @@ function SavedHistory({ family, child }: { family: string; child: Child }) {
     setStatus(cached ? 'Showing locally cached check-ins.' : rows.length ? '' : 'No saved check-ins yet.');
   }, () => { setPoints([]); setStatus('Unable to read saved check-ins. Check family access and connectivity.'); }), [family, child.id]);
   return <Screen><Header back title="Location History" subtitle={child.name} />
-    <Text>Locations saved from this child’s phone.</Text>
+    <TripHistory family={family} child={child.id} />
+    <Text variant="title">Saved check-ins</Text>
     {status ? <Text accessibilityLiveRegion="polite">{status}</Text> : null}
     {points.map(point => <Card key={point.measuredAt ?? point.receivedAt}>
       <Text variant="title">{new Date(point.measuredAt ?? point.receivedAt).toLocaleString()}</Text>

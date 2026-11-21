@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 
+import { ProfilePicture } from '@/components/ProfilePicture';
 import { Avatar, Card, Row, Screen, SectionLabel, Text } from '@/components/ui';
 import { linkSummary } from '@/components/LinkParts';
 import { useLink } from '@/sync/link';
@@ -42,7 +43,9 @@ export default function ChildProfileTab() {
   return (
     <Screen>
       <View style={styles.top}>
-        <Avatar name={childSelf.name} size={92} ring />
+         {live && link.role === 'child' && link.familyId && link.childId
+          ? <ProfilePicture key={link.familyId + '/' + link.childId} family={link.familyId} child={link.childId} name={childSelf.name} size={92} />
+          : <Avatar name={childSelf.name} size={92} ring />}
         <Text variant="h1" style={styles.name}>
           {childSelf.name.split(' ')[0]}
         </Text>
@@ -144,6 +147,13 @@ export default function ChildProfileTab() {
           onPress={() => (router.push as any)('/about-version')}
         />
         <Row
+          title="Typing practice"
+          subtitle="Preview a sample typed in Haven"
+          icon="edit-3"
+          iconColor={colors.primary}
+          onPress={() => router.push('/typing-practice')}
+        />
+        <Row
           title="Help"
           subtitle="Quick answers"
           icon="help-circle"
@@ -209,4 +219,3 @@ const styles = StyleSheet.create({
 
   switch: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
 });
-

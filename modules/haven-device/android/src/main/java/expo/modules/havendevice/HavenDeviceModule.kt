@@ -25,47 +25,85 @@ import expo.modules.kotlin.modules.ModuleDefinition
 import java.util.concurrent.atomic.AtomicBoolean
 
 class HavenDeviceModule : Module() {
-  private var photoRequest: Promise? = null
+  private var mediaRequest: Promise? = null
   private val context get() = requireNotNull(appContext.reactContext)
   private fun usageAllowed(): Boolean {
     val ops = requireNotNull(context.getSystemService(AppOpsManager::class.java))
     return ops.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.packageName) == AppOpsManager.MODE_ALLOWED
   }
 
-  override fun definition() = ModuleDefinition {
-    Name("HavenDevice")
-    AsyncFunction("takeCheckinPhoto") { promise: Promise ->
+  private fun launchMedia(intent: Intent, code: Int, promise: Promise) {
+    Handler(Looper.getMainLooper()).post {
       val activity = appContext.currentActivity
-      android.os.Handler(android.os.Looper.getMainLooper()).post {
-      if (activity == null || photoRequest != null) {
-        promise.reject("E_CAMERA", "Open the child screen before taking a photo.", null)
+      if (activity == null || !activity.hasWindowFocus() || mediaRequest != null) {
+        promise.reject("E_MEDIA", "Open Haven and finish the current media action.", null)
       } else {
-        photoRequest = promise
-        try {
-          activity.startActivityForResult(Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE), 58110)
-        } catch (e: Exception) {
-          photoRequest = null
-          promise.reject("E_CAMERA", "Unable to open the camera.", e)
+        mediaRequest = promise
+        try { activity.startActivityForResult(intent, code) }
+        catch (e: Exception) {
+          mediaRequest = null
+          promise.reject("E_MEDIA", "Unable to open the requested screen.", e)
         }
       }
-      }
+    }
+  }
+
+  override fun definition() = ModuleDefinition {
+    Name("HavenDevice")
+    Events("onTrip")
+    OnCreate { TripService.receive = { event -> sendEvent("onTrip", event) } }
+    AsyncFunction("startTrip") { scope: String, session: String, threshold: Int ->
+      val activity = requireNotNull(appContext.currentActivity)
+      check(activity.hasWindowFocus()) { "Open the trip screen to start sharing." }
+      check(TripService.visibleChannel(activity)) { "Enable Haven trip notifications before sharing." }
+      val intent = Intent(activity, TripService::class.java).putExtra("scope", scope)
+        .putExtra("session", session).putExtra("threshold", threshold)
+      if (Build.VERSION.SDK_INT >= 26) activity.startForegroundService(intent) else activity.startService(intent)
       Unit
     }
+    AsyncFunction("endTrip") { context.stopService(Intent(context, TripService::class.java)); Unit }
+    AsyncFunction("appCache") { clear: Boolean ->
+      val result = AppCache.inspect(listOf(context.cacheDir) + context.externalCacheDirs.filterNotNull(), clear, VoiceNoteActivity.activeFile)
+      mapOf("bytes" to result.bytes.toDouble(), "failures" to result.failures)
+    }
+    AsyncFunction("usingWifi") {
+      val manager = requireNotNull(context.getSystemService(android.net.ConnectivityManager::class.java))
+      manager.getNetworkCapabilities(manager.activeNetwork)?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) == true
+    }
+    AsyncFunction("takeCheckinPhoto") { promise: Promise ->
+      launchMedia(Intent(context, CheckinCameraActivity::class.java), 58110, promise)
+    }
+    AsyncFunction("chooseCheckinImage") { promise: Promise ->
+      launchMedia(Intent(Intent.ACTION_OPEN_DOCUMENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE), 58111, promise)
+    }
+    AsyncFunction("recordVoiceNote") { promise: Promise ->
+      launchMedia(Intent(context, VoiceNoteActivity::class.java), 58112, promise)
+    }
+    AsyncFunction("playVoiceNote") { audio: String, promise: Promise ->
+      require(audio.length in 1..240000)
+      launchMedia(Intent(context, VoiceNoteActivity::class.java).putExtra("audio", audio), 58113, promise)
+    }
     OnActivityResult { _, result ->
-      if (result.requestCode == 58110) {
-        val request = photoRequest
-        photoRequest = null
-        if (result.resultCode != android.app.Activity.RESULT_OK) request?.resolve(null)
-        else try {
-          val image = result.data?.extras?.get("data") as? android.graphics.Bitmap ?: error("Camera returned no preview.")
-          val stream = java.io.ByteArrayOutputStream()
-          check(image.compress(android.graphics.Bitmap.CompressFormat.JPEG, 75, stream))
-          require(stream.size() in 1..90000)
-          request?.resolve(android.util.Base64.encodeToString(stream.toByteArray(), android.util.Base64.NO_WRAP))
-        } catch (e: Exception) { request?.reject("E_PHOTO", "Unable to prepare the camera preview.", e) }
+      if (result.requestCode in 58110..58113) {
+        val request = mediaRequest
+        mediaRequest = null
+        if (result.resultCode != android.app.Activity.RESULT_OK || result.requestCode == 58113) request?.resolve(null)
+        else if (result.requestCode == 58110) request?.resolve(result.data?.getStringExtra("jpeg"))
+        else if (result.requestCode == 58112) request?.resolve(result.data?.getStringExtra("audio"))
+        else {
+          val uri = result.data?.data
+          val resolver = context.contentResolver
+          Thread {
+            try { request?.resolve(CheckinImage.preview(resolver, requireNotNull(uri))) }
+            catch (e: Exception) { request?.reject("E_IMAGE", "Unable to open this picture.", e) }
+          }.start()
+        }
       }
     }
-    OnDestroy { photoRequest?.reject("E_CAMERA", "Camera session ended.", null); photoRequest = null }
+    OnDestroy {
+      TripService.receive = null
+      appContext.reactContext?.let { it.stopService(Intent(it, TripService::class.java)) }
+      mediaRequest?.reject("E_MEDIA", "Media session ended.", null); mediaRequest = null }
     AsyncFunction("permissionStatus") {
       val ctx = context
       val policy = requireNotNull(ctx.getSystemService(DevicePolicyManager::class.java))
@@ -84,6 +122,9 @@ class HavenDeviceModule : Module() {
     AsyncFunction("batteryPercent") {
       context.getSystemService(android.os.BatteryManager::class.java)?.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)?.takeIf { it in 0..100 } ?: -1
     }
+    AsyncFunction("familyCallConsent") { scope: String -> FamilyCallRule.optedIn(context, scope) }
+    AsyncFunction("setFamilyCallConsent") { scope: String, allow: Boolean -> FamilyCallRule.consent(context, scope, allow) }
+    AsyncFunction("applyFamilyCallRule") { scope: String, block: Boolean? -> FamilyCallRule.apply(context, scope, block) }
     AsyncFunction("requestScreeningRole") {
       check(Build.VERSION.SDK_INT >= 29) { "Call screening requires Android 10 or later." }
       val manager = requireNotNull(context.getSystemService(RoleManager::class.java))

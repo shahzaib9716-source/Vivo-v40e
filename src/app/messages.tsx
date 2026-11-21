@@ -16,6 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ChatWordSettings } from '@/components/ChatWordAlerts';
 import { ChatBubble, TypingBubble, bubbleTint, type BubblePosition, type BubbleTone } from '@/components/ChatBubble';
 import { Avatar, Text } from '@/components/ui';
 import { useLink } from '@/sync/link';
@@ -158,7 +159,8 @@ export default function Messages() {
   const params = useLocalSearchParams();
   const { role, children, activeChild, childSelf, messages, sendMessage } = useStore();
   // In a linked family the other side is a real phone, so nothing is made up here.
-  const linked = useLink().role !== null;
+  const link = useLink();
+  const linked = link.role !== null;
   const now = useNow();
 
   const isChild = role === 'child';
@@ -306,6 +308,7 @@ export default function Messages() {
             followNewest();
             settled.current = true;
           }}>
+          {link.role === 'child' && link.familyId && <ChatWordSettings key={link.familyId} family={link.familyId} />}
           {thread.length === 0 ? (
             <ThreadIntro empty isChild={isChild} firstName={firstName} tint={tint} linked={linked} />
           ) : (

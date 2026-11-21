@@ -8,6 +8,10 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { APP_NAME } from '@/config/variant';
 import { StoreProvider, useStore } from '@/state/store';
 import { LinkProvider, useLink } from '@/sync/link';
+import { FamilyWordAlerts } from '@/components/ChatWordAlerts';
+import { SyncFamilyCallRule } from '@/components/FamilyCallSettings';
+import { SharedTripProvider } from '@/components/SharedTrip';
+import { ProfileDeletionProvider } from '@/components/ProfileDeletion';
 import { ManagedDevicePolicy } from '@/components/ManagedDevicePolicy';
 import { UsageSharingProvider } from '@/components/UsageSharing';
 import { PolicyStatus } from '@/sync/policyStatus';
@@ -38,8 +42,10 @@ function AppLayout() {
           <LinkProvider>
             <ThemeProvider value={navTheme}>
               <ManagedDevicePolicy onStatus={setPolicyStatus} />
+              <SyncFamilyCallRule />
+              <FamilyWordAlerts />
               <PolicyStatus.Provider value={policyStatus}>
-                <UsageSharingProvider><Screens scheme={scheme} /></UsageSharingProvider>
+                <ProfileDeletionProvider><SharedTripProvider><UsageSharingProvider><Screens scheme={scheme} /></UsageSharingProvider></SharedTripProvider></ProfileDeletionProvider>
               </PolicyStatus.Provider>
               <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
             </ThemeProvider>
@@ -119,10 +125,10 @@ function Screens({ scheme }: { scheme: 'light' | 'dark' }) {
       {/* The child side. */}
       <Stack.Protected guard={childAllowed}>
         <Stack.Screen name="(child)" />
+        <Stack.Screen name="typing-practice" />
         <Stack.Screen name="sos" options={{ animation: 'fade_from_bottom', presentation: 'modal' }} />
         <Stack.Screen name="unlock-request" />
       </Stack.Protected>
     </Stack>
   );
 }
-

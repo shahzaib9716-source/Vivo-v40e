@@ -14,6 +14,10 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
 
 registerHooks({
   resolve(specifier, context, nextResolve) {
+    const parent = context.parentURL?.startsWith('file:') ? fileURLToPath(context.parentURL) : '';
+    if (![path.join(root, 'src') + path.sep, path.join(root, 'tests') + path.sep].some(prefix => parent.startsWith(prefix))) {
+      return nextResolve(specifier, context);
+    }
     let target = null;
     if (specifier.startsWith('@/')) {
       target = path.join(root, 'src', specifier.slice(2));
@@ -24,9 +28,10 @@ registerHooks({
       if (existsSync(`${target}.ts`)) target = `${target}.ts`;
       else if (existsSync(`${target}.tsx`)) throw new Error(`${specifier} is a .tsx module (React): it cannot be loaded in plain node. Imported from ${context.parentURL}`);
     }
-    const result = nextResolve(target ? pathToFileURL(target).href : specifier, context);
+    const result = nextResolve(target?.endsWith('.ts') ? pathToFileURL(target).href : specifier, context);
     // Say that it is an ES module, so node does not have to guess (the repo's package.json has no "type").
     return result.url.endsWith('.ts') ? { ...result, format: 'module-typescript' } : result;
   },
 });
+
 

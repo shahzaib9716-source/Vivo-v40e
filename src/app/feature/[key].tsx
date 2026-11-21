@@ -1,3 +1,4 @@
+import { ParentCallSettings } from '@/components/FamilyCallSettings';
 import { useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Pressable, View, StyleSheet } from 'react-native';
@@ -165,7 +166,6 @@ interface Decision {
 }
 
 const SOURCE_STATUS: Record<string, string> = {
-  calls: 'Call activity requires an eligible Android call-log integration. Family check-ins remain available in Haven.',
   messages: 'SMS activity requires an eligible Android SMS integration. Family chat is available in Haven.',
 };
 
@@ -178,6 +178,11 @@ export default function FeatureScreen() {
     return <ImportedActivityReport key={link.familyId + '/' + activeChild.id + '/' + key}
       child={activeChild.name} source={key === 'video-import' || key === 'video-keywords' ? 'youtube' : 'chrome'} initialDomains={key === 'web'} scan={key === 'keywords' || key === 'video-keywords'} />;
   }
+  if (live && key === 'calls') return <Screen><Header back title="Call settings" subtitle={activeChild.name} />
+    {link.role === 'parent' && link.familyId && activeChild.id
+      ? <ParentCallSettings key={link.familyId + '/' + activeChild.id} family={link.familyId} child={activeChild.id} />
+      : <Text>Choose a linked child to manage call screening.</Text>}
+  </Screen>;
   if (live && category) {
     const title = key === 'social' ? 'Social Apps' : category === 'video' ? 'Video-app usage' : 'App Usage';
     return <Screen>

@@ -5,12 +5,14 @@ import { router } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { InlineConfirm, TextField } from '@/components/RuleForm';
+import { ProfilePicture } from '@/components/ProfilePicture';
 import { Avatar, Button, Card, Header, IconBadge, PlaceholderNotice, Row, Screen, SectionLabel, StatTile, Text } from '@/components/ui';
 import { useStore, fmtDuration } from '@/state/store';
 import { categoryColors, spacing, useTheme } from '@/theme';
 
 import { ParentUnlock } from '@/components/ParentUnlock';
-import { PhotoCheckin } from '@/components/PhotoCheckin';
+import { DeleteChildProfile } from '@/components/ProfileDeletion';
+import { FamilyCheckins } from '@/components/PhotoCheckin';
 import { PowerSetting } from '@/components/PowerSetting';
 import { useLink } from '@/sync/link';
 
@@ -112,6 +114,10 @@ export default function ChildProfile() {
     setUnpair('confirm');
   };
 
+  if (live && !activeChild.id) {
+    return <Screen><Header back title="Child profile" /><Text>No child profile selected. Open Family to add a child.</Text></Screen>;
+  }
+
   return (
     // Outermost so it lines up with the keyboard's frame (see RuleForm's FormScreen).
     <KeyboardAvoidingView behavior="padding" style={[styles.flex, { backgroundColor: colors.bg }]}>
@@ -125,7 +131,9 @@ export default function ChildProfile() {
           <Header back />
 
           <View style={styles.hero}>
-            <Avatar name={activeChild.name} size={88} ring />
+            {live && link.role === 'parent' && link.familyId && activeChild.id
+              ? <ProfilePicture key={link.familyId + '/' + activeChild.id} family={link.familyId} child={activeChild.id} name={activeChild.name} size={88} edit />
+              : <Avatar name={activeChild.name} size={88} ring />}
             <Text variant="h1" center numberOfLines={2} style={styles.name}>
               {activeChild.name}
             </Text>
@@ -134,7 +142,7 @@ export default function ChildProfile() {
             </Text>
           </View>
 
-          {live && link.role === 'parent' && link.familyId && <PhotoCheckin key={link.familyId + '/' + activeChildId} family={link.familyId} child={activeChildId} />}
+          {live && link.role === 'parent' && link.familyId && <FamilyCheckins key={link.familyId + '/' + activeChildId} family={link.familyId} child={activeChildId} />}
           {live && link.role === 'parent' && link.familyId && link.account && <ParentUnlock key={'pin-' + activeChildId} parent family={link.familyId} child={activeChildId} uid={link.account.uid} />}
           {live && link.role === 'parent' && link.familyId && <PowerSetting key={activeChildId} family={link.familyId} child={activeChildId} />}
           {live ? (
@@ -172,7 +180,7 @@ export default function ChildProfile() {
             <Row title="Screen Time" subtitle={`Limit ${fmtDuration(activeChild.limitMin)}/day`} icon="clock" iconColor={categoryColors.screenTime} onPress={() => (router.push as any)('/screen-time')} />
             <Row title="App Limits" subtitle={`${activeChild.apps.length} apps`} icon="grid" iconColor={categoryColors.apps} onPress={() => (router.push as any)('/app-limits')} />
             <Row title="Schedules" subtitle="Bedtime & school" icon="calendar" iconColor={categoryColors.schedules} onPress={() => (router.push as any)('/schedules')} />
-            <Row title="Location" subtitle={live ? 'Example map · check-ins are real' : activeChild.place} icon="map-pin" iconColor={categoryColors.location} onPress={openLocationTab} />
+            <Row title="Location" subtitle={live ? 'Shared location and trip history' : activeChild.place} icon="map-pin" iconColor={categoryColors.location} onPress={openLocationTab} />
           </Card>
 
           <SectionLabel>Device</SectionLabel>
@@ -235,6 +243,10 @@ export default function ChildProfile() {
               <Row title={live ? 'Remove this phone' : 'Unpair device'} subtitle={live ? 'Under Devices & Pairing' : activeChild.deviceName} icon="trash-2" danger chevron={live} onPress={askUnpair} />
             )}
           </Card>
+
+          {live && link.role === 'parent' && link.familyId && activeChild.id === activeChildId && activeChildId && (
+            <DeleteChildProfile key={link.familyId + '/' + activeChildId} family={link.familyId} child={activeChildId} name={activeChild.name} />
+          )}
 
           {unpair === 'demo' ? (
             <Animated.View entering={FadeIn.duration(160)} style={styles.demo} accessibilityLiveRegion="polite">
