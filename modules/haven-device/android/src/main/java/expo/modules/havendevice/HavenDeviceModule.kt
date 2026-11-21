@@ -1,6 +1,7 @@
 package expo.modules.havendevice
 
 import android.Manifest
+import android.app.role.RoleManager
 import android.app.AppOpsManager
 import android.app.NotificationManager
 import android.app.admin.DevicePolicyManager
@@ -36,6 +37,8 @@ class HavenDeviceModule : Module() {
       val ctx = context
       val policy = requireNotNull(ctx.getSystemService(DevicePolicyManager::class.java))
       mapOf(
+        "screeningRole" to (Build.VERSION.SDK_INT >= 29 && ctx.getSystemService(RoleManager::class.java)?.isRoleHeld(RoleManager.ROLE_CALL_SCREENING) == true),
+        "screeningEnabled" to ctx.getSharedPreferences("haven-call-screening", Context.MODE_PRIVATE).getBoolean("enabled", false),
         "usage" to usageAllowed(),
         "location" to (ctx.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
           ctx.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED),
@@ -44,6 +47,19 @@ class HavenDeviceModule : Module() {
         "notifications" to requireNotNull(ctx.getSystemService(NotificationManager::class.java)).areNotificationsEnabled(),
         "batteryExempt" to requireNotNull(ctx.getSystemService(PowerManager::class.java)).isIgnoringBatteryOptimizations(ctx.packageName)
       )
+    }
+    AsyncFunction("requestScreeningRole") {
+      check(Build.VERSION.SDK_INT >= 29) { "Call screening requires Android 10 or later." }
+      val manager = requireNotNull(context.getSystemService(RoleManager::class.java))
+      check(manager.isRoleAvailable(RoleManager.ROLE_CALL_SCREENING)) { "This phone does not offer call screening." }
+      val activity = requireNotNull(appContext.currentActivity)
+      activity.startActivityForResult(manager.createRequestRoleIntent(RoleManager.ROLE_CALL_SCREENING), 58109)
+    }
+    AsyncFunction("setScreeningEnabled") { enabled: Boolean ->
+      if (enabled) {
+        check(Build.VERSION.SDK_INT >= 29 && context.getSystemService(RoleManager::class.java)?.isRoleHeld(RoleManager.ROLE_CALL_SCREENING) == true)
+      }
+      check(context.getSharedPreferences("haven-call-screening", Context.MODE_PRIVATE).edit().putBoolean("enabled", enabled).commit())
     }
     AsyncFunction("openAdminActivation") {
       val ctx = context

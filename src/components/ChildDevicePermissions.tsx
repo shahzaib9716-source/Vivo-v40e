@@ -44,6 +44,13 @@ export function ChildDevicePermissions() {
           <Text>Background location · Haven shares GPS from the open child screen.</Text>
           <Text>Notifications · {label(values?.notifications, 'Allowed', 'Disabled')}</Text>
           <Button title="Open Haven app settings" onPress={() => open(Linking.openSettings)} />
+          {device.requestScreeningRole && values && <>
+            <Text>Call screening · {values.screeningRole && values.screeningEnabled ? 'Blocking incoming numbers outside contacts' : 'Off'}</Text>
+            <Text>Android sends eligible incoming numbers outside your contacts to Haven. Calls with hidden caller ID follow your dialer settings.</Text>
+            {values.screeningRole ? <Button title={values.screeningEnabled ? 'Turn off non-contact call blocking' : 'Block incoming non-contact calls'}
+              onPress={() => open(async () => { await device?.setScreeningEnabled?.(!values.screeningEnabled); await refresh(); })} />
+              : <Button title="Choose call screening app" onPress={() => open(async () => device?.requestScreeningRole?.())} />}
+          </>}
           <Text>Device Administrator · {label(values?.admin, 'Active', 'Inactive')}</Text>
           {values && !values.admin && device.openAdminActivation && <Button title="Review Android administrator activation" onPress={() => open(async () => device?.openAdminActivation?.())} />}
           <Text>Device Owner · {label(values?.owner, 'Enrolled', 'Enrollment required for enforcement')}</Text>

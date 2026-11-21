@@ -138,6 +138,6 @@ export function shadow(level: 1 | 2 | 3 = 1) {
 export function useTheme() {
   const system = useColorScheme();
   const { preference } = useAppearance();
-  const scheme = preference === 'Dark' || (preference === 'System' && system === 'dark') ? 'dark' : 'light';
-  return { mode: scheme, colors: palette[scheme] };
+  const scheme: 'light' | 'dark' = preference === 'Dark' || (preference === 'System' && system === 'dark') ? 'dark' : 'light';
+  return { mode: scheme, colors: palette[scheme] } as const;
 }
