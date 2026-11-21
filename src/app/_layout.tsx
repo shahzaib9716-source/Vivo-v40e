@@ -8,6 +8,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { APP_NAME } from '@/config/variant';
 import { StoreProvider, useStore } from '@/state/store';
 import { LinkProvider, useLink } from '@/sync/link';
+import { ProfileDeletionProvider } from '@/components/ProfileDeletion';
 import { ManagedDevicePolicy } from '@/components/ManagedDevicePolicy';
 import { UsageSharingProvider } from '@/components/UsageSharing';
 import { PolicyStatus } from '@/sync/policyStatus';
@@ -39,7 +40,7 @@ function AppLayout() {
             <ThemeProvider value={navTheme}>
               <ManagedDevicePolicy onStatus={setPolicyStatus} />
               <PolicyStatus.Provider value={policyStatus}>
-                <UsageSharingProvider><Screens scheme={scheme} /></UsageSharingProvider>
+                <ProfileDeletionProvider><UsageSharingProvider><Screens scheme={scheme} /></UsageSharingProvider></ProfileDeletionProvider>
               </PolicyStatus.Provider>
               <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
             </ThemeProvider>
@@ -125,4 +126,3 @@ function Screens({ scheme }: { scheme: 'light' | 'dark' }) {
     </Stack>
   );
 }
-

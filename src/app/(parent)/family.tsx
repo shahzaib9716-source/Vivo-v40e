@@ -4,6 +4,7 @@ import { Pressable, View, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 
 import { Avatar, Card, Row, Screen, SectionLabel, Text } from '@/components/ui';
+import { ProfileDeletionStatus } from '@/components/ProfileDeletion';
 import { linkSummary } from '@/components/LinkParts';
 import { useLink } from '@/sync/link';
 import { useStore } from '@/state/store';
@@ -64,6 +65,7 @@ export default function Family() {
       </LinearGradient>
 
       <SectionLabel>Children</SectionLabel>
+      <ProfileDeletionStatus />
       <Card padded={false} style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.xl }}>
         {children.map((c) => (
           <Row

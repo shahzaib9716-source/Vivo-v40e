@@ -10,6 +10,7 @@ import { useStore, fmtDuration } from '@/state/store';
 import { categoryColors, spacing, useTheme } from '@/theme';
 
 import { ParentUnlock } from '@/components/ParentUnlock';
+import { DeleteChildProfile } from '@/components/ProfileDeletion';
 import { PhotoCheckin } from '@/components/PhotoCheckin';
 import { PowerSetting } from '@/components/PowerSetting';
 import { useLink } from '@/sync/link';
@@ -235,6 +236,10 @@ export default function ChildProfile() {
               <Row title={live ? 'Remove this phone' : 'Unpair device'} subtitle={live ? 'Under Devices & Pairing' : activeChild.deviceName} icon="trash-2" danger chevron={live} onPress={askUnpair} />
             )}
           </Card>
+
+          {live && link.role === 'parent' && link.familyId && activeChild.id === activeChildId && activeChildId && (
+            <DeleteChildProfile key={link.familyId + '/' + activeChildId} family={link.familyId} child={activeChildId} name={activeChild.name} />
+          )}
 
           {unpair === 'demo' ? (
             <Animated.View entering={FadeIn.duration(160)} style={styles.demo} accessibilityLiveRegion="polite">
