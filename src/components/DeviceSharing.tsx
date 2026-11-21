@@ -5,7 +5,7 @@ import { Button, View, AppState } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Card, Text } from '@/components/ui';
 import { device, requestFix, shareUsage, clearUsage } from '@/sync/androidDevice';
-import { reportChildLocation, clearChildLocation } from '@/sync/location';
+import { reportChildLocation, clearChildLocation, clearCheckins } from '@/sync/location';
 
 export function DeviceSharing({ family, child, uid }: { family: string; child: string; uid: string }) {
   const automatic = useUsageSharing();
@@ -73,6 +73,13 @@ export function DeviceSharing({ family, child, uid }: { family: string; child: s
       foreground();
       await reportChildLocation(family, child, uid, fix.latitude, fix.longitude, fix.accuracyM, fix.measuredAt);
     }, 'Location shared.')} />
+    <Text>Saved check-ins are visible to your paired parent. Haven keeps one per UTC hour of the day, up to 24. Saving again in the same slot replaces the older point.</Text>
+    <Button title="Save my location to check-in history" disabled={busy} onPress={() => run(async () => {
+      const fix = await requestFix();
+      foreground();
+      await reportChildLocation(family, child, uid, fix.latitude, fix.longitude, fix.accuracyM, fix.measuredAt, true);
+    }, 'Check-in saved.')} />
+    <Button title="Clear saved check-ins" disabled={busy} onPress={() => run(() => clearCheckins(family, child), 'Check-in history cleared.')} />
     <Button title={sharing ? 'Stop location updates' : 'Share every minute while Me is open'} disabled={busy} onPress={() => {
       if (sharing) { stop(); setStatus('Location updates stopped.'); return; }
       run(async () => {

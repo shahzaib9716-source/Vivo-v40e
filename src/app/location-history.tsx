@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 
 import { Card, Header, Screen, SectionLabel, SegmentedControl, Text } from '@/components/ui';
 import { Child, useStore } from '@/state/store';
 import { categoryColors, radius, spacing, useTheme } from '@/theme';
+import { listenCheckins, type ChildLocation } from '@/sync/location';
+import { useLink } from '@/sync/link';
 import { SampleNote } from '@/components/SampleNote';
 
 const RANGES = ['Today', 'Week', 'Month'] as const;
@@ -112,6 +114,31 @@ function buildHistory(child: Child, range: Range): History {
 }
 
 export default function LocationHistory() {
+  const { live, activeChild } = useStore();
+  const link = useLink();
+  if (!live) return <SampleHistory />;
+  if (link.role !== 'parent' || !link.familyId) return <Screen><Header back title="Location History" /><Text>Open history from a linked parent account.</Text></Screen>;
+  return <SavedHistory key={link.familyId + '/' + activeChild.id} family={link.familyId} child={activeChild} />;
+}
+
+function SavedHistory({ family, child }: { family: string; child: Child }) {
+  const [points, setPoints] = useState<ChildLocation[]>([]);
+  const [status, setStatus] = useState('Loading saved check-ins…');
+  useEffect(() => listenCheckins(family, child.id, (rows, cached) => {
+    setPoints(rows);
+    setStatus(cached ? 'Showing locally cached check-ins.' : rows.length ? '' : 'No saved check-ins yet.');
+  }, () => { setPoints([]); setStatus('Unable to read saved check-ins. Check family access and connectivity.'); }), [family, child.id]);
+  return <Screen><Header back title="Location History" subtitle={child.name} />
+    <Text>Locations saved from this child’s phone.</Text>
+    {status ? <Text accessibilityLiveRegion="polite">{status}</Text> : null}
+    {points.map(point => <Card key={point.measuredAt ?? point.receivedAt}>
+      <Text variant="title">{new Date(point.measuredAt ?? point.receivedAt).toLocaleString()}</Text>
+      <Text>{point.latitude.toFixed(5)}, {point.longitude.toFixed(5)} · ±{Math.round(point.accuracyM)} m</Text>
+    </Card>)}
+  </Screen>;
+}
+
+function SampleHistory() {
   const { colors } = useTheme();
   const { activeChild } = useStore();
   const [range, setRange] = useState<Range>('Today');

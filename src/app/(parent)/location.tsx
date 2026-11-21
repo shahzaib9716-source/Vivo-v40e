@@ -146,7 +146,7 @@ export default function Location() {
               }} />}
               {!live && <ActionTile icon="navigation" label="Directions" color={categoryColors.location} onPress={() => run('directions')} />}
               <ActionTile icon={live ? 'message-circle' : 'bell'} label={live ? 'Message child' : 'Ping device'} color={colors.accent} onPress={() => live ? (router.push as any)(`/messages?childId=${activeChildId}`) : run('ping')} />
-              {!live && <ActionTile icon="clock" label="History" color={colors.info} onPress={() => (router.push as any)('/location-history')} />}
+              <ActionTile icon="clock" label="History" color={colors.info} onPress={() => (router.push as any)('/location-history')} />
             </View>
             {!live && shownAction?.kind === 'ping' && (
               <InlineNote

@@ -1,4 +1,5 @@
-import { doc, onSnapshot, serverTimestamp, runTransaction } from 'firebase/firestore';
+import { collection, doc, onSnapshot, serverTimestamp, runTransaction } from 'firebase/firestore';
+import type { DocumentSnapshot } from 'firebase/firestore';
 import { db } from './remote';
 
 export interface ChildLocation {
@@ -32,13 +33,19 @@ export async function reportChildLocation(
   longitude: number,
   accuracyM: number,
   measuredAt: number,
+  saveCheckin = false,
 ): Promise<void> {
   if (!familyId || !childId || !uid || !valid(latitude, longitude, accuracyM) || !Number.isSafeInteger(measuredAt) || measuredAt <= 0) {
     throw new Error('Invalid location report');
   }
   const key = path(familyId, childId);
   await inOrder(key, () => runTransaction(db(), async tx => {
-    tx.set(doc(db(), key), { latitude, longitude, accuracyM, measuredAt, capturedAt: serverTimestamp(), by: uid });
+    const fix = { latitude, longitude, accuracyM, measuredAt, capturedAt: serverTimestamp(), by: uid };
+    tx.set(doc(db(), key), fix);
+    if (saveCheckin) {
+      const slot = String(new Date(measuredAt).getUTCHours());
+      tx.set(doc(db(), historyPath(familyId, childId), slot), fix);
+    }
   }));
 }
 
@@ -50,17 +57,7 @@ export function listenChildLocation(
 ): () => void {
   if (!familyId || !childId) throw new Error('A linked family and child are required');
   return onSnapshot(doc(db(), path(familyId, childId)), { includeMetadataChanges: true }, (snapshot) => {
-    const data = snapshot.data();
-    const latitude = data?.latitude;
-    const longitude = data?.longitude;
-    const accuracyM = data?.accuracyM;
-    const capturedAt = data?.capturedAt?.toMillis?.();
-    if (!data || !valid(latitude, longitude, accuracyM) || !Number.isFinite(capturedAt)) {
-      onData(null, snapshot.metadata.fromCache);
-      return;
-    }
-    const measuredAt = data.measuredAt;
-    onData({ latitude, longitude, accuracyM, receivedAt: capturedAt, measuredAt: Number.isSafeInteger(measuredAt) && measuredAt > 0 ? measuredAt : null }, snapshot.metadata.fromCache);
+    onData(readFix(snapshot), snapshot.metadata.fromCache);
   }, (error) => onError(error));
 }
 
@@ -70,3 +67,27 @@ export async function clearChildLocation(familyId: string, childId: string): Pro
   await inOrder(key, () => runTransaction(db(), async tx => { tx.delete(doc(db(), key)); }));
 }
 
+
+function readFix(snapshot: DocumentSnapshot): ChildLocation | null {
+  const data = snapshot.data();
+  const receivedAt = data?.capturedAt?.toMillis?.();
+  if (!data || !valid(data.latitude, data.longitude, data.accuracyM) || !Number.isFinite(receivedAt)) return null;
+  const measuredAt = data.measuredAt;
+  return { latitude: data.latitude, longitude: data.longitude, accuracyM: data.accuracyM, receivedAt,
+    measuredAt: Number.isSafeInteger(measuredAt) && measuredAt > 0 ? measuredAt : null };
+}
+
+const historyPath = (family: string, child: string) => `families/${family}/children/${child}/checkins`;
+
+export function listenCheckins(family: string, child: string, onData: (points: ChildLocation[], cached: boolean) => void, onError: (e: Error) => void) {
+  return onSnapshot(collection(db(), historyPath(family, child)), { includeMetadataChanges: true }, snapshot => {
+    const points = snapshot.docs.map(readFix).filter((p): p is ChildLocation => p !== null);
+    onData(points.sort((a, b) => b.receivedAt - a.receivedAt), snapshot.metadata.fromCache);
+  }, onError);
+}
+
+export function clearCheckins(family: string, child: string) {
+  return inOrder(path(family, child), () => runTransaction(db(), async tx => {
+    for (let hour = 0; hour < 24; hour++) tx.delete(doc(db(), historyPath(family, child), String(hour)));
+  }));
+}

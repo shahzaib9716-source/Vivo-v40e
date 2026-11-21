@@ -425,12 +425,8 @@ service cloud.firestore {
           allow delete: if report == 'latest' && isChildOf(fid, cid);
         }
 
-        match /location/{docId} {
-          allow get: if docId == 'latest' && (isParent(fid) || isChildOf(fid, cid));
-          allow list: if false;
-          allow create, update: if docId == 'latest'
-            && isChildOf(fid, cid)
-            && request.resource.data.keys().hasOnly(['latitude', 'longitude', 'accuracyM', 'capturedAt', 'by', 'measuredAt'])
+        function validLocation() {
+          return request.resource.data.keys().hasOnly(['latitude', 'longitude', 'accuracyM', 'capturedAt', 'by', 'measuredAt'])
             && request.resource.data.keys().hasAll(['latitude', 'longitude', 'accuracyM', 'capturedAt', 'by'])
             && request.resource.data.latitude is number
             && request.resource.data.latitude >= -90
@@ -447,6 +443,16 @@ service cloud.firestore {
                  && request.resource.data.measuredAt <= request.time.toMillis() + 60000))
             && request.resource.data.capturedAt == request.time
             && request.resource.data.by == request.auth.uid;
+        }
+        match /location/{docId} {
+          allow get: if docId == 'latest' && (isParent(fid) || isChildOf(fid, cid));
+          allow create, update: if docId == 'latest' && isChildOf(fid, cid) && validLocation();
+          allow delete: if isChildOf(fid, cid);
+        }
+        match /checkins/{slot} {
+          allow read: if isParent(fid) || isChildOf(fid, cid);
+          allow create, update: if isChildOf(fid, cid) && slot.matches('^([0-9]|1[0-9]|2[0-3])$')
+            && validLocation() && 'measuredAt' in request.resource.data;
           allow delete: if isChildOf(fid, cid);
         }
 

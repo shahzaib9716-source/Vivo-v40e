@@ -64,3 +64,17 @@ test('concurrent approvals grant the requested time once', async () => {
   assert.deepEqual(outcomes.sort(), ['Already answered.', 'Time request approved.']);
   assert.equal((await getDoc(child)).get('limitMin'), Math.min(1440, limit + 15));
 });
+
+test('saved check-ins have bounded slots and stay scoped to the linked child', async () => {
+  const report = { ...fix(), measuredAt: Date.now() };
+  const slot = 'checkins/23';
+  await allowed(setDoc(at('kid1', slot), report));
+  await allowed(getDoc(at('founder', slot)));
+  await refused(getDoc(at('kid2', slot)));
+  await refused(setDoc(at('kid1', 'checkins/24'), report));
+  await refused(setDoc(at('kid1', slot), fix()));
+  await refused(setDoc(at('kid1', slot), { ...report, latitude: 95 }));
+  await refused(setDoc(at('founder', slot), report));
+  await refused(deleteDoc(at('kid2', slot)));
+  await allowed(deleteDoc(at('kid1', slot)));
+});
