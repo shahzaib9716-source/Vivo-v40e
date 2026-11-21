@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { decideExtraTime } from '../../src/sync/extraTime.ts';
 import { before, after, beforeEach, test } from 'node:test';
-import { getDoc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { getDoc, setDoc, deleteDoc, serverTimestamp, updateDoc, writeBatch } from 'firebase/firestore';
 import { harness, A, FAM_A, ref, allowed, refused } from './helpers.mjs';
 
 const h = harness();
@@ -122,4 +122,41 @@ test('family adult-site filtering is parent-controlled', async () => {
   await refused(setDoc(policy('kid1'), { enabled: false }));
   await refused(setDoc(policy('founder'), { enabled: 'true' }));
   await allowed(deleteDoc(policy('founder')));
+});
+
+test('one-time PIN is private, throttled, and consumed atomically with the manual pause', async () => {
+  const child = actor => ref(h.a[actor], A('children/c1'));
+  const grant = () => ({ code: '02468', at: serverTimestamp() });
+  const guess = code => ({ code, at: serverTimestamp(), by: h.a.kid1.selfId });
+  const redeem = () => {
+    const batch = writeBatch(child('kid1').firestore);
+    batch.update(child('kid1'), { bedtime: false });
+    batch.delete(at('kid1', 'unlock/pin'));
+    batch.delete(at('kid1', 'unlock/attempt'));
+    return batch.commit();
+  };
+  await allowed(updateDoc(child('founder'), { bedtime: true }));
+  await refused(setDoc(at('kid1', 'unlock/pin'), grant()));
+  await allowed(setDoc(at('founder', 'unlock/pin'), grant()));
+  await refused(getDoc(at('kid1', 'unlock/pin')));
+  await refused(setDoc(at('kid2', 'unlock/attempt'), guess('02468')));
+  await allowed(setDoc(at('kid1', 'unlock/attempt'), guess('02468')));
+  await refused(setDoc(at('kid1', 'unlock/attempt'), guess('12345')));
+  await refused(updateDoc(child('kid1'), { bedtime: false }));
+  await allowed(redeem());
+  await allowed(updateDoc(child('founder'), { bedtime: true }));
+  await refused(redeem());
+});
+
+test('incorrect unlock PIN cannot release the pause or remove the attempt cooldown', async () => {
+  const child = actor => ref(h.a[actor], A('children/c1'));
+  await allowed(updateDoc(child('founder'), { bedtime: true }));
+  await allowed(setDoc(at('founder', 'unlock/pin'), { code: '12345', at: serverTimestamp() }));
+  await allowed(setDoc(at('kid1', 'unlock/attempt'), { code: '99999', at: serverTimestamp(), by: h.a.kid1.selfId }));
+  const batch = writeBatch(child('kid1').firestore);
+  batch.update(child('kid1'), { bedtime: false });
+  batch.delete(at('kid1', 'unlock/pin'));
+  batch.delete(at('kid1', 'unlock/attempt'));
+  await refused(batch.commit());
+  await refused(deleteDoc(at('kid1', 'unlock/attempt')));
 });

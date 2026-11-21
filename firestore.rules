@@ -377,6 +377,601 @@ service cloud.firestore {
       }
 
       match /children/{cid} {
+        function pinPath() {
+          return /databases/$(database)/documents/families/$(fid)/children/$(cid)/unlock/pin;
+        }
+        function attemptPath() {
+          return /databases/$(database)/documents/families/$(fid)/children/$(cid)/unlock/attempt;
+        }
+        function redeemable() {
+          let pin = get(pinPath()).data;
+          let attempt = get(attemptPath()).data;
+          return attempt.by == request.auth.uid && attempt.code == pin.code
+            && attempt.at >= pin.at && pin.at + duration.value(10, 'm') > request.time
+            && attempt.at + duration.value(1, 'm') > request.time;
+        }
+        match /unlock/pin {
+          allow create, update: if isParent(fid) && request.resource.data.keys().hasOnly(['code', 'at'])
+            && request.resource.data.code.matches('^[0-9]{5} if isParent(fid) || isChildOf(fid, cid);
+        allow list: if isParent(fid);
+        allow create: if isParent(fid) && idOk(cid) && childShapeOk(request.resource.data);
+        allow update: if isParent(fid) && childShapeOk(request.resource.data);
+        allow update: if isChildOf(fid, cid) && resource.data.bedtime == true
+          && request.resource.data.bedtime == false && onlyChanged(['bedtime'])
+          && redeemable() && !existsAfter(pinPath()) && !existsAfter(attemptPath());
+        allow delete: if false;
+
+        // What the child's own device reports. Today: the time of its last check-in.
+        match /live/{docId} {
+          allow read: if isParent(fid) || isChildOf(fid, cid);
+          allow create, update: if docId == 'status'
+            && isChildOf(fid, cid)
+            && request.resource.data.keys().hasOnly(['checkInAt', 'by'])
+            && request.resource.data.keys().hasAll(['checkInAt', 'by'])
+            && request.resource.data.checkInAt == request.time
+            && request.resource.data.by == request.auth.uid;
+          allow delete: if false;
+        }
+
+        // Explicit, permissioned location reports from the enrolled child device.
+        // A report contains no background tracking history and cannot be written by a parent.
+        match /packageRules/{pkg} {
+          allow read: if isParent(fid) || isChildOf(fid, cid);
+          allow create, update: if isParent(fid) && pkg.size() <= 255
+            && pkg.matches('[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z][a-zA-Z0-9_]*)+')
+            && request.resource.data.keys().hasOnly(['minutes', 'blocked'])
+            && request.resource.data.minutes is int && request.resource.data.minutes >= 0
+            && request.resource.data.minutes <= 1440 && request.resource.data.blocked is bool;
+          allow delete: if isParent(fid);
+        }
+        match /settings/offline {
+          allow get: if isParent(fid) || isChildOf(fid, cid);
+          allow create, update: if isParent(fid) && request.resource.data.keys().hasOnly(['enabled'])
+            && request.resource.data.enabled is bool;
+          allow delete: if isParent(fid);
+        }
+        match /settings/power {
+          allow get: if isParent(fid) || isChildOf(fid, cid);
+          allow create, update: if isParent(fid) && request.resource.data.keys().hasOnly(['percent'])
+            && request.resource.data.percent in [0, 10, 20, 30, 50];
+          allow delete: if isParent(fid);
+        }
+        match /management/{report} {
+          allow get: if report == 'latest' && (isParent(fid) || isChildOf(fid, cid));
+          allow create, update: if report == 'latest' && isChildOf(fid, cid)
+            && request.resource.data.keys().hasOnly(['by', 'message', 'receivedAt'])
+            && nonEmptyText(request.resource.data.message, 240)
+            && request.resource.data.by == request.auth.uid && request.resource.data.receivedAt == request.time;
+        }
+        match /usage/{report} {
+          allow get: if report == 'latest' && (isParent(fid) || isChildOf(fid, cid));
+          allow create, update: if report == 'latest' && isChildOf(fid, cid)
+            && request.resource.data.keys().hasOnly(['apps', 'measuredAt', 'screenMs', 'by', 'receivedAt', 'days'])
+            && (!('days' in request.resource.data) || (request.resource.data.days is list && request.resource.data.days.size() <= 7))
+            && request.resource.data.apps is list && request.resource.data.apps.size() <= 1000
+            && (!('screenMs' in request.resource.data) || (request.resource.data.screenMs is int && request.resource.data.screenMs >= 0 && request.resource.data.screenMs <= 93600000))
+            && request.resource.data.measuredAt is int && request.resource.data.measuredAt > 0
+            && request.resource.data.by == request.auth.uid && request.resource.data.receivedAt == request.time;
+          allow delete: if report == 'latest' && isChildOf(fid, cid);
+        }
+
+        function validLocation() {
+          return request.resource.data.keys().hasOnly(['latitude', 'longitude', 'accuracyM', 'capturedAt', 'by', 'measuredAt'])
+            && request.resource.data.keys().hasAll(['latitude', 'longitude', 'accuracyM', 'capturedAt', 'by'])
+            && request.resource.data.latitude is number
+            && request.resource.data.latitude >= -90
+            && request.resource.data.latitude <= 90
+            && request.resource.data.longitude is number
+            && request.resource.data.longitude >= -180
+            && request.resource.data.longitude <= 180
+            && request.resource.data.accuracyM is number
+            && request.resource.data.accuracyM >= 0
+            && request.resource.data.accuracyM <= 100000
+            && (!('measuredAt' in request.resource.data) ||
+                (request.resource.data.measuredAt is int
+                 && request.resource.data.measuredAt > 0
+                 && request.resource.data.measuredAt <= request.time.toMillis() + 60000))
+            && request.resource.data.capturedAt == request.time
+            && request.resource.data.by == request.auth.uid;
+        }
+        match /location/{docId} {
+          allow get: if docId == 'latest' && (isParent(fid) || isChildOf(fid, cid));
+          allow create, update: if docId == 'latest' && isChildOf(fid, cid) && validLocation();
+          allow delete: if isChildOf(fid, cid);
+        }
+        match /checkins/{slot} {
+          allow read: if isParent(fid) || isChildOf(fid, cid);
+          allow create, update: if isChildOf(fid, cid) && slot.matches('^([0-9]|1[0-9]|2[0-3])$')
+            && validLocation() && 'measuredAt' in request.resource.data;
+          allow delete: if isChildOf(fid, cid);
+        }
+
+        // Requests: the child asks, a parent answers once.
+        match /requests/{rid} {
+          allow read: if isParent(fid) || isChildOf(fid, cid);
+
+          allow create: if isChildOf(fid, cid)
+            && idOk(rid)
+            && request.resource.data.keys().hasOnly(['kind', 'label', 'detail', 'minutes', 'appId', 'status', 'at', 'by'])
+            && request.resource.data.keys().hasAll(['kind', 'label', 'detail', 'status', 'at', 'by'])
+            && request.resource.data.kind in ['extra_time', 'unlock_app', 'install_app', 'bedtime']
+            && nonEmptyText(request.resource.data.label, 80)
+            && text(request.resource.data.detail, 200)
+            && (!('minutes' in request.resource.data)
+                  || (request.resource.data.minutes is int && request.resource.data.minutes > 0 && request.resource.data.minutes <= 240))
+            && (!('appId' in request.resource.data) || nonEmptyText(request.resource.data.appId, 40))
+            && request.resource.data.status == 'pending'
+            && request.resource.data.at == request.time
+            && request.resource.data.by == request.auth.uid;
+
+          allow update: if isParent(fid)
+            && resource.data.status == 'pending'
+            && onlyChanged(['status', 'resolvedBy', 'resolvedAt'])
+            && request.resource.data.status in ['approved', 'denied']
+            && request.resource.data.resolvedBy == request.auth.uid
+            && request.resource.data.resolvedAt == request.time;
+
+          allow delete: if isParent(fid);
+        }
+
+        // Chat. A message is written once, as yourself, and never edited or removed.
+        match /messages/{mid} {
+          allow read: if isParent(fid) || isChildOf(fid, cid);
+
+          allow create: if idOk(mid)
+            && request.resource.data.keys().hasOnly(['from', 'text', 'at', 'by'])
+            && request.resource.data.keys().hasAll(['from', 'text', 'at', 'by'])
+            && nonEmptyText(request.resource.data.text, 2000)
+            && request.resource.data.at == request.time
+            && request.resource.data.by == request.auth.uid
+            && ((request.resource.data.from == 'parent' && isParent(fid) && childExists(fid, cid))
+                 || (request.resource.data.from == 'child' && isChildOf(fid, cid)));
+
+          allow update, delete: if false;
+        }
+      }
+
+      // ---- alerts/{id}: the parents' activity feed --------------------------------------------
+      // A child device adds entries about itself (check-in, SOS, a request, leaving the family)
+      // but cannot read the feed. Parents read it and mark entries as read.
+
+      function alertShapeOk(data) {
+        return data.keys().hasOnly(['kind', 'childId', 'icon', 'color', 'title', 'body', 'unread', 'at', 'by'])
+          && data.keys().hasAll(['kind', 'childId', 'icon', 'color', 'title', 'body', 'unread', 'at', 'by'])
+          && nonEmptyText(data.kind, 20)
+          && (data.childId == null || (data.childId is string && idOk(data.childId)))
+          && text(data.icon, 40)
+          && data.color is string && data.color.matches('^#[0-9A-Fa-f]{6}$')
+          && nonEmptyText(data.title, 120)
+          && text(data.body, 240)
+          && data.unread is bool;
+      }
+
+      match /alerts/{aid} {
+        allow read: if isParent(fid);
+
+        allow create: if idOk(aid)
+          && alertShapeOk(request.resource.data)
+          && request.resource.data.unread == true
+          && request.resource.data.at == request.time
+          && request.resource.data.by == request.auth.uid
+          && (isParent(fid)
+               || (isChild(fid)
+                    && request.resource.data.childId == myRecord(fid).childId
+                    && request.resource.data.kind in ['checkin', 'sos', 'request', 'left']));
+
+        allow update: if isParent(fid)
+          && onlyChanged(['unread'])
+          && request.resource.data.unread == false;
+
+        allow delete: if isParent(fid);
+      }
+
+      // ---- Family rules: places, schedules, sites. Parent-owned, readable by the family. ------
+
+      match /places/{id} {
+        allow read: if isMember(fid);
+        allow create, update: if isParent(fid) && idOk(id)
+          && request.resource.data.keys().hasOnly(['name', 'icon', 'radius', 'arrive', 'leave', 'ord', 'latitude', 'longitude'])
+          && ((!('latitude' in request.resource.data) && !('longitude' in request.resource.data)) ||
+            (request.resource.data.latitude is number && request.resource.data.latitude >= -90 && request.resource.data.latitude <= 90 &&
+             request.resource.data.longitude is number && request.resource.data.longitude >= -180 && request.resource.data.longitude <= 180))
+          && request.resource.data.keys().hasAll(['name', 'icon', 'radius', 'arrive', 'leave', 'ord'])
+          && nonEmptyText(request.resource.data.name, 60)
+          && text(request.resource.data.icon, 40)
+          && request.resource.data.radius is number && request.resource.data.radius > 0 && request.resource.data.radius <= 100000
+          && request.resource.data.arrive is bool
+          && request.resource.data.leave is bool
+          && request.resource.data.ord is number;
+        allow delete: if isParent(fid);
+      }
+
+      match /schedules/{id} {
+        allow read: if isMember(fid);
+        allow create, update: if isParent(fid) && idOk(id)
+          && request.resource.data.keys().hasOnly(['name', 'icon', 'color', 'start', 'end', 'days', 'on', 'ord'])
+          && request.resource.data.keys().hasAll(['name', 'icon', 'color', 'start', 'end', 'days', 'on', 'ord'])
+          && nonEmptyText(request.resource.data.name, 60)
+          && text(request.resource.data.icon, 40)
+          && request.resource.data.color is string && request.resource.data.color.matches('^#[0-9A-Fa-f]{6}$')
+          && nonEmptyText(request.resource.data.start, 12)
+          && nonEmptyText(request.resource.data.end, 12)
+          && request.resource.data.days is list && request.resource.data.days.size() == 7
+          && request.resource.data.on is bool
+          && request.resource.data.ord is number;
+        allow delete: if isParent(fid);
+      }
+
+      match /webPolicy/adultSites {
+        allow get: if isMember(fid);
+        allow create, update: if isParent(fid) && request.resource.data.keys().hasOnly(['enabled'])
+          && request.resource.data.enabled is bool;
+        allow delete: if isParent(fid);
+      }
+      match /webPolicy/chrome {
+        allow get: if isMember(fid);
+        allow create, update: if isParent(fid)
+          && request.resource.data.keys().hasOnly(['safeSearch'])
+          && request.resource.data.safeSearch is bool;
+        allow delete: if isParent(fid);
+      }
+
+      match /sites/{id} {
+        allow read: if isMember(fid);
+        allow create, update: if isParent(fid) && idOk(id)
+          && request.resource.data.keys().hasOnly(['host', 'list', 'ord'])
+          && request.resource.data.keys().hasAll(['host', 'list', 'ord'])
+          && nonEmptyText(request.resource.data.host, 253)
+          && request.resource.data.list in ['blocked', 'allowed']
+          && request.resource.data.ord is number;
+        allow delete: if isParent(fid);
+      }
+
+      // ---- tasks/{id}: a parent defines them, a child may only tick them ----------------------
+
+      match /tasks/{id} {
+        allow read: if isMember(fid);
+        allow create, update: if isParent(fid) && idOk(id)
+          && request.resource.data.keys().hasOnly(['title', 'points', 'done', 'ord'])
+          && request.resource.data.keys().hasAll(['title', 'points', 'done', 'ord'])
+          && nonEmptyText(request.resource.data.title, 80)
+          && request.resource.data.points is int && request.resource.data.points >= 0 && request.resource.data.points <= 1000
+          && request.resource.data.done is bool
+          && request.resource.data.ord is number;
+        allow update: if isChild(fid)
+          && onlyChanged(['done'])
+          && request.resource.data.done is bool;
+        allow delete: if isParent(fid);
+      }
+
+      // ---- signals/sos: the SOS flag -----------------------------------------------------------
+      // A child raises it for itself and may clear its own. A parent may only clear it.
+
+      match /signals/{signal} {
+        allow read: if isMember(fid);
+
+        allow create, update: if signal == 'sos'
+          && request.resource.data.keys().hasOnly(['active', 'childId', 'by', 'at'])
+          && request.resource.data.keys().hasAll(['active', 'childId', 'by', 'at'])
+          && request.resource.data.active is bool
+          && request.resource.data.by == request.auth.uid
+          && request.resource.data.at == request.time
+          && ((isParent(fid)
+                 && request.resource.data.active == false
+                 && (resource == null ? request.resource.data.childId == null : request.resource.data.childId == resource.data.childId))
+               || (isChild(fid)
+                    && request.resource.data.childId == myRecord(fid).childId
+                    && (request.resource.data.active == true
+                          || resource == null
+                          || resource.data.active == false
+                          || resource.data.childId == myRecord(fid).childId)));
+
+        allow delete: if false;
+      }
+    }
+
+    // Everything not named above is closed.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+
+) && request.resource.data.at == request.time;
+          allow delete: if isParent(fid) || (isChildOf(fid, cid) && redeemable() && !existsAfter(attemptPath()));
+        }
+        match /unlock/attempt {
+          function validAttempt() {
+            return isChildOf(fid, cid) && request.resource.data.keys().hasOnly(['code', 'at', 'by'])
+              && request.resource.data.code.matches('^[0-9]{5} if isParent(fid) || isChildOf(fid, cid);
+        allow list: if isParent(fid);
+        allow create: if isParent(fid) && idOk(cid) && childShapeOk(request.resource.data);
+        allow update: if isParent(fid) && childShapeOk(request.resource.data);
+        allow delete: if false;
+
+        // What the child's own device reports. Today: the time of its last check-in.
+        match /live/{docId} {
+          allow read: if isParent(fid) || isChildOf(fid, cid);
+          allow create, update: if docId == 'status'
+            && isChildOf(fid, cid)
+            && request.resource.data.keys().hasOnly(['checkInAt', 'by'])
+            && request.resource.data.keys().hasAll(['checkInAt', 'by'])
+            && request.resource.data.checkInAt == request.time
+            && request.resource.data.by == request.auth.uid;
+          allow delete: if false;
+        }
+
+        // Explicit, permissioned location reports from the enrolled child device.
+        // A report contains no background tracking history and cannot be written by a parent.
+        match /packageRules/{pkg} {
+          allow read: if isParent(fid) || isChildOf(fid, cid);
+          allow create, update: if isParent(fid) && pkg.size() <= 255
+            && pkg.matches('[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z][a-zA-Z0-9_]*)+')
+            && request.resource.data.keys().hasOnly(['minutes', 'blocked'])
+            && request.resource.data.minutes is int && request.resource.data.minutes >= 0
+            && request.resource.data.minutes <= 1440 && request.resource.data.blocked is bool;
+          allow delete: if isParent(fid);
+        }
+        match /settings/offline {
+          allow get: if isParent(fid) || isChildOf(fid, cid);
+          allow create, update: if isParent(fid) && request.resource.data.keys().hasOnly(['enabled'])
+            && request.resource.data.enabled is bool;
+          allow delete: if isParent(fid);
+        }
+        match /settings/power {
+          allow get: if isParent(fid) || isChildOf(fid, cid);
+          allow create, update: if isParent(fid) && request.resource.data.keys().hasOnly(['percent'])
+            && request.resource.data.percent in [0, 10, 20, 30, 50];
+          allow delete: if isParent(fid);
+        }
+        match /management/{report} {
+          allow get: if report == 'latest' && (isParent(fid) || isChildOf(fid, cid));
+          allow create, update: if report == 'latest' && isChildOf(fid, cid)
+            && request.resource.data.keys().hasOnly(['by', 'message', 'receivedAt'])
+            && nonEmptyText(request.resource.data.message, 240)
+            && request.resource.data.by == request.auth.uid && request.resource.data.receivedAt == request.time;
+        }
+        match /usage/{report} {
+          allow get: if report == 'latest' && (isParent(fid) || isChildOf(fid, cid));
+          allow create, update: if report == 'latest' && isChildOf(fid, cid)
+            && request.resource.data.keys().hasOnly(['apps', 'measuredAt', 'screenMs', 'by', 'receivedAt', 'days'])
+            && (!('days' in request.resource.data) || (request.resource.data.days is list && request.resource.data.days.size() <= 7))
+            && request.resource.data.apps is list && request.resource.data.apps.size() <= 1000
+            && (!('screenMs' in request.resource.data) || (request.resource.data.screenMs is int && request.resource.data.screenMs >= 0 && request.resource.data.screenMs <= 93600000))
+            && request.resource.data.measuredAt is int && request.resource.data.measuredAt > 0
+            && request.resource.data.by == request.auth.uid && request.resource.data.receivedAt == request.time;
+          allow delete: if report == 'latest' && isChildOf(fid, cid);
+        }
+
+        function validLocation() {
+          return request.resource.data.keys().hasOnly(['latitude', 'longitude', 'accuracyM', 'capturedAt', 'by', 'measuredAt'])
+            && request.resource.data.keys().hasAll(['latitude', 'longitude', 'accuracyM', 'capturedAt', 'by'])
+            && request.resource.data.latitude is number
+            && request.resource.data.latitude >= -90
+            && request.resource.data.latitude <= 90
+            && request.resource.data.longitude is number
+            && request.resource.data.longitude >= -180
+            && request.resource.data.longitude <= 180
+            && request.resource.data.accuracyM is number
+            && request.resource.data.accuracyM >= 0
+            && request.resource.data.accuracyM <= 100000
+            && (!('measuredAt' in request.resource.data) ||
+                (request.resource.data.measuredAt is int
+                 && request.resource.data.measuredAt > 0
+                 && request.resource.data.measuredAt <= request.time.toMillis() + 60000))
+            && request.resource.data.capturedAt == request.time
+            && request.resource.data.by == request.auth.uid;
+        }
+        match /location/{docId} {
+          allow get: if docId == 'latest' && (isParent(fid) || isChildOf(fid, cid));
+          allow create, update: if docId == 'latest' && isChildOf(fid, cid) && validLocation();
+          allow delete: if isChildOf(fid, cid);
+        }
+        match /checkins/{slot} {
+          allow read: if isParent(fid) || isChildOf(fid, cid);
+          allow create, update: if isChildOf(fid, cid) && slot.matches('^([0-9]|1[0-9]|2[0-3])$')
+            && validLocation() && 'measuredAt' in request.resource.data;
+          allow delete: if isChildOf(fid, cid);
+        }
+
+        // Requests: the child asks, a parent answers once.
+        match /requests/{rid} {
+          allow read: if isParent(fid) || isChildOf(fid, cid);
+
+          allow create: if isChildOf(fid, cid)
+            && idOk(rid)
+            && request.resource.data.keys().hasOnly(['kind', 'label', 'detail', 'minutes', 'appId', 'status', 'at', 'by'])
+            && request.resource.data.keys().hasAll(['kind', 'label', 'detail', 'status', 'at', 'by'])
+            && request.resource.data.kind in ['extra_time', 'unlock_app', 'install_app', 'bedtime']
+            && nonEmptyText(request.resource.data.label, 80)
+            && text(request.resource.data.detail, 200)
+            && (!('minutes' in request.resource.data)
+                  || (request.resource.data.minutes is int && request.resource.data.minutes > 0 && request.resource.data.minutes <= 240))
+            && (!('appId' in request.resource.data) || nonEmptyText(request.resource.data.appId, 40))
+            && request.resource.data.status == 'pending'
+            && request.resource.data.at == request.time
+            && request.resource.data.by == request.auth.uid;
+
+          allow update: if isParent(fid)
+            && resource.data.status == 'pending'
+            && onlyChanged(['status', 'resolvedBy', 'resolvedAt'])
+            && request.resource.data.status in ['approved', 'denied']
+            && request.resource.data.resolvedBy == request.auth.uid
+            && request.resource.data.resolvedAt == request.time;
+
+          allow delete: if isParent(fid);
+        }
+
+        // Chat. A message is written once, as yourself, and never edited or removed.
+        match /messages/{mid} {
+          allow read: if isParent(fid) || isChildOf(fid, cid);
+
+          allow create: if idOk(mid)
+            && request.resource.data.keys().hasOnly(['from', 'text', 'at', 'by'])
+            && request.resource.data.keys().hasAll(['from', 'text', 'at', 'by'])
+            && nonEmptyText(request.resource.data.text, 2000)
+            && request.resource.data.at == request.time
+            && request.resource.data.by == request.auth.uid
+            && ((request.resource.data.from == 'parent' && isParent(fid) && childExists(fid, cid))
+                 || (request.resource.data.from == 'child' && isChildOf(fid, cid)));
+
+          allow update, delete: if false;
+        }
+      }
+
+      // ---- alerts/{id}: the parents' activity feed --------------------------------------------
+      // A child device adds entries about itself (check-in, SOS, a request, leaving the family)
+      // but cannot read the feed. Parents read it and mark entries as read.
+
+      function alertShapeOk(data) {
+        return data.keys().hasOnly(['kind', 'childId', 'icon', 'color', 'title', 'body', 'unread', 'at', 'by'])
+          && data.keys().hasAll(['kind', 'childId', 'icon', 'color', 'title', 'body', 'unread', 'at', 'by'])
+          && nonEmptyText(data.kind, 20)
+          && (data.childId == null || (data.childId is string && idOk(data.childId)))
+          && text(data.icon, 40)
+          && data.color is string && data.color.matches('^#[0-9A-Fa-f]{6}$')
+          && nonEmptyText(data.title, 120)
+          && text(data.body, 240)
+          && data.unread is bool;
+      }
+
+      match /alerts/{aid} {
+        allow read: if isParent(fid);
+
+        allow create: if idOk(aid)
+          && alertShapeOk(request.resource.data)
+          && request.resource.data.unread == true
+          && request.resource.data.at == request.time
+          && request.resource.data.by == request.auth.uid
+          && (isParent(fid)
+               || (isChild(fid)
+                    && request.resource.data.childId == myRecord(fid).childId
+                    && request.resource.data.kind in ['checkin', 'sos', 'request', 'left']));
+
+        allow update: if isParent(fid)
+          && onlyChanged(['unread'])
+          && request.resource.data.unread == false;
+
+        allow delete: if isParent(fid);
+      }
+
+      // ---- Family rules: places, schedules, sites. Parent-owned, readable by the family. ------
+
+      match /places/{id} {
+        allow read: if isMember(fid);
+        allow create, update: if isParent(fid) && idOk(id)
+          && request.resource.data.keys().hasOnly(['name', 'icon', 'radius', 'arrive', 'leave', 'ord', 'latitude', 'longitude'])
+          && ((!('latitude' in request.resource.data) && !('longitude' in request.resource.data)) ||
+            (request.resource.data.latitude is number && request.resource.data.latitude >= -90 && request.resource.data.latitude <= 90 &&
+             request.resource.data.longitude is number && request.resource.data.longitude >= -180 && request.resource.data.longitude <= 180))
+          && request.resource.data.keys().hasAll(['name', 'icon', 'radius', 'arrive', 'leave', 'ord'])
+          && nonEmptyText(request.resource.data.name, 60)
+          && text(request.resource.data.icon, 40)
+          && request.resource.data.radius is number && request.resource.data.radius > 0 && request.resource.data.radius <= 100000
+          && request.resource.data.arrive is bool
+          && request.resource.data.leave is bool
+          && request.resource.data.ord is number;
+        allow delete: if isParent(fid);
+      }
+
+      match /schedules/{id} {
+        allow read: if isMember(fid);
+        allow create, update: if isParent(fid) && idOk(id)
+          && request.resource.data.keys().hasOnly(['name', 'icon', 'color', 'start', 'end', 'days', 'on', 'ord'])
+          && request.resource.data.keys().hasAll(['name', 'icon', 'color', 'start', 'end', 'days', 'on', 'ord'])
+          && nonEmptyText(request.resource.data.name, 60)
+          && text(request.resource.data.icon, 40)
+          && request.resource.data.color is string && request.resource.data.color.matches('^#[0-9A-Fa-f]{6}$')
+          && nonEmptyText(request.resource.data.start, 12)
+          && nonEmptyText(request.resource.data.end, 12)
+          && request.resource.data.days is list && request.resource.data.days.size() == 7
+          && request.resource.data.on is bool
+          && request.resource.data.ord is number;
+        allow delete: if isParent(fid);
+      }
+
+      match /webPolicy/adultSites {
+        allow get: if isMember(fid);
+        allow create, update: if isParent(fid) && request.resource.data.keys().hasOnly(['enabled'])
+          && request.resource.data.enabled is bool;
+        allow delete: if isParent(fid);
+      }
+      match /webPolicy/chrome {
+        allow get: if isMember(fid);
+        allow create, update: if isParent(fid)
+          && request.resource.data.keys().hasOnly(['safeSearch'])
+          && request.resource.data.safeSearch is bool;
+        allow delete: if isParent(fid);
+      }
+
+      match /sites/{id} {
+        allow read: if isMember(fid);
+        allow create, update: if isParent(fid) && idOk(id)
+          && request.resource.data.keys().hasOnly(['host', 'list', 'ord'])
+          && request.resource.data.keys().hasAll(['host', 'list', 'ord'])
+          && nonEmptyText(request.resource.data.host, 253)
+          && request.resource.data.list in ['blocked', 'allowed']
+          && request.resource.data.ord is number;
+        allow delete: if isParent(fid);
+      }
+
+      // ---- tasks/{id}: a parent defines them, a child may only tick them ----------------------
+
+      match /tasks/{id} {
+        allow read: if isMember(fid);
+        allow create, update: if isParent(fid) && idOk(id)
+          && request.resource.data.keys().hasOnly(['title', 'points', 'done', 'ord'])
+          && request.resource.data.keys().hasAll(['title', 'points', 'done', 'ord'])
+          && nonEmptyText(request.resource.data.title, 80)
+          && request.resource.data.points is int && request.resource.data.points >= 0 && request.resource.data.points <= 1000
+          && request.resource.data.done is bool
+          && request.resource.data.ord is number;
+        allow update: if isChild(fid)
+          && onlyChanged(['done'])
+          && request.resource.data.done is bool;
+        allow delete: if isParent(fid);
+      }
+
+      // ---- signals/sos: the SOS flag -----------------------------------------------------------
+      // A child raises it for itself and may clear its own. A parent may only clear it.
+
+      match /signals/{signal} {
+        allow read: if isMember(fid);
+
+        allow create, update: if signal == 'sos'
+          && request.resource.data.keys().hasOnly(['active', 'childId', 'by', 'at'])
+          && request.resource.data.keys().hasAll(['active', 'childId', 'by', 'at'])
+          && request.resource.data.active is bool
+          && request.resource.data.by == request.auth.uid
+          && request.resource.data.at == request.time
+          && ((isParent(fid)
+                 && request.resource.data.active == false
+                 && (resource == null ? request.resource.data.childId == null : request.resource.data.childId == resource.data.childId))
+               || (isChild(fid)
+                    && request.resource.data.childId == myRecord(fid).childId
+                    && (request.resource.data.active == true
+                          || resource == null
+                          || resource.data.active == false
+                          || resource.data.childId == myRecord(fid).childId)));
+
+        allow delete: if false;
+      }
+    }
+
+    // Everything not named above is closed.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+
+) && request.resource.data.by == request.auth.uid
+              && request.resource.data.at == request.time;
+          }
+          allow create: if validAttempt();
+          allow update: if validAttempt() && resource.data.at + duration.value(1, 'm') <= request.time;
+          allow delete: if isChildOf(fid, cid) && redeemable() && !existsAfter(pinPath());
+        }
         allow get: if isParent(fid) || isChildOf(fid, cid);
         allow list: if isParent(fid);
         allow create: if isParent(fid) && idOk(cid) && childShapeOk(request.resource.data);

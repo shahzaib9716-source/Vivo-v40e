@@ -5,6 +5,7 @@ import { Pressable, ScrollView, View, StyleSheet } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ParentUnlock } from '@/components/ParentUnlock';
 import { LinkCard } from '@/components/child/LinkCard';
 import { Toast, useToast } from '@/components/child/Toast';
 import { Button, Card, ProgressRing, Text } from '@/components/ui';
@@ -30,7 +31,8 @@ export default function ChildHome() {
   const { colors } = useTheme();
   // Only this child's own SOS shows here: in a family with two children the other one's is not theirs to clear.
   const { childSelf, tasks, messages, checkIn, sosMine: sosActive, clearSOS, live } = useStore();
-  const linkStatus = useLink().status;
+  const link = useLink();
+  const linkStatus = link.status;
   const toast = useToast();
 
   const firstName = childSelf.name.split(' ')[0];
@@ -260,6 +262,7 @@ export default function ChildHome() {
             </LinkCard>
           )}
 
+          {live && paused && link.role === 'child' && link.familyId && link.childId && link.account && <ParentUnlock key={link.childId} parent={false} family={link.familyId} child={link.childId} uid={link.account.uid} />}
           {live && device && <TopApps key={childSelf.id} />}
           {/* Apps */}
           <Text variant="h3" style={styles.sectionTitle}>

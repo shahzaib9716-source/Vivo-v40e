@@ -9,6 +9,7 @@ import { Avatar, Button, Card, Header, IconBadge, PlaceholderNotice, Row, Screen
 import { useStore, fmtDuration } from '@/state/store';
 import { categoryColors, spacing, useTheme } from '@/theme';
 
+import { ParentUnlock } from '@/components/ParentUnlock';
 import { PowerSetting } from '@/components/PowerSetting';
 import { useLink } from '@/sync/link';
 
@@ -132,6 +133,7 @@ export default function ChildProfile() {
             </Text>
           </View>
 
+          {live && link.role === 'parent' && link.familyId && link.account && <ParentUnlock key={'pin-' + activeChildId} parent family={link.familyId} child={activeChildId} uid={link.account.uid} />}
           {live && link.role === 'parent' && link.familyId && <PowerSetting key={activeChildId} family={link.familyId} child={activeChildId} />}
           {live ? (
             // A real family: what the phones really report. Use, battery and place are not read by this version.
