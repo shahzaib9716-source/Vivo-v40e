@@ -406,6 +406,12 @@ service cloud.firestore {
             && request.resource.data.minutes <= 1440 && request.resource.data.blocked is bool;
           allow delete: if isParent(fid);
         }
+        match /settings/power {
+          allow get: if isParent(fid) || isChildOf(fid, cid);
+          allow create, update: if isParent(fid) && request.resource.data.keys().hasOnly(['percent'])
+            && request.resource.data.percent in [0, 10, 20, 30, 50];
+          allow delete: if isParent(fid);
+        }
         match /management/{report} {
           allow get: if report == 'latest' && (isParent(fid) || isChildOf(fid, cid));
           allow create, update: if report == 'latest' && isChildOf(fid, cid)

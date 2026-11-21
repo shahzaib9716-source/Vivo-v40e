@@ -9,6 +9,9 @@ import { Avatar, Button, Card, Header, IconBadge, PlaceholderNotice, Row, Screen
 import { useStore, fmtDuration } from '@/state/store';
 import { categoryColors, spacing, useTheme } from '@/theme';
 
+import { PowerSetting } from '@/components/PowerSetting';
+import { useLink } from '@/sync/link';
+
 const NAME_MAX = 24;
 
 /** Trimmed, with runs of spaces collapsed, so initials and first names stay clean. */
@@ -47,6 +50,7 @@ export default function ChildProfile() {
   const { colors } = useTheme();
   const { activeChild, activeChildId, pauseDevice, resumeDevice, renameChild, live } = useStore();
 
+  const link = useLink();
   const scroll = useRef<ComponentRef<typeof ScrollView>>(null);
   /** The name being typed, or null while the rename editor is closed. */
   const [draft, setDraft] = useState<string | null>(null);
@@ -128,6 +132,7 @@ export default function ChildProfile() {
             </Text>
           </View>
 
+          {live && link.role === 'parent' && link.familyId && <PowerSetting key={activeChildId} family={link.familyId} child={activeChildId} />}
           {live ? (
             // A real family: what the phones really report. Use, battery and place are not read by this version.
             <View style={styles.tiles}>

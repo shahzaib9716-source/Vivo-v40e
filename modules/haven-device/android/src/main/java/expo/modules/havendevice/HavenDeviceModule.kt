@@ -48,6 +48,9 @@ class HavenDeviceModule : Module() {
         "batteryExempt" to requireNotNull(ctx.getSystemService(PowerManager::class.java)).isIgnoringBatteryOptimizations(ctx.packageName)
       )
     }
+    AsyncFunction("batteryPercent") {
+      context.getSystemService(android.os.BatteryManager::class.java)?.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)?.takeIf { it in 0..100 } ?: -1
+    }
     AsyncFunction("requestScreeningRole") {
       check(Build.VERSION.SDK_INT >= 29) { "Call screening requires Android 10 or later." }
       val manager = requireNotNull(context.getSystemService(RoleManager::class.java))

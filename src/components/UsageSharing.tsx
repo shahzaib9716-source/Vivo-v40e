@@ -5,6 +5,8 @@ import { device, shareUsage } from '@/sync/androidDevice';
 import { useLink } from '@/sync/link';
 import { readKey, writeKey } from '@/state/storage';
 
+import { lowBattery, usePowerThreshold } from '@/sync/power';
+
 interface Consent {
   enabled: boolean;
   ready: boolean;
@@ -17,6 +19,7 @@ export const useUsageSharing = () => useContext(Context);
 
 export function UsageSharingProvider({ children }: { children: ReactNode }) {
   const { role, familyId, childId, account, status: linkStatus } = useLink();
+  const threshold = usePowerThreshold(role === 'child' ? familyId : null, childId)?.percent ?? 0;
   const uid = account?.uid;
   const key = role === 'child' && familyId && childId && uid && device
     ? ['haven.usage-consent.v1', familyId, childId, uid].join('/') : '';
@@ -63,6 +66,10 @@ export function UsageSharingProvider({ children }: { children: ReactNode }) {
       lastAttempt = Date.now();
       const work = (async () => {
         try {
+          if (await lowBattery(threshold, native.batteryPercent ? () => native.batteryPercent!() : undefined)) {
+            if (active()) setStatus('Automatic usage sharing paused for low battery.');
+            return;
+          }
           const published = await refreshUsage(active, () => native.readUsage(), report =>
             shareUsage(family, child, author, report.apps, report.measuredAt, report.screenMs, report.days));
           if (published && active()) setStatus('Last usage update: ' + new Date().toLocaleString());
@@ -77,7 +84,7 @@ export function UsageSharingProvider({ children }: { children: ReactNode }) {
     const sub = AppState.addEventListener('change', state => { if (state === 'active') refresh(); });
     const timer = setInterval(refresh, 15 * 60000);
     return () => { disposed = true; sub.remove(); clearInterval(timer); };
-  }, [enabled, linkStatus, familyId, childId, uid]);
+  }, [enabled, linkStatus, familyId, childId, uid, threshold]);
 
   return <Context.Provider value={{ enabled, ready: !!key && preference.key === key, status, setEnabled }}>{children}</Context.Provider>;
 }

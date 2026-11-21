@@ -8,10 +8,12 @@ import { device, requestFix, shareUsage, clearUsage } from '@/sync/androidDevice
 import { reportChildLocation, clearChildLocation, clearCheckins } from '@/sync/location';
 
 import { useStore } from '@/state/store';
+import { lowBattery, usePowerThreshold } from '@/sync/power';
 import { CrossingSession } from '@/sync/placeCrossing';
 
 export function DeviceSharing({ family, child, uid }: { family: string; child: string; uid: string }) {
   const { places } = useStore();
+  const threshold = usePowerThreshold(family, child)?.percent ?? 0;
   const automatic = useUsageSharing();
   const management = useContext(PolicyStatus);
   const [sharing, setSharing] = useState(false);
@@ -43,6 +45,11 @@ export function DeviceSharing({ family, child, uid }: { family: string; child: s
     const active = () => !disposed && token === generation.current && AppState.currentState === 'active';
     async function report() {
       try {
+        if (await lowBattery(threshold, device?.batteryPercent ? () => device!.batteryPercent!() : undefined)) {
+          if (active()) { setStatus('GPS updates paused for low battery.'); timer = setTimeout(report, 60000); }
+          return;
+        }
+        if (!active()) return;
         const fix = await device!.currentFix();
         if (!active()) return;
         await reportChildLocation(family, child, uid, fix.latitude, fix.longitude, fix.accuracyM, fix.measuredAt, false, session.update(places, fix));
@@ -58,7 +65,7 @@ export function DeviceSharing({ family, child, uid }: { family: string; child: s
     }
     timer = setTimeout(report, 60000);
     return () => { disposed = true; clearTimeout(timer); };
-  }, [sharing, family, child, uid, stop, places]);
+  }, [sharing, family, child, uid, stop, places, threshold]);
   if (!device) return null;
   const native = device;
   async function run(work: () => Promise<void>, success: string) {

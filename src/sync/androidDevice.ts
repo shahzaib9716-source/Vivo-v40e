@@ -18,6 +18,7 @@ export interface DevicePermissions {
 
 interface DeviceModule {
   permissionStatus?(): Promise<DevicePermissions>;
+  batteryPercent?(): Promise<number>;
   requestScreeningRole?(): Promise<void>;
   setScreeningEnabled?(value: boolean): Promise<void>;
   openAdminActivation?(): Promise<void>;
