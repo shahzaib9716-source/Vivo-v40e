@@ -24,7 +24,7 @@ export function ManagedDevicePolicy({ onStatus }: { onStatus: (message: string) 
     function report(message: string) {
       if (!current || !account || !familyId || !childId) return;
       onStatus(message);
-      publishManagement(familyId, childId, account.uid, message).catch(() => {
+      publishManagement(familyId, childId, account.uid, message.slice(0, 240)).catch(() => {
         if (current) onStatus(message + ' Status could not be sent to your parent.');
       });
     }

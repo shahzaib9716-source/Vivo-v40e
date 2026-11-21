@@ -63,7 +63,7 @@ export default function Geofences() {
                         {p.name}
                       </Text>
                       <Text variant="small" tone="muted" numberOfLines={1}>
-                        {p.radius} m radius
+                        {p.radius} m radius{live && (p.latitude == null ? ' · coordinates missing' : ` · ${p.latitude.toFixed(4)}, ${p.longitude?.toFixed(4)}`)}
                       </Text>
                     </View>
                     {confirming ? null : <IconButton icon="trash-2" label={`Remove ${p.name}`} onPress={() => setConfirmId(p.id)} />}

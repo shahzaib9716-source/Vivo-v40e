@@ -87,3 +87,21 @@ test('only parents may configure Chrome search policy', async () => {
   await refused(setDoc(policy('founder'), { safeSearch: 'true' }));
   await refused(setDoc(policy('founder'), { safeSearch: true, extra: true }));
 });
+
+test('a parent selects a bounded power threshold for a linked child', async () => {
+  const path = 'settings/power';
+  await allowed(setDoc(at('founder', path), { percent: 20 }));
+  await allowed(getDoc(at('kid1', path)));
+  await refused(getDoc(at('kid2', path)));
+  await refused(setDoc(at('kid1', path), { percent: 50 }));
+  await refused(setDoc(at('founder', path), { percent: 101 }));
+});
+
+test('family places accept coordinate pairs and retain legacy entries', async () => {
+  const place = { name: 'Home', icon: 'home', radius: 100, arrive: true, leave: true, ord: 0 };
+  const path = ref(h.a.founder, A('places/home'));
+  await allowed(setDoc(path, place));
+  await allowed(setDoc(path, { ...place, latitude: 0, longitude: -180 }));
+  await refused(setDoc(path, { ...place, latitude: 1 }));
+  await refused(setDoc(path, { ...place, latitude: 90.1, longitude: 0 }));
+});

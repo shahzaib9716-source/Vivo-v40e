@@ -195,9 +195,9 @@ export default function AddPlace() {
 
       <Field label="Alert zone" hint={`${meters} m radius`}>
         <Card>
-          <View style={[styles.map, { borderColor: colors.border }]}>
+          {!live && <View style={[styles.map, { borderColor: colors.border }]}>
             <PlaceMap height={176} tint={TINT} pinIcon={icon} radiusMeters={meters} label={cleanName || 'New place'} />
-          </View>
+          </View>}
 
           <View style={styles.radiusRow}>
             {RADII.map((r) => (
@@ -220,9 +220,9 @@ export default function AddPlace() {
               {live ? 'In-app alerts use fixes shared while the child keeps Me open.' : 'Alerts fire when your child crosses the edge of the zone.'}
             </Text>
           </View>
-          <Text variant="tiny" tone="faint" style={styles.demoNote}>
+          {!live && <Text variant="tiny" tone="faint" style={styles.demoNote}>
             Sample map. In this demo the place is pinned to the middle of the map.
-          </Text>
+          </Text>}
         </Card>
       </Field>
 
