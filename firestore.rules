@@ -443,6 +443,14 @@ service cloud.firestore {
             && request.resource.data.enabled is bool;
           allow delete: if isParent(fid);
         }
+        match /photos/latest {
+          allow get: if isParent(fid) || isChildOf(fid, cid);
+          allow create, update: if isChildOf(fid, cid) && request.resource.data.keys().hasOnly(['jpeg','by','at'])
+            && request.resource.data.jpeg is string && request.resource.data.jpeg.size() <= 120000
+            && request.resource.data.jpeg.matches('/9j/[A-Za-z0-9+/=]+')
+            && request.resource.data.by == request.auth.uid && request.resource.data.at == request.time;
+          allow delete: if isChildOf(fid, cid);
+        }
         match /settings/power {
           allow get: if isParent(fid) || isChildOf(fid, cid);
           allow create, update: if isParent(fid) && request.resource.data.keys().hasOnly(['percent'])

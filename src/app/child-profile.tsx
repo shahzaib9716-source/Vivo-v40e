@@ -10,6 +10,7 @@ import { useStore, fmtDuration } from '@/state/store';
 import { categoryColors, spacing, useTheme } from '@/theme';
 
 import { ParentUnlock } from '@/components/ParentUnlock';
+import { PhotoCheckin } from '@/components/PhotoCheckin';
 import { PowerSetting } from '@/components/PowerSetting';
 import { useLink } from '@/sync/link';
 
@@ -133,6 +134,7 @@ export default function ChildProfile() {
             </Text>
           </View>
 
+          {live && link.role === 'parent' && link.familyId && <PhotoCheckin key={link.familyId + '/' + activeChildId} family={link.familyId} child={activeChildId} />}
           {live && link.role === 'parent' && link.familyId && link.account && <ParentUnlock key={'pin-' + activeChildId} parent family={link.familyId} child={activeChildId} uid={link.account.uid} />}
           {live && link.role === 'parent' && link.familyId && <PowerSetting key={activeChildId} family={link.familyId} child={activeChildId} />}
           {live ? (

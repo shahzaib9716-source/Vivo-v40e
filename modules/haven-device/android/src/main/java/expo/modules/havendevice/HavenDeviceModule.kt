@@ -25,6 +25,7 @@ import expo.modules.kotlin.modules.ModuleDefinition
 import java.util.concurrent.atomic.AtomicBoolean
 
 class HavenDeviceModule : Module() {
+  private var photoRequest: Promise? = null
   private val context get() = requireNotNull(appContext.reactContext)
   private fun usageAllowed(): Boolean {
     val ops = requireNotNull(context.getSystemService(AppOpsManager::class.java))
@@ -33,6 +34,38 @@ class HavenDeviceModule : Module() {
 
   override fun definition() = ModuleDefinition {
     Name("HavenDevice")
+    AsyncFunction("takeCheckinPhoto") { promise: Promise ->
+      val activity = appContext.currentActivity
+      android.os.Handler(android.os.Looper.getMainLooper()).post {
+      if (activity == null || photoRequest != null) {
+        promise.reject("E_CAMERA", "Open the child screen before taking a photo.", null)
+      } else {
+        photoRequest = promise
+        try {
+          activity.startActivityForResult(Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE), 58110)
+        } catch (e: Exception) {
+          photoRequest = null
+          promise.reject("E_CAMERA", "Unable to open the camera.", e)
+        }
+      }
+      }
+      Unit
+    }
+    OnActivityResult { _, result ->
+      if (result.requestCode == 58110) {
+        val request = photoRequest
+        photoRequest = null
+        if (result.resultCode != android.app.Activity.RESULT_OK) request?.resolve(null)
+        else try {
+          val image = result.data?.extras?.get("data") as? android.graphics.Bitmap ?: error("Camera returned no preview.")
+          val stream = java.io.ByteArrayOutputStream()
+          check(image.compress(android.graphics.Bitmap.CompressFormat.JPEG, 75, stream))
+          require(stream.size() in 1..90000)
+          request?.resolve(android.util.Base64.encodeToString(stream.toByteArray(), android.util.Base64.NO_WRAP))
+        } catch (e: Exception) { request?.reject("E_PHOTO", "Unable to prepare the camera preview.", e) }
+      }
+    }
+    OnDestroy { photoRequest?.reject("E_CAMERA", "Camera session ended.", null); photoRequest = null }
     AsyncFunction("permissionStatus") {
       val ctx = context
       val policy = requireNotNull(ctx.getSystemService(DevicePolicyManager::class.java))

@@ -17,6 +17,7 @@ export interface DevicePermissions {
 }
 
 interface DeviceModule {
+  takeCheckinPhoto?(): Promise<string | null>;
   permissionStatus?(): Promise<DevicePermissions>;
   batteryPercent?(): Promise<number>;
   requestScreeningRole?(): Promise<void>;

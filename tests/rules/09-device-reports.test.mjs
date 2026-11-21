@@ -160,3 +160,15 @@ test('incorrect unlock PIN cannot release the pause or remove the attempt cooldo
   await refused(batch.commit());
   await refused(deleteDoc(at('kid1', 'unlock/attempt')));
 });
+
+test('only the enrolled child can publish or remove a photo check-in', async () => {
+  const path = 'photos/latest';
+  const data = { jpeg: '/9j/AAAA', by: h.a.kid1.selfId, at: serverTimestamp() };
+  await allowed(setDoc(at('kid1', path), data));
+  await allowed(getDoc(at('founder', path)));
+  await refused(getDoc(at('kid2', path)));
+  await refused(setDoc(at('founder', path), data));
+  await refused(setDoc(at('kid1', path), { ...data, jpeg: 'invalid' }));
+  await refused(deleteDoc(at('kid2', path)));
+  await allowed(deleteDoc(at('kid1', path)));
+});
