@@ -1,4 +1,3 @@
-
 {
   "cli": {
     "version": ">= 19.1.0",
@@ -15,6 +14,18 @@
     "production": {
       "channel": "production",
       "autoIncrement": true
+    },
+    "parent-apk": {
+      "extends": "preview",
+      "env": {
+        "HAVEN_ANDROID_SIDE": "parent"
+      }
+    },
+    "child-apk": {
+      "extends": "preview",
+      "env": {
+        "HAVEN_ANDROID_SIDE": "child"
+      }
     }
   },
   "submit": {

@@ -131,6 +131,32 @@ function withUpdates(config) {
   };
 }
 
+function forAndroidSide(config, side) {
+  if (!side) return config;
+  if (side !== 'parent' && side !== 'child') throw new Error('HAVEN_ANDROID_SIDE must be parent or child.');
+  if (!config.extra?.firebase) throw new Error('Paired Android builds require Firebase configuration.');
+  const child = side === 'child';
+  const images = './assets/images/child';
+  return {
+    ...config,
+    name: child ? 'Haven Child' : 'Haven Parent',
+    scheme: 'haven-' + side,
+    icon: child ? images + '/icon.png' : config.icon,
+    android: {
+      ...config.android,
+      package: config.android.package + '.' + side,
+      adaptiveIcon: child ? {
+        ...config.android.adaptiveIcon,
+        foregroundImage: images + '/android-icon-foreground.png',
+        backgroundImage: images + '/android-icon-background.png',
+        monochromeImage: images + '/android-icon-monochrome.png',
+      } : config.android.adaptiveIcon,
+    },
+    extra: { ...config.extra, androidSide: side },
+    updates: { ...config.updates, enabled: false },
+  };
+}
+
 module.exports = ({ config }) => {
   const linkedConfig = {
     ...config,
@@ -144,5 +170,5 @@ module.exports = ({ config }) => {
     },
   };
 
-  return withUpdates(withBackend(linkedConfig));
+  return forAndroidSide(withUpdates(withBackend(linkedConfig)), process.env.HAVEN_ANDROID_SIDE);
 };

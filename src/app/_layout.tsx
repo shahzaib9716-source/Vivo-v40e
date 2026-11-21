@@ -5,7 +5,7 @@ import { Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { APP_NAME } from '@/config/variant';
+import { APP_NAME, BUILD_SIDE } from '@/config/variant';
 import { StoreProvider, useStore } from '@/state/store';
 import { LinkProvider, useLink } from '@/sync/link';
 import { FamilyWordAlerts } from '@/components/ChatWordAlerts';
@@ -70,7 +70,7 @@ function AppLayout() {
  */
 function Screens({ scheme }: { scheme: 'light' | 'dark' }) {
   const link = useLink();
-  const { role, setRole, linkedRoleAtStart } = useStore();
+  const { role, setRole, linkedRoleAtStart, live } = useStore();
   // While the link layer is still reading this device's record at start, the role saved with it
   // stands in, so a deep link opened at a cold start cannot show the other side for a moment.
   const serverRole = link.role ?? (link.status === 'connecting' ? linkedRoleAtStart : null);
@@ -78,11 +78,13 @@ function Screens({ scheme }: { scheme: 'light' | 'dark' }) {
   // Keep the saved side in step with the server's, so screens that read the side agree with it and
   // the device stays on that side if it later leaves the family.
   useEffect(() => {
-    if (serverRole && role !== serverRole) setRole(serverRole);
+    const effective = serverRole ?? BUILD_SIDE;
+    if (effective && role !== effective) setRole(effective);
   }, [serverRole, role, setRole]);
 
-  const parentAllowed = serverRole !== 'child';
-  const childAllowed = serverRole !== 'parent';
+  const readyForData = !BUILD_SIDE || (live && serverRole === BUILD_SIDE);
+  const parentAllowed = BUILD_SIDE !== 'child' && serverRole !== 'child';
+  const childAllowed = BUILD_SIDE !== 'parent' && serverRole !== 'parent';
 
   return (
     <Stack
@@ -93,15 +95,15 @@ function Screens({ scheme }: { scheme: 'light' | 'dark' }) {
       }}>
       <Stack.Screen name="index" options={{ animation: 'fade' }} />
       <Stack.Screen name="onboarding" options={{ animation: 'fade', gestureEnabled: false }} />
-      <Stack.Screen name="messages" />
+      <Stack.Protected guard={readyForData}><Stack.Screen name="messages" /></Stack.Protected>
       <Stack.Screen name="transparency" />
       <Stack.Screen name="link-device" />
       <Stack.Screen name="about-version" />
 
       {/* The parent side: the tabs and everything reached from them. */}
-      <Stack.Protected guard={parentAllowed}>
+      <Stack.Protected guard={parentAllowed}><Stack.Screen name="account" /></Stack.Protected>
+      <Stack.Protected guard={parentAllowed && readyForData}>
         <Stack.Screen name="(parent)" />
-        <Stack.Screen name="account" />
         <Stack.Screen name="pairing" />
         <Stack.Screen name="settings" />
         <Stack.Screen name="child-profile" />
@@ -123,7 +125,7 @@ function Screens({ scheme }: { scheme: 'light' | 'dark' }) {
       </Stack.Protected>
 
       {/* The child side. */}
-      <Stack.Protected guard={childAllowed}>
+      <Stack.Protected guard={childAllowed && readyForData}>
         <Stack.Screen name="(child)" />
         <Stack.Screen name="typing-practice" />
         <Stack.Screen name="sos" options={{ animation: 'fade_from_bottom', presentation: 'modal' }} />

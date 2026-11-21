@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { HavenScreenCapture } from './HavenScreenCapture';
 import { Image, View } from 'react-native';
 import { doc, onSnapshot, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { closeRequest, requestCheckin, requestPath, useCheckinRequest } from './CheckinRequests';
@@ -91,7 +92,7 @@ function Checkin({ family, child, author, kind }: { family: string; child: strin
     {item && kind === 'voice' && (device?.playVoiceNote
       ? <Button disabled={busy} label="Listen to note" onPress={() => act('play')} />
       : <Text>Open this note in the Haven Android app to listen.</Text>)}
-    {author && kind === 'screen' && <Text>Take a screenshot using your phone’s screenshot controls, then choose it here to preview.</Text>}
+    {author && kind === 'screen' && !draft && <HavenScreenCapture onPick={setDraft} disabled={busy} />}
     {author && device && <Button disabled={busy} label={spec.select} onPress={() => act('select')} />}
     {author && draft && <>
       <Button disabled={busy} label={'Share this ' + spec.label} onPress={() => act('send')} />

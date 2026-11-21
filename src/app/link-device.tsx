@@ -6,7 +6,7 @@ import { InlineNote } from '@/components/InlineNote';
 import { CheckCode, DeviceList, LinkFootnote, LinkStatusCard, Step, useLinkAction } from '@/components/LinkParts';
 import { InlineConfirm, TextField } from '@/components/RuleForm';
 import { Button, Card, Header, Row, Screen, SectionLabel, Text } from '@/components/ui';
-import { SIDE_HOME } from '@/config/variant';
+import { BUILD_SIDE, SIDE_HOME } from '@/config/variant';
 import { useStore } from '@/state/store';
 import { useLink } from '@/sync/link';
 import { formatPairingCode, normalisePairingCode, PAIRING_CODE_LENGTH, type LinkRole } from '@/sync/types';
@@ -30,7 +30,7 @@ export default function LinkDevice() {
   const [confirmUnlink, setConfirmUnlink] = useState(false);
 
   // Until the server has given this device a role, the wording follows the side that was chosen here.
-  const joinAs: LinkRole = link.role ?? (role === 'parent' ? 'parent' : 'child');
+  const joinAs: LinkRole = link.role ?? BUILD_SIDE ?? (role === 'parent' ? 'parent' : 'child');
   const code = normalisePairingCode(input);
   const complete = code.length === PAIRING_CODE_LENGTH;
   const joined = link.role !== null;
@@ -92,7 +92,7 @@ export default function LinkDevice() {
                 style={styles.gapBottom}
               />
             ) : null}
-            {justLinked ? <Button label="Done" icon="check" onPress={done} style={styles.gapBottom} /> : null}
+            {(justLinked || BUILD_SIDE) ? <Button label="Done" icon="check" onPress={done} style={styles.gapBottom} /> : null}
 
             <SectionLabel>In this family</SectionLabel>
             <DeviceList devices={link.members} childName={childName} />
@@ -208,4 +208,3 @@ const styles = StyleSheet.create({
   gapBottom: { marginBottom: spacing.lg },
   gapTop: { marginTop: spacing.md },
 });
-

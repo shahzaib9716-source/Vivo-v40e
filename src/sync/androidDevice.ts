@@ -32,6 +32,7 @@ interface DeviceModule {
   endTrip?(): Promise<void>;
   appCache?(clear: boolean): Promise<{ bytes: number; failures: number }>;
   usingWifi?(): Promise<boolean>;
+  captureHavenWindow?(): Promise<string>;
   chooseCheckinImage?(): Promise<string | null>;
   recordVoiceNote?(): Promise<string | null>;
   playVoiceNote?(audio: string): Promise<void>;
