@@ -2,7 +2,7 @@ import { ChildDevicePermissions } from '@/components/ChildDevicePermissions';
 import { DeviceSharing } from '@/components/DeviceSharing';
 import { useState } from 'react';
 import { router } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import { Linking, StyleSheet, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 
 import { ProfilePicture } from '@/components/ProfilePicture';
@@ -121,7 +121,17 @@ export default function ChildProfileTab() {
         />
       </Card>
 
-      <SectionLabel>About Haven</SectionLabel>
+      <SectionLabel>Android device administration</SectionLabel>
+      <Card padded={false} style={styles.group}>
+        <Row
+          title="Device Administrator settings"
+          subtitle="Optional. Android Settings → Security → Device admin apps → Haven. This does not enable app blocking."
+          icon="shield"
+          iconColor={colors.primary}
+          onPress={() => { void Linking.openSettings(); }}
+        />
+      </Card>
+            <SectionLabel>About Haven</SectionLabel>
       <Card padded={false} style={styles.group}>
         <Row
           title="Family link"
