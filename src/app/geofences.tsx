@@ -42,7 +42,7 @@ export default function Geofences() {
             No saved places
           </Text>
           <Text variant="body" tone="muted" center>
-            {live ? 'Add home, school or practice to keep them in your family’s list. Arrival and departure alerts are not in this version.' : 'Add home, school or practice to get a heads-up when your child arrives or leaves.'}
+            {live ? 'Add home, school or practice to keep them in your family’s list. Add coordinates to receive in-app arrival and departure alerts during foreground sharing.' : 'Add home, school or practice to get a heads-up when your child arrives or leaves.'}
           </Text>
           <Button label="Add a place" icon="plus" onPress={openAdd} style={{ marginTop: spacing.md }} />
         </Card>
@@ -63,7 +63,7 @@ export default function Geofences() {
                         {p.name}
                       </Text>
                       <Text variant="small" tone="muted" numberOfLines={1}>
-                        {p.radius} m radius
+                        {p.radius} m radius{live && (p.latitude == null ? ' · coordinates missing' : ` · ${p.latitude.toFixed(4)}, ${p.longitude?.toFixed(4)}`)}
                       </Text>
                     </View>
                     {confirming ? null : <IconButton icon="trash-2" label={`Remove ${p.name}`} onPress={() => setConfirmId(p.id)} />}
@@ -119,7 +119,7 @@ export default function Geofences() {
         <Feather name="shield" size={14} color={colors.textFaint} style={styles.noteIcon} />
         <Text variant="small" tone="faint" style={styles.flex}>
           {live
-            ? 'Saved places do not trigger arrival or departure alerts. Your child controls GPS reports from Me.'
+            ? 'Place alerts use foreground GPS updates shared from Me. Older places without coordinates need to be recreated.'
             : 'Location sharing is never hidden. Your child can always see that it is on under “What’s shared”.'}
         </Text>
       </View>

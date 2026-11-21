@@ -5,9 +5,16 @@ import { useLink } from '@/sync/link';
 import { useStore } from '@/state/store';
 import { device, listenPolicy } from '@/sync/androidDevice';
 
+import { useFamilySafeSearch } from '@/sync/safeSearch';
+
+import { useOfflinePause } from '@/sync/offlinePolicy';
+
 export function ManagedDevicePolicy({ onStatus }: { onStatus: (message: string) => void }) {
   const { role, status, familyId, childId, account } = useLink();
-  const { childSelf, live, schedules } = useStore();
+  const { childSelf, live, schedules, sites } = useStore();
+  const offline = useOfflinePause(live && role === 'child' ? familyId : null, childId)?.enabled;
+  const adultSites = useFamilySafeSearch(live && role === 'child' ? familyId : null, 'adultSites')?.value;
+  const search = useFamilySafeSearch(live && role === 'child' && familyId ? familyId : null)?.value;
   const { bedtime, limitMin } = childSelf;
   useEffect(() => {
     const native = device;
@@ -21,7 +28,7 @@ export function ManagedDevicePolicy({ onStatus }: { onStatus: (message: string) 
     function report(message: string) {
       if (!current || !account || !familyId || !childId) return;
       onStatus(message);
-      publishManagement(familyId, childId, account.uid, message).catch(() => {
+      publishManagement(familyId, childId, account.uid, message.slice(0, 240)).catch(() => {
         if (current) onStatus(message + ' Status could not be sent to your parent.');
       });
     }
@@ -33,7 +40,7 @@ export function ManagedDevicePolicy({ onStatus }: { onStatus: (message: string) 
         const mask = s.days.reduce((bits, selected, day) => selected ? bits | (1 << day) : bits, 0);
         return [{ start, end, mask }];
       });
-      native.applyPolicy(JSON.stringify({ paused: bedtime, dailyMinutes: limitMin, rules, windows }))
+      native.applyPolicy(JSON.stringify({ scope: familyId + '/' + childId, paused: bedtime, dailyMinutes: limitMin, rules, windows, adultSites, safeSearch: search, offlinePause: offline, sites: sites.map(({ host, list }) => ({ host, list })) }))
         .then(report)
         .catch(() => report('Android could not apply the current rules. Check device management and usage access.'));
     }, e => {
@@ -41,6 +48,6 @@ export function ManagedDevicePolicy({ onStatus }: { onStatus: (message: string) 
       if (current) onStatus('Unable to synchronize managed rules.');
     });
     return () => { current = false; unsubscribe(); };
-  }, [role, status, familyId, childId, account, childSelf.id, bedtime, limitMin, schedules, live, onStatus]);
+  }, [role, status, familyId, childId, account, childSelf.id, bedtime, limitMin, schedules, sites, adultSites, search, offline, live, onStatus]);
   return null;
 }

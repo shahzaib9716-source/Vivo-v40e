@@ -5,12 +5,21 @@ import { Button, View, AppState } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Card, Text } from '@/components/ui';
 import { device, requestFix, shareUsage, clearUsage } from '@/sync/androidDevice';
-import { reportChildLocation, clearChildLocation } from '@/sync/location';
+import { reportChildLocation, clearChildLocation, clearCheckins } from '@/sync/location';
+
+import { useStore } from '@/state/store';
+import { lowBattery, usePowerThreshold } from '@/sync/power';
+import { CrossingSession } from '@/sync/placeCrossing';
+
+import { PhotoCheckin } from './PhotoCheckin';
 
 export function DeviceSharing({ family, child, uid }: { family: string; child: string; uid: string }) {
+  const { places } = useStore();
+  const threshold = usePowerThreshold(family, child)?.percent ?? 0;
   const automatic = useUsageSharing();
   const management = useContext(PolicyStatus);
   const [sharing, setSharing] = useState(false);
+  const firstFix = useRef<Awaited<ReturnType<typeof requestFix>> | undefined>(undefined);
   const focused = useRef(false);
   const generation = useRef(0);
   const stop = useCallback(() => {
@@ -32,12 +41,20 @@ export function DeviceSharing({ family, child, uid }: { family: string; child: s
     const token = generation.current;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let disposed = false;
+    const session = new CrossingSession();
+    if (firstFix.current) session.update(places, firstFix.current);
+    firstFix.current = undefined;
     const active = () => !disposed && token === generation.current && AppState.currentState === 'active';
     async function report() {
       try {
+        if (await lowBattery(threshold, device?.batteryPercent ? () => device!.batteryPercent!() : undefined)) {
+          if (active()) { setStatus('GPS updates paused for low battery.'); timer = setTimeout(report, 60000); }
+          return;
+        }
+        if (!active()) return;
         const fix = await device!.currentFix();
         if (!active()) return;
-        await reportChildLocation(family, child, uid, fix.latitude, fix.longitude, fix.accuracyM, fix.measuredAt);
+        await reportChildLocation(family, child, uid, fix.latitude, fix.longitude, fix.accuracyM, fix.measuredAt, false, session.update(places, fix));
         if (active()) {
           setStatus('Foreground location sharing is on.');
           timer = setTimeout(report, 60000);
@@ -50,7 +67,7 @@ export function DeviceSharing({ family, child, uid }: { family: string; child: s
     }
     timer = setTimeout(report, 60000);
     return () => { disposed = true; clearTimeout(timer); };
-  }, [sharing, family, child, uid, stop]);
+  }, [sharing, family, child, uid, stop, places, threshold]);
   if (!device) return null;
   const native = device;
   async function run(work: () => Promise<void>, success: string) {
@@ -66,13 +83,21 @@ export function DeviceSharing({ family, child, uid }: { family: string; child: s
     if (!focused.current || !mounted.current || AppState.currentState !== 'active') throw Error('Open Haven to share this report.');
   }
   return <Card><View style={{ gap: 8 }}>
+    <PhotoCheckin key={family + '/' + child + '/' + uid} family={family} child={child} author={uid} />
     <Text variant="title">Share from this phone</Text>
-    <Text>Your paired parent can see the latest report until you clear or replace it.</Text>
+    <Text>Your paired parent can see the latest report until you clear or replace it. While sharing every minute, crossings of saved family places can create arrival and departure alerts.</Text>
     <Button title="Share my current location once" disabled={busy || sharing} onPress={() => run(async () => {
       const fix = await requestFix();
       foreground();
       await reportChildLocation(family, child, uid, fix.latitude, fix.longitude, fix.accuracyM, fix.measuredAt);
     }, 'Location shared.')} />
+    <Text>Saved check-ins are visible to your paired parent. Haven keeps one per UTC hour of the day, up to 24. Saving again in the same slot replaces the older point.</Text>
+    <Button title="Save my location to check-in history" disabled={busy} onPress={() => run(async () => {
+      const fix = await requestFix();
+      foreground();
+      await reportChildLocation(family, child, uid, fix.latitude, fix.longitude, fix.accuracyM, fix.measuredAt, true);
+    }, 'Check-in saved.')} />
+    <Button title="Clear saved check-ins" disabled={busy} onPress={() => run(() => clearCheckins(family, child), 'Check-in history cleared.')} />
     <Button title={sharing ? 'Stop location updates' : 'Share every minute while Me is open'} disabled={busy} onPress={() => {
       if (sharing) { stop(); setStatus('Location updates stopped.'); return; }
       run(async () => {
@@ -80,7 +105,7 @@ export function DeviceSharing({ family, child, uid }: { family: string; child: s
         foreground();
         const token = generation.current;
         await reportChildLocation(family, child, uid, fix.latitude, fix.longitude, fix.accuracyM, fix.measuredAt);
-        if (mounted.current && token === generation.current) setSharing(true);
+        if (mounted.current && token === generation.current) { firstFix.current = fix; setSharing(true); }
       }, 'Location shared.');
     }} />
     <Button title="Clear shared location" disabled={busy} onPress={() => run(() => { stop(); return clearChildLocation(family, child); }, 'Location cleared.')} />

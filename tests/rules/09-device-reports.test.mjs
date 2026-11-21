@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { decideExtraTime } from '../../src/sync/extraTime.ts';
 import { before, after, beforeEach, test } from 'node:test';
-import { getDoc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { getDoc, setDoc, deleteDoc, serverTimestamp, updateDoc, writeBatch } from 'firebase/firestore';
 import { harness, A, FAM_A, ref, allowed, refused } from './helpers.mjs';
 
 const h = harness();
@@ -63,4 +63,112 @@ test('concurrent approvals grant the requested time once', async () => {
   const outcomes = await Promise.all([decide(parent), decide(h.a.parent2)]);
   assert.deepEqual(outcomes.sort(), ['Already answered.', 'Time request approved.']);
   assert.equal((await getDoc(child)).get('limitMin'), Math.min(1440, limit + 15));
+});
+
+test('saved check-ins have bounded slots and stay scoped to the linked child', async () => {
+  const report = { ...fix(), measuredAt: Date.now() };
+  const slot = 'checkins/23';
+  await allowed(setDoc(at('kid1', slot), report));
+  await allowed(getDoc(at('founder', slot)));
+  await refused(getDoc(at('kid2', slot)));
+  await refused(setDoc(at('kid1', 'checkins/24'), report));
+  await refused(setDoc(at('kid1', slot), fix()));
+  await refused(setDoc(at('kid1', slot), { ...report, latitude: 95 }));
+  await refused(setDoc(at('founder', slot), report));
+  await refused(deleteDoc(at('kid2', slot)));
+  await allowed(deleteDoc(at('kid1', slot)));
+});
+
+test('only parents may configure Chrome search policy', async () => {
+  const policy = (actor) => ref(h.a[actor], A('webPolicy/chrome'));
+  await allowed(setDoc(policy('founder'), { safeSearch: true }));
+  await allowed(getDoc(policy('kid1')));
+  await refused(setDoc(policy('kid1'), { safeSearch: false }));
+  await refused(setDoc(policy('founder'), { safeSearch: 'true' }));
+  await refused(setDoc(policy('founder'), { safeSearch: true, extra: true }));
+});
+
+test('a parent selects a bounded power threshold for a linked child', async () => {
+  const path = 'settings/power';
+  await allowed(setDoc(at('founder', path), { percent: 20 }));
+  await allowed(getDoc(at('kid1', path)));
+  await refused(getDoc(at('kid2', path)));
+  await refused(setDoc(at('kid1', path), { percent: 50 }));
+  await refused(setDoc(at('founder', path), { percent: 101 }));
+});
+
+test('family places accept coordinate pairs and retain legacy entries', async () => {
+  const place = { name: 'Home', icon: 'home', radius: 100, arrive: true, leave: true, ord: 0 };
+  const path = ref(h.a.founder, A('places/home'));
+  await allowed(setDoc(path, place));
+  await allowed(setDoc(path, { ...place, latitude: 0, longitude: -180 }));
+  await refused(setDoc(path, { ...place, latitude: 1 }));
+  await refused(setDoc(path, { ...place, latitude: 90.1, longitude: 0 }));
+});
+
+test('offline pause is a parent-owned device setting', async () => {
+  const path = 'settings/offline';
+  await allowed(setDoc(at('founder', path), { enabled: true }));
+  await allowed(getDoc(at('kid1', path)));
+  await refused(getDoc(at('kid2', path)));
+  await refused(setDoc(at('kid1', path), { enabled: false }));
+  await refused(setDoc(at('founder', path), { enabled: 1 }));
+});
+
+test('family adult-site filtering is parent-controlled', async () => {
+  const policy = actor => ref(h.a[actor], A('webPolicy/adultSites'));
+  await allowed(setDoc(policy('founder'), { enabled: true }));
+  await allowed(getDoc(policy('kid1')));
+  await refused(setDoc(policy('kid1'), { enabled: false }));
+  await refused(setDoc(policy('founder'), { enabled: 'true' }));
+  await allowed(deleteDoc(policy('founder')));
+});
+
+test('one-time PIN is private, throttled, and consumed atomically with the manual pause', async () => {
+  const child = actor => ref(h.a[actor], A('children/c1'));
+  const grant = () => ({ code: '02468', at: serverTimestamp() });
+  const guess = code => ({ code, at: serverTimestamp(), by: h.a.kid1.selfId });
+  const redeem = () => {
+    const batch = writeBatch(child('kid1').firestore);
+    batch.update(child('kid1'), { bedtime: false });
+    batch.delete(at('kid1', 'unlock/pin'));
+    batch.delete(at('kid1', 'unlock/attempt'));
+    return batch.commit();
+  };
+  await allowed(updateDoc(child('founder'), { bedtime: true }));
+  await refused(setDoc(at('kid1', 'unlock/pin'), grant()));
+  await allowed(setDoc(at('founder', 'unlock/pin'), grant()));
+  await refused(getDoc(at('kid1', 'unlock/pin')));
+  await refused(setDoc(at('kid2', 'unlock/attempt'), guess('02468')));
+  await allowed(setDoc(at('kid1', 'unlock/attempt'), guess('02468')));
+  await refused(setDoc(at('kid1', 'unlock/attempt'), guess('12345')));
+  await refused(updateDoc(child('kid1'), { bedtime: false }));
+  await allowed(redeem());
+  await allowed(updateDoc(child('founder'), { bedtime: true }));
+  await refused(redeem());
+});
+
+test('incorrect unlock PIN cannot release the pause or remove the attempt cooldown', async () => {
+  const child = actor => ref(h.a[actor], A('children/c1'));
+  await allowed(updateDoc(child('founder'), { bedtime: true }));
+  await allowed(setDoc(at('founder', 'unlock/pin'), { code: '12345', at: serverTimestamp() }));
+  await allowed(setDoc(at('kid1', 'unlock/attempt'), { code: '99999', at: serverTimestamp(), by: h.a.kid1.selfId }));
+  const batch = writeBatch(child('kid1').firestore);
+  batch.update(child('kid1'), { bedtime: false });
+  batch.delete(at('kid1', 'unlock/pin'));
+  batch.delete(at('kid1', 'unlock/attempt'));
+  await refused(batch.commit());
+  await refused(deleteDoc(at('kid1', 'unlock/attempt')));
+});
+
+test('only the enrolled child can publish or remove a photo check-in', async () => {
+  const path = 'photos/latest';
+  const data = { jpeg: '/9j/AAAA', by: h.a.kid1.selfId, at: serverTimestamp() };
+  await allowed(setDoc(at('kid1', path), data));
+  await allowed(getDoc(at('founder', path)));
+  await refused(getDoc(at('kid2', path)));
+  await refused(setDoc(at('founder', path), data));
+  await refused(setDoc(at('kid1', path), { ...data, jpeg: 'invalid' }));
+  await refused(deleteDoc(at('kid2', path)));
+  await allowed(deleteDoc(at('kid1', path)));
 });

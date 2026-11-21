@@ -54,6 +54,10 @@ export default function AddPlace() {
   const { colors } = useTheme();
   const { places, addPlace, live } = useStore();
 
+  const [coordinates, setCoordinates] = useState('');
+  const pair = coordinates.split(',').map(part => part.trim());
+  const [latitude, longitude] = pair.map(Number);
+  const coordinateError = live && (pair.length !== 2 || pair.some(part => !/^[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)$/.test(part)) || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) ? 'Enter latitude and longitude, separated by a comma.' : null;
   const [name, setName] = useState('');
   const [icon, setIcon] = useState(ICONS[0].name);
   const [meters, setMeters] = useState(150);
@@ -84,9 +88,10 @@ export default function AddPlace() {
       nameInput.current?.focus();
       return;
     }
+    if (coordinateError) { setTried(true); return; }
     if (saved.current) return;
     saved.current = true;
-    addPlace({ name: cleanName, icon, radius: meters, arrive, leave });
+    addPlace({ name: cleanName, icon, radius: meters, arrive, leave, ...(live ? { latitude, longitude } : {}) });
     Keyboard.dismiss();
     if (router.canGoBack()) router.back();
     else (router.replace as any)('/geofences');
@@ -96,10 +101,10 @@ export default function AddPlace() {
     <FormScreen
       ref={form}
       title="New place"
-      subtitle={live ? 'Saved in your family’s list. Arrival and departure alerts are not in this version.' : 'Get a heads-up when your child arrives or leaves'}
+      subtitle={live ? 'Choose coordinates for arrival and departure alerts during foreground sharing.' : 'Get a heads-up when your child arrives or leaves'}
       saveLabel="Save place"
       onSave={save}
-      error={tried ? nameError : null}
+      error={tried ? nameError || coordinateError : null}
       lead={
         ideas.length > 0 ? (
           <View style={styles.lead}>
@@ -164,6 +169,7 @@ export default function AddPlace() {
         />
       </Field>
 
+      {live && <Field label="Place coordinates" error={tried ? coordinateError : null}><TextField value={coordinates} onChangeText={setCoordinates} accessibilityLabel="Latitude and longitude" placeholder="e.g. 37.42, -122.08" /></Field>}
       <Field label="Icon">
         <Card>
           <View style={styles.tileRows}>
@@ -189,9 +195,9 @@ export default function AddPlace() {
 
       <Field label="Alert zone" hint={`${meters} m radius`}>
         <Card>
-          <View style={[styles.map, { borderColor: colors.border }]}>
+          {!live && <View style={[styles.map, { borderColor: colors.border }]}>
             <PlaceMap height={176} tint={TINT} pinIcon={icon} radiusMeters={meters} label={cleanName || 'New place'} />
-          </View>
+          </View>}
 
           <View style={styles.radiusRow}>
             {RADII.map((r) => (
@@ -211,12 +217,12 @@ export default function AddPlace() {
             <Feather name="target" size={14} color={TINT} style={styles.captionIcon} />
             <Text variant="small" tone="muted" style={styles.flex}>
               <Text variant="smallStrong">{meters} m radius.</Text> {fits ? `${fits}.` : ''}{' '}
-              {live ? 'Saved with the place. No alerts are sent in this version.' : 'Alerts fire when your child crosses the edge of the zone.'}
+              {live ? 'In-app alerts use fixes shared while the child keeps Me open.' : 'Alerts fire when your child crosses the edge of the zone.'}
             </Text>
           </View>
-          <Text variant="tiny" tone="faint" style={styles.demoNote}>
+          {!live && <Text variant="tiny" tone="faint" style={styles.demoNote}>
             Sample map. In this demo the place is pinned to the middle of the map.
-          </Text>
+          </Text>}
         </Card>
       </Field>
 

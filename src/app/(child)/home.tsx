@@ -5,12 +5,14 @@ import { Pressable, ScrollView, View, StyleSheet } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ParentUnlock } from '@/components/ParentUnlock';
 import { LinkCard } from '@/components/child/LinkCard';
 import { Toast, useToast } from '@/components/child/Toast';
-import { ProgressRing, Text } from '@/components/ui';
+import { Button, Card, ProgressRing, Text } from '@/components/ui';
 import { useLink } from '@/sync/link';
 import { useStore, fmtDuration, nowLabel, timeOf, type ManagedApp } from '@/state/store';
 import { radius, shadow, spacing, useTheme } from '@/theme';
+import { device, type AppUsage } from '@/sync/androidDevice';
 import { OfflineBanner } from '@/components/OfflineBanner';
 
 type FeatherName = keyof typeof Feather.glyphMap;
@@ -29,7 +31,8 @@ export default function ChildHome() {
   const { colors } = useTheme();
   // Only this child's own SOS shows here: in a family with two children the other one's is not theirs to clear.
   const { childSelf, tasks, messages, checkIn, sosMine: sosActive, clearSOS, live } = useStore();
-  const linkStatus = useLink().status;
+  const link = useLink();
+  const linkStatus = link.status;
   const toast = useToast();
 
   const firstName = childSelf.name.split(' ')[0];
@@ -74,7 +77,7 @@ export default function ChildHome() {
 
   const askForTime = () => (router.push as any)('/(child)/requests');
 
-  const appsHeading = live ? 'App rules your family set' : paused ? 'Paused for now' : outOfTime ? 'Waiting for more time' : 'You can use now';
+  const appsHeading = live ? 'Example app rules' : paused ? 'Paused for now' : outOfTime ? 'Waiting for more time' : 'You can use now';
 
   return (
     <View style={[styles.root, { backgroundColor: colors.bg }]}>
@@ -259,6 +262,8 @@ export default function ChildHome() {
             </LinkCard>
           )}
 
+          {live && paused && link.role === 'child' && link.familyId && link.childId && link.account && <ParentUnlock key={link.childId} parent={false} family={link.familyId} child={link.childId} uid={link.account.uid} />}
+          {live && device && <TopApps key={childSelf.id} />}
           {/* Apps */}
           <Text variant="h3" style={styles.sectionTitle}>
             {appsHeading}
@@ -268,7 +273,7 @@ export default function ChildHome() {
               <View style={[styles.appNote, { backgroundColor: colors.surfaceAlt }]}>
                 <Feather name="info" size={14} color={colors.textMuted} />
                 <Text variant="small" tone="muted" style={styles.flex}>
-                  These are example apps. This version of Haven does not look at which apps are on this phone, and it does not close them.
+                  The tiles below are examples. Your phone’s usage and managed rules are reported separately.
                 </Text>
               </View>
             )}
@@ -538,3 +543,28 @@ const styles = StyleSheet.create({
   blocked: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.md, paddingHorizontal: spacing.xs },
 });
 
+
+function TopApps() {
+  const [rows, setRows] = useState<AppUsage[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('View today’s foreground usage on this phone.');
+  async function refresh() {
+    if (!device || busy) return;
+    setBusy(true);
+    try {
+      const report = await device.readUsage();
+      const top = report.apps.filter(app => app.ms > 0).sort((a, b) => b.ms - a.ms || a.label.localeCompare(b.label)).slice(0, 4);
+      setRows(top);
+      setMessage(top.length ? 'Measured ' + new Date(report.measuredAt).toLocaleString() : 'No foreground usage recorded today.');
+    } catch {
+      setRows([]);
+      setMessage('Check Android Usage Access under Me, then try again.');
+    } finally { setBusy(false); }
+  }
+  return <Card style={styles.gapLg}>
+    <Text variant="title">My four most used apps</Text>
+    <Text variant="small" tone="muted" accessibilityLiveRegion="polite">{message}</Text>
+    {rows.map(app => <Text key={app.pkg}>{app.label} · {app.ms < 60000 ? 'Under 1 min' : fmtDuration(Math.floor(app.ms / 60000))}</Text>)}
+    <Button label={busy ? 'Reading usage…' : 'Show today’s usage'} disabled={busy} onPress={refresh} />
+  </Card>;
+}

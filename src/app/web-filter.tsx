@@ -8,6 +8,9 @@ import { useStore } from '@/state/store';
 import { spacing, useTheme } from '@/theme';
 import { SampleNote } from '@/components/SampleNote';
 
+import { useLink } from '@/sync/link';
+import { setFamilyAdultSites, setFamilySafeSearch, useFamilySafeSearch } from '@/sync/safeSearch';
+
 interface Cat {
   id: string;
   label: string;
@@ -51,7 +54,7 @@ export default function WebFilter() {
         <View style={{ flex: 1 }}>
           <Text variant="title">{live ? 'Your family’s web rules' : 'Protection is on'}</Text>
           <Text variant="small" tone="muted">
-            {plural(blockedCount, 'category', 'categories')} and {plural(blockedSites, 'site', 'sites')} blocked
+            {live ? `${siteCount(blockedSites)} on the managed Chrome blocklist` : `${plural(blockedCount, 'category', 'categories')} and ${plural(blockedSites, 'site', 'sites')} blocked`}
           </Text>
         </View>
         {live ? null : (
@@ -63,7 +66,8 @@ export default function WebFilter() {
         )}
       </Card>
 
-      <SectionLabel>Safety</SectionLabel>
+      {live && <ManagedSearch />}
+      {!live && <><SectionLabel>Safety</SectionLabel>
       <Card padded={false} style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.xl }}>
         <Row title="Safe Search" subtitle="Filter explicit results in search" icon="search" iconColor={colors.primary} chevron={false} right={<Toggle value={safeSearch} onChange={setSafeSearch} />} />
         <Row title="Safe Browsing mode" subtitle="Force restricted mode on sites" icon="lock" iconColor={colors.info} chevron={false} right={<Toggle value={safeMode} onChange={setSafeMode} />} />
@@ -83,6 +87,7 @@ export default function WebFilter() {
         ))}
       </Card>
 
+      </>}
       <SectionLabel>Specific sites</SectionLabel>
       <Card padded={false} style={{ paddingHorizontal: spacing.lg }}>
         <Row
@@ -107,3 +112,25 @@ export default function WebFilter() {
 const styles = StyleSheet.create({
   pill: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999 },
 });
+
+function ManagedSearch() {
+  const { familyId, role } = useLink();
+  const catalog = useFamilySafeSearch(familyId ?? null, 'adultSites');
+  const state = useFamilySafeSearch(familyId ?? null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  async function save(value: boolean, adultSites = false) {
+    if (!familyId || role !== 'parent' || busy) return;
+    setBusy(true);
+    setError('');
+    try { await (adultSites ? setFamilyAdultSites : setFamilySafeSearch)(familyId, value); }
+    catch { setError('Unable to save this web policy. Check your connection and family access.'); }
+    finally { setBusy(false); }
+  }
+  return <Card><Row title="Google Safe Search" subtitle="Applies to Google searches in stable Chrome on enrolled Android phones." icon="search" chevron={false}
+    right={<Toggle value={state?.value ?? false} disabled={state?.value == null || busy || role !== 'parent'} onChange={save} />} />
+    <Row title="Adult website blocker" subtitle="Block domains in the bundled adult-site catalog in managed Chrome. Your family’s explicit site exceptions apply." icon="shield" chevron={false}
+      right={<Toggle value={catalog?.value ?? false} disabled={catalog?.value == null || busy || role !== 'parent'} onChange={value => save(value, true)} />} />
+    {catalog?.error || state?.error || error ? <Text accessibilityLiveRegion="polite">{error || 'Unable to load the family search policy.'}</Text> : null}
+  </Card>;
+}

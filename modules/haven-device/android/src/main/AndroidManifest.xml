@@ -2,9 +2,13 @@
   <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
   <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
   <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"/>
+  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
   <queries><intent><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent><intent><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.HOME"/></intent></queries>
   <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
   <application>
+    <service android:name="expo.modules.havendevice.HavenCallScreening" android:exported="true" android:permission="android.permission.BIND_SCREENING_SERVICE">
+      <intent-filter><action android:name="android.telecom.CallScreeningService"/></intent-filter>
+    </service>
     <receiver android:name="expo.modules.havendevice.HavenAdmin" android:exported="true" android:permission="android.permission.BIND_DEVICE_ADMIN">
       <meta-data android:name="android.app.device_admin" android:resource="@xml/haven_admin"/>
       <intent-filter><action android:name="android.app.action.DEVICE_ADMIN_ENABLED"/></intent-filter>

@@ -1,6 +1,7 @@
 package expo.modules.havendevice
 
 import android.Manifest
+import android.app.role.RoleManager
 import android.app.AppOpsManager
 import android.app.NotificationManager
 import android.app.admin.DevicePolicyManager
@@ -24,6 +25,7 @@ import expo.modules.kotlin.modules.ModuleDefinition
 import java.util.concurrent.atomic.AtomicBoolean
 
 class HavenDeviceModule : Module() {
+  private var photoRequest: Promise? = null
   private val context get() = requireNotNull(appContext.reactContext)
   private fun usageAllowed(): Boolean {
     val ops = requireNotNull(context.getSystemService(AppOpsManager::class.java))
@@ -32,10 +34,44 @@ class HavenDeviceModule : Module() {
 
   override fun definition() = ModuleDefinition {
     Name("HavenDevice")
+    AsyncFunction("takeCheckinPhoto") { promise: Promise ->
+      val activity = appContext.currentActivity
+      android.os.Handler(android.os.Looper.getMainLooper()).post {
+      if (activity == null || photoRequest != null) {
+        promise.reject("E_CAMERA", "Open the child screen before taking a photo.", null)
+      } else {
+        photoRequest = promise
+        try {
+          activity.startActivityForResult(Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE), 58110)
+        } catch (e: Exception) {
+          photoRequest = null
+          promise.reject("E_CAMERA", "Unable to open the camera.", e)
+        }
+      }
+      }
+      Unit
+    }
+    OnActivityResult { _, result ->
+      if (result.requestCode == 58110) {
+        val request = photoRequest
+        photoRequest = null
+        if (result.resultCode != android.app.Activity.RESULT_OK) request?.resolve(null)
+        else try {
+          val image = result.data?.extras?.get("data") as? android.graphics.Bitmap ?: error("Camera returned no preview.")
+          val stream = java.io.ByteArrayOutputStream()
+          check(image.compress(android.graphics.Bitmap.CompressFormat.JPEG, 75, stream))
+          require(stream.size() in 1..90000)
+          request?.resolve(android.util.Base64.encodeToString(stream.toByteArray(), android.util.Base64.NO_WRAP))
+        } catch (e: Exception) { request?.reject("E_PHOTO", "Unable to prepare the camera preview.", e) }
+      }
+    }
+    OnDestroy { photoRequest?.reject("E_CAMERA", "Camera session ended.", null); photoRequest = null }
     AsyncFunction("permissionStatus") {
       val ctx = context
       val policy = requireNotNull(ctx.getSystemService(DevicePolicyManager::class.java))
       mapOf(
+        "screeningRole" to (Build.VERSION.SDK_INT >= 29 && ctx.getSystemService(RoleManager::class.java)?.isRoleHeld(RoleManager.ROLE_CALL_SCREENING) == true),
+        "screeningEnabled" to ctx.getSharedPreferences("haven-call-screening", Context.MODE_PRIVATE).getBoolean("enabled", false),
         "usage" to usageAllowed(),
         "location" to (ctx.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
           ctx.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED),
@@ -44,6 +80,22 @@ class HavenDeviceModule : Module() {
         "notifications" to requireNotNull(ctx.getSystemService(NotificationManager::class.java)).areNotificationsEnabled(),
         "batteryExempt" to requireNotNull(ctx.getSystemService(PowerManager::class.java)).isIgnoringBatteryOptimizations(ctx.packageName)
       )
+    }
+    AsyncFunction("batteryPercent") {
+      context.getSystemService(android.os.BatteryManager::class.java)?.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)?.takeIf { it in 0..100 } ?: -1
+    }
+    AsyncFunction("requestScreeningRole") {
+      check(Build.VERSION.SDK_INT >= 29) { "Call screening requires Android 10 or later." }
+      val manager = requireNotNull(context.getSystemService(RoleManager::class.java))
+      check(manager.isRoleAvailable(RoleManager.ROLE_CALL_SCREENING)) { "This phone does not offer call screening." }
+      val activity = requireNotNull(appContext.currentActivity)
+      activity.startActivityForResult(manager.createRequestRoleIntent(RoleManager.ROLE_CALL_SCREENING), 58109)
+    }
+    AsyncFunction("setScreeningEnabled") { enabled: Boolean ->
+      if (enabled) {
+        check(Build.VERSION.SDK_INT >= 29 && context.getSystemService(RoleManager::class.java)?.isRoleHeld(RoleManager.ROLE_CALL_SCREENING) == true)
+      }
+      check(context.getSharedPreferences("haven-call-screening", Context.MODE_PRIVATE).edit().putBoolean("enabled", enabled).commit())
     }
     AsyncFunction("openAdminActivation") {
       val ctx = context

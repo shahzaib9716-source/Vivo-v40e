@@ -12,10 +12,16 @@ export interface DevicePermissions {
   owner: boolean;
   notifications: boolean;
   batteryExempt: boolean;
+  screeningRole?: boolean;
+  screeningEnabled?: boolean;
 }
 
 interface DeviceModule {
+  takeCheckinPhoto?(): Promise<string | null>;
   permissionStatus?(): Promise<DevicePermissions>;
+  batteryPercent?(): Promise<number>;
+  requestScreeningRole?(): Promise<void>;
+  setScreeningEnabled?(value: boolean): Promise<void>;
   openAdminActivation?(): Promise<void>;
   openBatterySettings?(): Promise<void>;
   applyPolicy(payload: string): Promise<string>;

@@ -26,13 +26,22 @@ object ManagedPolicy {
       check(saved.edit().putStringSet("held", failed.toSet()).commit())
       check(failed.isEmpty()) { "Android could not release all managed packages." }
     }
+    if (owner(c)) ChromeSitePolicy.apply(c, admin(c), emptyList(), emptyList(), false)
     check(saved.edit().clear().commit())
     requireNotNull(c.getSystemService(JobScheduler::class.java)).cancel(JOB)
   }
 
   @Synchronized fun update(c: Context, payload: String): String {
     if (!owner(c)) return "Family agreements only. Android device-owner enrollment is required for enforcement."
-    check(prefs(c).edit().putString("policy", payload).commit())
+    val next = JSONObject(payload)
+    val previous = prefs(c).getString("policy", null)?.let { JSONObject(it) }
+    if (!next.has("adultSites") && previous?.has("adultSites") == true && next.optString("scope") == previous.optString("scope")) {
+      next.put("adultSites", previous.getBoolean("adultSites"))
+    }
+    if (!next.has("offlinePause") && previous?.has("offlinePause") == true && next.optString("scope") == previous.optString("scope")) {
+      next.put("offlinePause", previous.getBoolean("offlinePause"))
+    }
+    check(prefs(c).edit().putString("policy", next.toString()).commit())
     val job = JobInfo.Builder(JOB, ComponentName(c, PolicyJob::class.java))
       .setPeriodic(15 * 60 * 1000L).setPersisted(true).build()
     val scheduler = requireNotNull(c.getSystemService(JobScheduler::class.java))
@@ -75,6 +84,11 @@ object ManagedPolicy {
       val window = windows.getJSONObject(index)
       ScheduleWindow.active(window.getInt("start"), window.getInt("end"), window.getInt("mask"), mondayBasedDay, minute)
     }
+    val offlinePause = config.optBoolean("offlinePause") && runCatching {
+      val network = requireNotNull(c.getSystemService(android.net.ConnectivityManager::class.java))
+      val active = network.activeNetwork
+      active == null || network.getNetworkCapabilities(active)?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED) == false
+    }.getOrDefault(false)
     val desired = mutableSetOf<String>()
     var ineligible = 0
     for (i in 0 until rules.length()) {
@@ -88,7 +102,7 @@ object ManagedPolicy {
       val limit = rule.getInt("minutes")
       if (shouldSuspendApp(
         blocked = rule.getBoolean("blocked"),
-        paused = config.getBoolean("paused"),
+        paused = config.getBoolean("paused") || offlinePause,
         scheduled = scheduled,
         dailyMinutes = config.getInt("dailyMinutes"),
         appMinutes = limit,
@@ -101,9 +115,32 @@ object ManagedPolicy {
     val result = reconcileSuspensions(held, desired,
       persist = { packages -> check(saved.edit().putStringSet("held", packages).commit()) },
       change = { packages, shouldSuspend -> manager.setPackagesSuspended(admin(c), packages.toTypedArray(), shouldSuspend).toSet() })
+    val sites = config.optJSONArray("sites")
+    val webStatus = if (sites != null) {
+      val blocked = mutableSetOf<String>()
+      val exceptions = mutableSetOf<String>()
+      for (i in 0 until sites.length()) {
+        val site = sites.optJSONObject(i) ?: continue
+        val host = site.optString("host")
+        if (!ChromeSitePolicy.validHost(host)) continue
+        when (site.optString("list")) {
+          "blocked" -> blocked.add(host)
+          "allowed" -> exceptions.add(host)
+        }
+      }
+      runCatching {
+        if (config.optBoolean("adultSites")) {
+          c.assets.open("haven/adult-sites.txt").bufferedReader().useLines { lines -> lines.forEach { blocked.add(it) } }
+        }
+        check(blocked.size <= 1000 && exceptions.size <= 1000) { "Chrome supports up to 1,000 domains per list. Reduce the family list." }
+        ChromeSitePolicy.apply(c, admin(c), blocked.sorted(), exceptions.sorted(), if (config.has("safeSearch")) config.getBoolean("safeSearch") else null)
+      }
+        .getOrElse { if (blocked.size > 1000 || exceptions.size > 1000) "Chrome policy exceeds 1,000 entries. Reduce the site list." else "Chrome site rules could not be applied." }
+    } else null
     val failed = result.failed
     return buildList {
       add("Suspended packages: " + result.held.size + ".")
+      if (webStatus != null) add(webStatus)
       if (failed.isNotEmpty()) add("Android declined changes for " + failed.size + " packages.")
       if (ineligible > 0) add("Ineligible or unavailable packages: " + ineligible + ".")
       if (!allowed) add("Timed limits require Usage Access.")

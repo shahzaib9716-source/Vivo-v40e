@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { router } from 'expo-router';
-import { Alert, Linking, Platform, Pressable, ScrollView, View, StyleSheet } from 'react-native';
+import { Alert, Linking, Share, Platform, Pressable, ScrollView, View, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -146,8 +146,19 @@ export default function Location() {
               }} />}
               {!live && <ActionTile icon="navigation" label="Directions" color={categoryColors.location} onPress={() => run('directions')} />}
               <ActionTile icon={live ? 'message-circle' : 'bell'} label={live ? 'Message child' : 'Ping device'} color={colors.accent} onPress={() => live ? (router.push as any)(`/messages?childId=${activeChildId}`) : run('ping')} />
-              {!live && <ActionTile icon="clock" label="History" color={colors.info} onPress={() => (router.push as any)('/location-history')} />}
+              <ActionTile icon="clock" label="History" color={colors.info} onPress={() => (router.push as any)('/location-history')} />
             </View>
+            {live && location && <View style={styles.actions}>
+              <ActionTile icon="navigation" label="Directions" color={categoryColors.location} onPress={async () => {
+                const point = encodeURIComponent(location.latitude + ',' + location.longitude);
+                try { await Linking.openURL('https://www.google.com/maps/dir/?api=1&destination=' + point); }
+                catch { Alert.alert('Directions unavailable', 'Use the coordinates above in your maps app.'); }
+              }} />
+              <ActionTile icon="share-2" label="Share location" color={colors.info} onPress={async () => {
+                try { await Share.share({ message: firstName + ' shared a location: https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(location.latitude + ',' + location.longitude) + ' (reported ' + new Date(location.receivedAt).toLocaleString() + ')' }); }
+                catch { Alert.alert('Sharing unavailable', 'Use the coordinates shown above.'); }
+              }} />
+            </View>}
             {!live && shownAction?.kind === 'ping' && (
               <InlineNote
                 tone="success"
