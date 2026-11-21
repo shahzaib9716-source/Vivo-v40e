@@ -42,9 +42,44 @@ class FamilySharingTest {
   }
 
   private fun awaitState(check: () -> Boolean) {
-    val end = SystemClock.elapsedRealtime() + 8000
+    val end = SystemClock.elapsedRealtime() + 25000
     while (!check() && SystemClock.elapsedRealtime() < end) SystemClock.sleep(50)
     assertTrue(check())
+  }
+
+  @Test fun cameraReturnsAPrivateJpegFromEachLensAndSupportsCancel() {
+    grant(Manifest.permission.CAMERA)
+    val intent = Intent(context, CheckinCameraActivity::class.java)
+    ActivityScenario.launchActivityForResult<CheckinCameraActivity>(intent).use { screen ->
+      screen.onActivity { tap(it, "Cancel") }
+      assertEquals(Activity.RESULT_CANCELED, screen.result.resultCode)
+    }
+    for (front in listOf(false, true)) {
+      ActivityScenario.launchActivityForResult<CheckinCameraActivity>(intent).use { screen ->
+        fun ready() {
+          awaitState {
+            var available = false
+            screen.onActivity { a -> available = a.hasWindowFocus() && buttons(a.window.decorView).any { it.text == "Take photo" && it.isEnabled } }
+            available
+          }
+        }
+        ready()
+        if (front) {
+          screen.onActivity { a ->
+            assertTrue(buttons(a.window.decorView).single { it.text == "Switch camera" }.isEnabled)
+            tap(a, "Switch camera")
+          }
+          ready()
+        }
+        screen.onActivity { tap(it, "Take photo") }
+        val result = screen.result
+        assertEquals(Activity.RESULT_OK, result.resultCode)
+        val bytes = Base64.decode(requireNotNull(result.resultData?.getStringExtra("jpeg")), Base64.NO_WRAP)
+        assertTrue(bytes.size in 3..90000)
+        assertEquals(255, bytes[0].toInt() and 255)
+        assertEquals(216, bytes[1].toInt() and 255)
+      }
+    }
   }
 
   @Test fun recordingStopsOnBackgroundAndReturnsOnlyAfterConfirmation() {

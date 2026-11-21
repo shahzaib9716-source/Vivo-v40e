@@ -34,13 +34,18 @@ object CheckinImage {
         8 -> setRotate(-90f)
       }
     }
-    var preview = Bitmap.createBitmap(image, 0, 0, image.width, image.height, matrix, true)
+    val preview = Bitmap.createBitmap(image, 0, 0, image.width, image.height, matrix, true)
     if (preview !== image) image.recycle()
+    return encode(preview, 180000)
+  }
+
+  fun encode(image: Bitmap, byteLimit: Int): String {
+    var preview = image
     try {
       while (true) {
         val bytes = ByteArrayOutputStream()
         check(preview.compress(Bitmap.CompressFormat.JPEG, 78, bytes))
-        if (bytes.size() <= 180000) return Base64.encodeToString(bytes.toByteArray(), Base64.NO_WRAP)
+        if (bytes.size() <= byteLimit) return Base64.encodeToString(bytes.toByteArray(), Base64.NO_WRAP)
         val next = Bitmap.createScaledBitmap(preview, (preview.width * 3 / 4).coerceAtLeast(1), (preview.height * 3 / 4).coerceAtLeast(1), true)
         preview.recycle()
         preview = next

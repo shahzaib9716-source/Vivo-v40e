@@ -125,6 +125,7 @@ function Screens({ scheme }: { scheme: 'light' | 'dark' }) {
       {/* The child side. */}
       <Stack.Protected guard={childAllowed}>
         <Stack.Screen name="(child)" />
+        <Stack.Screen name="typing-practice" />
         <Stack.Screen name="sos" options={{ animation: 'fade_from_bottom', presentation: 'modal' }} />
         <Stack.Screen name="unlock-request" />
       </Stack.Protected>

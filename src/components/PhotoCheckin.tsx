@@ -9,7 +9,7 @@ import { Button, Text } from '@/components/ui';
 
 type Kind = 'photo' | 'screen' | 'voice';
 const media = {
-  photo: { path: ['photos', 'latest'], field: 'jpeg', title: 'Photo check-in', label: 'photo', select: 'Open camera', take: () => device?.takeCheckinPhoto?.() },
+  photo: { path: ['photos', 'latest'], field: 'jpeg', title: 'Photo check-in', label: 'photo', select: 'Open front or back camera', take: () => device?.takeCheckinPhoto?.() },
   screen: { path: ['photos', 'screen'], field: 'jpeg', title: 'Screenshot check-in', label: 'screenshot', select: 'Choose a screenshot', take: () => device?.chooseCheckinImage?.() },
   voice: { path: ['voice', 'latest'], field: 'audio', title: 'Voice check-in', label: 'voice note', select: 'Record a voice note', take: () => device?.recordVoiceNote?.() },
 } as const;
@@ -91,6 +91,7 @@ function Checkin({ family, child, author, kind }: { family: string; child: strin
     {item && kind === 'voice' && (device?.playVoiceNote
       ? <Button disabled={busy} label="Listen to note" onPress={() => act('play')} />
       : <Text>Open this note in the Haven Android app to listen.</Text>)}
+    {author && kind === 'screen' && <Text>Take a screenshot using your phone’s screenshot controls, then choose it here to preview.</Text>}
     {author && device && <Button disabled={busy} label={spec.select} onPress={() => act('select')} />}
     {author && draft && <>
       <Button disabled={busy} label={'Share this ' + spec.label} onPress={() => act('send')} />
