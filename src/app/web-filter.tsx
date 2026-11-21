@@ -51,7 +51,7 @@ export default function WebFilter() {
         <View style={{ flex: 1 }}>
           <Text variant="title">{live ? 'Your family’s web rules' : 'Protection is on'}</Text>
           <Text variant="small" tone="muted">
-            {plural(blockedCount, 'category', 'categories')} and {plural(blockedSites, 'site', 'sites')} blocked
+            {live ? `${siteCount(blockedSites)} on the managed Chrome blocklist` : `${plural(blockedCount, 'category', 'categories')} and ${plural(blockedSites, 'site', 'sites')} blocked`}
           </Text>
         </View>
         {live ? null : (
@@ -63,7 +63,7 @@ export default function WebFilter() {
         )}
       </Card>
 
-      <SectionLabel>Safety</SectionLabel>
+      {!live && <><SectionLabel>Safety</SectionLabel>
       <Card padded={false} style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.xl }}>
         <Row title="Safe Search" subtitle="Filter explicit results in search" icon="search" iconColor={colors.primary} chevron={false} right={<Toggle value={safeSearch} onChange={setSafeSearch} />} />
         <Row title="Safe Browsing mode" subtitle="Force restricted mode on sites" icon="lock" iconColor={colors.info} chevron={false} right={<Toggle value={safeMode} onChange={setSafeMode} />} />
@@ -83,6 +83,7 @@ export default function WebFilter() {
         ))}
       </Card>
 
+      </>}
       <SectionLabel>Specific sites</SectionLabel>
       <Card padded={false} style={{ paddingHorizontal: spacing.lg }}>
         <Row

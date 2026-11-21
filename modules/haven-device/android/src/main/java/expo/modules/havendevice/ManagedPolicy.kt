@@ -26,6 +26,7 @@ object ManagedPolicy {
       check(saved.edit().putStringSet("held", failed.toSet()).commit())
       check(failed.isEmpty()) { "Android could not release all managed packages." }
     }
+    if (owner(c)) ChromeSitePolicy.apply(c, admin(c), emptyList(), emptyList())
     check(saved.edit().clear().commit())
     requireNotNull(c.getSystemService(JobScheduler::class.java)).cancel(JOB)
   }
@@ -101,9 +102,26 @@ object ManagedPolicy {
     val result = reconcileSuspensions(held, desired,
       persist = { packages -> check(saved.edit().putStringSet("held", packages).commit()) },
       change = { packages, shouldSuspend -> manager.setPackagesSuspended(admin(c), packages.toTypedArray(), shouldSuspend).toSet() })
+    val sites = config.optJSONArray("sites")
+    val webStatus = if (sites != null) {
+      val blocked = mutableSetOf<String>()
+      val exceptions = mutableSetOf<String>()
+      for (i in 0 until sites.length()) {
+        val site = sites.optJSONObject(i) ?: continue
+        val host = site.optString("host")
+        if (!ChromeSitePolicy.validHost(host)) continue
+        when (site.optString("list")) {
+          "blocked" -> blocked.add(host)
+          "allowed" -> exceptions.add(host)
+        }
+      }
+      runCatching { ChromeSitePolicy.apply(c, admin(c), blocked.sorted(), exceptions.sorted()) }
+        .getOrElse { "Chrome site rules could not be applied." }
+    } else null
     val failed = result.failed
     return buildList {
       add("Suspended packages: " + result.held.size + ".")
+      if (webStatus != null) add(webStatus)
       if (failed.isNotEmpty()) add("Android declined changes for " + failed.size + " packages.")
       if (ineligible > 0) add("Ineligible or unavailable packages: " + ineligible + ".")
       if (!allowed) add("Timed limits require Usage Access.")

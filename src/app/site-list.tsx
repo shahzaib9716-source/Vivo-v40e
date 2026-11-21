@@ -39,12 +39,12 @@ const LIVE_COPY: Record<ListKind, { subtitle: string; emptyBody: string; note: s
   blocked: {
     subtitle: 'Sites your family agreed not to use',
     emptyBody: 'Add an address above to save it in your family’s list.',
-    note: 'This version of Haven does not filter the web: the list is an agreement, not a block.',
+    note: 'Haven applies this list to stable Google Chrome on Android phones enrolled with Haven as device owner. Other browsers are outside this rule.',
   },
   allowed: {
     subtitle: 'Sites your family agreed are fine',
     emptyBody: 'Add an address above to save it in your family’s list.',
-    note: 'This version of Haven does not filter the web: the list is an agreement.',
+    note: 'On enrolled Android phones these exceptions apply to the managed Chrome site blocklist.',
   },
 };
 
