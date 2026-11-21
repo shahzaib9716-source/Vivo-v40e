@@ -105,3 +105,12 @@ test('family places accept coordinate pairs and retain legacy entries', async ()
   await refused(setDoc(path, { ...place, latitude: 1 }));
   await refused(setDoc(path, { ...place, latitude: 90.1, longitude: 0 }));
 });
+
+test('offline pause is a parent-owned device setting', async () => {
+  const path = 'settings/offline';
+  await allowed(setDoc(at('founder', path), { enabled: true }));
+  await allowed(getDoc(at('kid1', path)));
+  await refused(getDoc(at('kid2', path)));
+  await refused(setDoc(at('kid1', path), { enabled: false }));
+  await refused(setDoc(at('founder', path), { enabled: 1 }));
+});

@@ -33,7 +33,12 @@ object ManagedPolicy {
 
   @Synchronized fun update(c: Context, payload: String): String {
     if (!owner(c)) return "Family agreements only. Android device-owner enrollment is required for enforcement."
-    check(prefs(c).edit().putString("policy", payload).commit())
+    val next = JSONObject(payload)
+    val previous = prefs(c).getString("policy", null)?.let { JSONObject(it) }
+    if (!next.has("offlinePause") && previous?.has("offlinePause") == true && next.optString("scope") == previous.optString("scope")) {
+      next.put("offlinePause", previous.getBoolean("offlinePause"))
+    }
+    check(prefs(c).edit().putString("policy", next.toString()).commit())
     val job = JobInfo.Builder(JOB, ComponentName(c, PolicyJob::class.java))
       .setPeriodic(15 * 60 * 1000L).setPersisted(true).build()
     val scheduler = requireNotNull(c.getSystemService(JobScheduler::class.java))
@@ -76,6 +81,11 @@ object ManagedPolicy {
       val window = windows.getJSONObject(index)
       ScheduleWindow.active(window.getInt("start"), window.getInt("end"), window.getInt("mask"), mondayBasedDay, minute)
     }
+    val offlinePause = config.optBoolean("offlinePause") && runCatching {
+      val network = requireNotNull(c.getSystemService(android.net.ConnectivityManager::class.java))
+      val active = network.activeNetwork
+      active == null || network.getNetworkCapabilities(active)?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED) == false
+    }.getOrDefault(false)
     val desired = mutableSetOf<String>()
     var ineligible = 0
     for (i in 0 until rules.length()) {
@@ -89,7 +99,7 @@ object ManagedPolicy {
       val limit = rule.getInt("minutes")
       if (shouldSuspendApp(
         blocked = rule.getBoolean("blocked"),
-        paused = config.getBoolean("paused"),
+        paused = config.getBoolean("paused") || offlinePause,
         scheduled = scheduled,
         dailyMinutes = config.getInt("dailyMinutes"),
         appMinutes = limit,
