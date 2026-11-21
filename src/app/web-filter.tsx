@@ -8,6 +8,9 @@ import { useStore } from '@/state/store';
 import { spacing, useTheme } from '@/theme';
 import { SampleNote } from '@/components/SampleNote';
 
+import { useLink } from '@/sync/link';
+import { setFamilySafeSearch, useFamilySafeSearch } from '@/sync/safeSearch';
+
 interface Cat {
   id: string;
   label: string;
@@ -63,6 +66,7 @@ export default function WebFilter() {
         )}
       </Card>
 
+      {live && <ManagedSearch />}
       {!live && <><SectionLabel>Safety</SectionLabel>
       <Card padded={false} style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.xl }}>
         <Row title="Safe Search" subtitle="Filter explicit results in search" icon="search" iconColor={colors.primary} chevron={false} right={<Toggle value={safeSearch} onChange={setSafeSearch} />} />
@@ -108,3 +112,22 @@ export default function WebFilter() {
 const styles = StyleSheet.create({
   pill: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999 },
 });
+
+function ManagedSearch() {
+  const { familyId, role } = useLink();
+  const state = useFamilySafeSearch(familyId ?? null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  async function save(value: boolean) {
+    if (!familyId || role !== 'parent' || busy) return;
+    setBusy(true);
+    setError('');
+    try { await setFamilySafeSearch(familyId, value); }
+    catch { setError('Unable to save Safe Search. Check your connection and family access.'); }
+    finally { setBusy(false); }
+  }
+  return <Card><Row title="Google Safe Search" subtitle="Applies to Google searches in stable Chrome on enrolled Android phones." icon="search" chevron={false}
+    right={<Toggle value={state?.value ?? false} disabled={state?.value == null || busy || role !== 'parent'} onChange={save} />} />
+    {state?.error || error ? <Text accessibilityLiveRegion="polite">{error || 'Unable to load the family search policy.'}</Text> : null}
+  </Card>;
+}

@@ -78,3 +78,12 @@ test('saved check-ins have bounded slots and stay scoped to the linked child', a
   await refused(deleteDoc(at('kid2', slot)));
   await allowed(deleteDoc(at('kid1', slot)));
 });
+
+test('only parents may configure Chrome search policy', async () => {
+  const policy = (actor) => ref(h.a[actor], A('webPolicy/chrome'));
+  await allowed(setDoc(policy('founder'), { safeSearch: true }));
+  await allowed(getDoc(policy('kid1')));
+  await refused(setDoc(policy('kid1'), { safeSearch: false }));
+  await refused(setDoc(policy('founder'), { safeSearch: 'true' }));
+  await refused(setDoc(policy('founder'), { safeSearch: true, extra: true }));
+});

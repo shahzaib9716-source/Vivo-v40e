@@ -26,7 +26,7 @@ object ManagedPolicy {
       check(saved.edit().putStringSet("held", failed.toSet()).commit())
       check(failed.isEmpty()) { "Android could not release all managed packages." }
     }
-    if (owner(c)) ChromeSitePolicy.apply(c, admin(c), emptyList(), emptyList())
+    if (owner(c)) ChromeSitePolicy.apply(c, admin(c), emptyList(), emptyList(), false)
     check(saved.edit().clear().commit())
     requireNotNull(c.getSystemService(JobScheduler::class.java)).cancel(JOB)
   }
@@ -115,7 +115,7 @@ object ManagedPolicy {
           "allowed" -> exceptions.add(host)
         }
       }
-      runCatching { ChromeSitePolicy.apply(c, admin(c), blocked.sorted(), exceptions.sorted()) }
+      runCatching { ChromeSitePolicy.apply(c, admin(c), blocked.sorted(), exceptions.sorted(), if (config.has("safeSearch")) config.getBoolean("safeSearch") else null) }
         .getOrElse { "Chrome site rules could not be applied." }
     } else null
     val failed = result.failed

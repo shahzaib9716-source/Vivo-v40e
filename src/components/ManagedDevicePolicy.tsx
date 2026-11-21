@@ -5,9 +5,12 @@ import { useLink } from '@/sync/link';
 import { useStore } from '@/state/store';
 import { device, listenPolicy } from '@/sync/androidDevice';
 
+import { useFamilySafeSearch } from '@/sync/safeSearch';
+
 export function ManagedDevicePolicy({ onStatus }: { onStatus: (message: string) => void }) {
   const { role, status, familyId, childId, account } = useLink();
   const { childSelf, live, schedules, sites } = useStore();
+  const search = useFamilySafeSearch(live && role === 'child' && familyId ? familyId : null)?.value;
   const { bedtime, limitMin } = childSelf;
   useEffect(() => {
     const native = device;
@@ -33,7 +36,7 @@ export function ManagedDevicePolicy({ onStatus }: { onStatus: (message: string) 
         const mask = s.days.reduce((bits, selected, day) => selected ? bits | (1 << day) : bits, 0);
         return [{ start, end, mask }];
       });
-      native.applyPolicy(JSON.stringify({ paused: bedtime, dailyMinutes: limitMin, rules, windows, sites: sites.map(({ host, list }) => ({ host, list })) }))
+      native.applyPolicy(JSON.stringify({ paused: bedtime, dailyMinutes: limitMin, rules, windows, safeSearch: search, sites: sites.map(({ host, list }) => ({ host, list })) }))
         .then(report)
         .catch(() => report('Android could not apply the current rules. Check device management and usage access.'));
     }, e => {
@@ -41,6 +44,6 @@ export function ManagedDevicePolicy({ onStatus }: { onStatus: (message: string) 
       if (current) onStatus('Unable to synchronize managed rules.');
     });
     return () => { current = false; unsubscribe(); };
-  }, [role, status, familyId, childId, account, childSelf.id, bedtime, limitMin, schedules, sites, live, onStatus]);
+  }, [role, status, familyId, childId, account, childSelf.id, bedtime, limitMin, schedules, sites, search, live, onStatus]);
   return null;
 }

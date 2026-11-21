@@ -569,6 +569,14 @@ service cloud.firestore {
         allow delete: if isParent(fid);
       }
 
+      match /webPolicy/chrome {
+        allow get: if isMember(fid);
+        allow create, update: if isParent(fid)
+          && request.resource.data.keys().hasOnly(['safeSearch'])
+          && request.resource.data.safeSearch is bool;
+        allow delete: if isParent(fid);
+      }
+
       match /sites/{id} {
         allow read: if isMember(fid);
         allow create, update: if isParent(fid) && idOk(id)
