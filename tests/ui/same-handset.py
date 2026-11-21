@@ -9,7 +9,7 @@ import xml.etree.ElementTree as ET
 AUTH = 'http://127.0.0.1:9099'
 PROJECT = 'demo-haven'
 BASE = 'com.haven.familysafety.'
-EMAIL = 'owner@example.test'
+EMAIL = 'owner@example.com'
 PASSWORD = 'HavenLocal1234'
 
 
@@ -77,6 +77,11 @@ def fill(pattern, text):
 
 
 def run():
+    subprocess.run(
+        ['node', '--input-type=module', '-e',
+         "import {loadRules} from './tests/sync/live/harness/driver.mjs'; await loadRules();"],
+        check=True, timeout=60,
+    )
     account = auth('signUp', {'email': EMAIL, 'password': PASSWORD, 'returnSecureToken': True})
     auth('sendOobCode', {'requestType': 'VERIFY_EMAIL', 'idToken': account['idToken']})
     with urllib.request.urlopen(f'{AUTH}/emulator/v1/projects/{PROJECT}/oobCodes') as resp:

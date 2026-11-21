@@ -82,6 +82,7 @@ jobs:
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/.ghcup /opt/ghc /usr/local/share/boost
           sudo chmod a+rw /dev/kvm
+          npm ci --include=dev --no-audit --no-fund
           npx --yes firebase-tools@14 setup:emulators:firestore
       - uses: reactivecircus/android-emulator-runner@v2
         with:
