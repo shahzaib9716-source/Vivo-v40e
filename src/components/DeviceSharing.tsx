@@ -8,13 +8,14 @@ import { device, requestFix, shareUsage, clearUsage } from '@/sync/androidDevice
 import { reportChildLocation, clearChildLocation, clearCheckins } from '@/sync/location';
 
 import { useStore } from '@/state/store';
-import { crossings } from '@/sync/placeCrossing';
+import { CrossingSession } from '@/sync/placeCrossing';
 
 export function DeviceSharing({ family, child, uid }: { family: string; child: string; uid: string }) {
   const { places } = useStore();
   const automatic = useUsageSharing();
   const management = useContext(PolicyStatus);
   const [sharing, setSharing] = useState(false);
+  const firstFix = useRef<Awaited<ReturnType<typeof requestFix>> | undefined>(undefined);
   const focused = useRef(false);
   const generation = useRef(0);
   const stop = useCallback(() => {
@@ -36,14 +37,15 @@ export function DeviceSharing({ family, child, uid }: { family: string; child: s
     const token = generation.current;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let disposed = false;
-    let previous: Awaited<ReturnType<typeof requestFix>> | undefined;
+    const session = new CrossingSession();
+    if (firstFix.current) session.update(places, firstFix.current);
+    firstFix.current = undefined;
     const active = () => !disposed && token === generation.current && AppState.currentState === 'active';
     async function report() {
       try {
         const fix = await device!.currentFix();
         if (!active()) return;
-        await reportChildLocation(family, child, uid, fix.latitude, fix.longitude, fix.accuracyM, fix.measuredAt, false, crossings(places, previous, fix));
-        previous = fix;
+        await reportChildLocation(family, child, uid, fix.latitude, fix.longitude, fix.accuracyM, fix.measuredAt, false, session.update(places, fix));
         if (active()) {
           setStatus('Foreground location sharing is on.');
           timer = setTimeout(report, 60000);
@@ -93,7 +95,7 @@ export function DeviceSharing({ family, child, uid }: { family: string; child: s
         foreground();
         const token = generation.current;
         await reportChildLocation(family, child, uid, fix.latitude, fix.longitude, fix.accuracyM, fix.measuredAt);
-        if (mounted.current && token === generation.current) setSharing(true);
+        if (mounted.current && token === generation.current) { firstFix.current = fix; setSharing(true); }
       }, 'Location shared.');
     }} />
     <Button title="Clear shared location" disabled={busy} onPress={() => run(() => { stop(); return clearChildLocation(family, child); }, 'Location cleared.')} />

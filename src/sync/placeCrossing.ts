@@ -12,12 +12,20 @@ export function placeSide(place: Place, fix: Fix): boolean | undefined {
   if (distance - fix.accuracyM > place.radius) return false;
 }
 
-export function crossings(places: readonly Place[], previous: Fix | undefined, current: Fix): string[] {
-  if (!previous || current.measuredAt <= previous.measuredAt || current.measuredAt - previous.measuredAt > 300000) return [];
-  return places.flatMap(place => {
-    const before = placeSide(place, previous), after = placeSide(place, current);
-    if (before === false && after === true && place.arrive) return ['Arrived at ' + place.name];
-    if (before === true && after === false && place.leave) return ['Left ' + place.name];
-    return [];
-  });
+export class CrossingSession {
+  private readonly observed = new Map<string, { inside: boolean; time: number }>();
+
+  update(places: readonly Place[], fix: Fix): string[] {
+    const changes: string[] = [];
+    for (const place of places) {
+      const inside = placeSide(place, fix);
+      const last = this.observed.get(place.id);
+      if (inside === undefined || (last && fix.measuredAt <= last.time)) continue;
+      this.observed.set(place.id, { inside, time: fix.measuredAt });
+      if (!last || fix.measuredAt - last.time > 300000 || last.inside === inside) continue;
+      if (inside && place.arrive) changes.push('Arrived at ' + place.name);
+      if (!inside && place.leave) changes.push('Left ' + place.name);
+    }
+    return changes;
+  }
 }
