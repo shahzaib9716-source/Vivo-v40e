@@ -35,6 +35,9 @@ object ManagedPolicy {
     if (!owner(c)) return "Family agreements only. Android device-owner enrollment is required for enforcement."
     val next = JSONObject(payload)
     val previous = prefs(c).getString("policy", null)?.let { JSONObject(it) }
+    if (!next.has("adultSites") && previous?.has("adultSites") == true && next.optString("scope") == previous.optString("scope")) {
+      next.put("adultSites", previous.getBoolean("adultSites"))
+    }
     if (!next.has("offlinePause") && previous?.has("offlinePause") == true && next.optString("scope") == previous.optString("scope")) {
       next.put("offlinePause", previous.getBoolean("offlinePause"))
     }
@@ -125,8 +128,14 @@ object ManagedPolicy {
           "allowed" -> exceptions.add(host)
         }
       }
-      runCatching { ChromeSitePolicy.apply(c, admin(c), blocked.sorted(), exceptions.sorted(), if (config.has("safeSearch")) config.getBoolean("safeSearch") else null) }
-        .getOrElse { "Chrome site rules could not be applied." }
+      runCatching {
+        if (config.optBoolean("adultSites")) {
+          c.assets.open("haven/adult-sites.txt").bufferedReader().useLines { lines -> lines.forEach { blocked.add(it) } }
+        }
+        check(blocked.size <= 1000 && exceptions.size <= 1000) { "Chrome supports up to 1,000 domains per list. Reduce the family list." }
+        ChromeSitePolicy.apply(c, admin(c), blocked.sorted(), exceptions.sorted(), if (config.has("safeSearch")) config.getBoolean("safeSearch") else null)
+      }
+        .getOrElse { if (blocked.size > 1000 || exceptions.size > 1000) "Chrome policy exceeds 1,000 entries. Reduce the site list." else "Chrome site rules could not be applied." }
     } else null
     val failed = result.failed
     return buildList {

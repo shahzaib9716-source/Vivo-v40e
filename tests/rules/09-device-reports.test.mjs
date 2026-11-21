@@ -114,3 +114,12 @@ test('offline pause is a parent-owned device setting', async () => {
   await refused(setDoc(at('kid1', path), { enabled: false }));
   await refused(setDoc(at('founder', path), { enabled: 1 }));
 });
+
+test('family adult-site filtering is parent-controlled', async () => {
+  const policy = actor => ref(h.a[actor], A('webPolicy/adultSites'));
+  await allowed(setDoc(policy('founder'), { enabled: true }));
+  await allowed(getDoc(policy('kid1')));
+  await refused(setDoc(policy('kid1'), { enabled: false }));
+  await refused(setDoc(policy('founder'), { enabled: 'true' }));
+  await allowed(deleteDoc(policy('founder')));
+});

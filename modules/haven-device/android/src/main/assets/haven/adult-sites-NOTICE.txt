@@ -1,0 +1,3 @@
+Domain sources: Tiuxo (https://github.com/tiuxo/hosts) and Brijraj Parmar (https://github.com/brijrajparmar27/host-sources), CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/).
+Snapshot: https://github.com/StevenBlack/hosts/tree/ce25ce24d6dca08fa484612091a822bc93587086/extensions/porn
+Modified for Haven: removed hosts-file address prefixes, normalized domain case, sorted and removed duplicates and redundant subdomains.
