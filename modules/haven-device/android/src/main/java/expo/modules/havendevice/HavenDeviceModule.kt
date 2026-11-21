@@ -63,6 +63,10 @@ class HavenDeviceModule : Module() {
       Unit
     }
     AsyncFunction("endTrip") { context.stopService(Intent(context, TripService::class.java)); Unit }
+    AsyncFunction("appCache") { clear: Boolean ->
+      val result = AppCache.inspect(listOf(context.cacheDir) + context.externalCacheDirs.filterNotNull(), clear, VoiceNoteActivity.activeFile)
+      mapOf("bytes" to result.bytes.toDouble(), "failures" to result.failures)
+    }
     AsyncFunction("usingWifi") {
       val manager = requireNotNull(context.getSystemService(android.net.ConnectivityManager::class.java))
       manager.getNetworkCapabilities(manager.activeNetwork)?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) == true

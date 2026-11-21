@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { router } from 'expo-router';
 import { Pressable, View } from 'react-native';
 
+import { AppCacheSetting } from '@/components/AppCacheSetting';
 import { ChatWordSettings } from '@/components/ChatWordAlerts';
 import { MediaTransfer } from '@/components/CheckinRequests';
 import { InlineNote } from '@/components/InlineNote';
@@ -152,6 +153,7 @@ export default function Settings() {
         )}
       </Card>
 
+      <AppCacheSetting />
       <SectionLabel>Privacy & security</SectionLabel>
       <Card padded={false} style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.xl }}>
         {live ? null : (

@@ -17,6 +17,10 @@ import android.widget.TextView
 import java.io.File
 
 class VoiceNoteActivity : Activity() {
+  companion object {
+    @Volatile var activeFile: File? = null
+      private set
+  }
   private lateinit var file: File
   private lateinit var layout: LinearLayout
   private lateinit var status: TextView
@@ -31,6 +35,7 @@ class VoiceNoteActivity : Activity() {
     super.onCreate(savedInstanceState)
     setResult(RESULT_CANCELED)
     file = File(cacheDir, "haven-voice-preview.m4a")
+    activeFile = file
     file.delete()
     val audio = intent.getStringExtra("audio")
     readOnly = audio != null
@@ -144,6 +149,7 @@ class VoiceNoteActivity : Activity() {
     handler.removeCallbacks(limit)
     stopPlayer()
     file.delete()
+    activeFile = null
     super.onDestroy()
   }
 }
