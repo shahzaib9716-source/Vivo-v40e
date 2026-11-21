@@ -64,6 +64,33 @@ jobs:
       - run: ./gradlew :haven-device:testDebugUnitTest
         working-directory: android
 
+  android-sharing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v5
+      - run: npm ci --no-audit --no-fund
+      - run: npx --no-install expo prebuild --platform android --no-install
+      - name: Enable Android emulator acceleration
+        run: sudo chmod a+rw /dev/kvm
+      - name: Exercise voice recording and trip notification on Android
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: cd android && ./gradlew :haven-device:connectedDebugAndroidTest -PreactNativeArchitectures=x86_64
+
   live-sync:
     runs-on: ubuntu-latest
     timeout-minutes: 30
