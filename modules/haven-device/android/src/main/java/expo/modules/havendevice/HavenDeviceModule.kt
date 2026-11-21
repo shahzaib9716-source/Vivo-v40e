@@ -63,7 +63,10 @@ class HavenDeviceModule : Module() {
       Unit
     }
     AsyncFunction("endTrip") { context.stopService(Intent(context, TripService::class.java)); Unit }
-    AsyncFunction("tripScope") { TripService.activeScope }
+    AsyncFunction("usingWifi") {
+      val manager = requireNotNull(context.getSystemService(android.net.ConnectivityManager::class.java))
+      manager.getNetworkCapabilities(manager.activeNetwork)?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) == true
+    }
     AsyncFunction("takeCheckinPhoto") { promise: Promise ->
       val activity = appContext.currentActivity
       android.os.Handler(android.os.Looper.getMainLooper()).post {

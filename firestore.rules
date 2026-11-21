@@ -438,7 +438,7 @@ service cloud.firestore {
 
         match /{group}/{entry} {
           allow list, delete: if group in ['live', 'settings', 'packageRules', 'unlock', 'photos',
-              'location', 'checkins', 'management', 'usage', 'requests', 'messages', 'voice', 'tripPoints']
+              'location', 'checkins', 'management', 'usage', 'requests', 'messages', 'voice', 'tripPoints', 'checkinRequests']
             && isParent(fid) && retired(fid, cid);
         }
 
@@ -470,6 +470,27 @@ service cloud.firestore {
           allow create, update: if isParent(fid) && childExists(fid, cid) && request.resource.data.keys().hasOnly(['enabled'])
             && request.resource.data.enabled is bool;
           allow delete: if isParent(fid);
+        }
+        match /checkinRequests/{kind} {
+          function acceptedShare() {
+            let group = kind == 'voice' ? 'voice' : 'photos';
+            let entry = kind == 'screen' ? 'screen' : 'latest';
+            let media = getAfter(/databases/$(database)/documents/families/$(fid)/children/$(cid)/$(group)/$(entry)).data;
+            return media.by == request.auth.uid && media.at == request.time;
+          }
+          function validRequest() {
+            return kind in ['screen','voice','photo'] && isParent(fid) && childExists(fid, cid)
+              && request.resource.data.keys().hasOnly(['id','by','at','state'])
+              && idOk(request.resource.data.id) && request.resource.data.by == request.auth.uid
+              && request.resource.data.at == request.time && request.resource.data.state == 'pending';
+          }
+          allow read: if isParent(fid) || isChildOf(fid, cid);
+          allow create: if validRequest();
+          allow update: if resource.data.state != 'pending' && validRequest();
+          allow update: if resource.data.state == 'pending' && onlyChanged(['state'])
+            && ((isParent(fid) && request.resource.data.state == 'cancelled')
+              || (isChildOf(fid, cid) && (request.resource.data.state == 'declined'
+                || (request.resource.data.state == 'fulfilled' && acceptedShare()))));
         }
         match /photos/avatar {
           allow get: if isParent(fid) || isChildOf(fid, cid);
@@ -685,6 +706,12 @@ service cloud.firestore {
           && request.resource.data.on is bool
           && request.resource.data.ord is number;
         allow delete: if isParent(fid);
+      }
+
+      match /settings/media {
+        allow get: if isMember(fid);
+        allow create, update: if isParent(fid) && request.resource.data.keys().hasOnly(['wifiOnly'])
+          && request.resource.data.wifiOnly is bool;
       }
 
       match /webPolicy/adultSites {

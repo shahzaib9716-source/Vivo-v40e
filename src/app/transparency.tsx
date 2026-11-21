@@ -15,12 +15,10 @@ const SHARED = [
   { icon: 'battery', label: 'Battery level', detail: 'So your family knows if your device is low', parentDetail: 'So you know if their device is running low' },
 ] as const;
 
-/**
- * A real family: exactly what travels between the phones in this version. It reads nothing from the
- * phone itself (no location, no usage, no battery), so those are listed as not shared.
- */
+/** Data the linked family can share in Haven. */
 const LIVE_SHARED = [
-  { icon: 'map-pin', label: 'Shared location', detail: 'A location you share once or every minute while the Me tab is open', parentDetail: 'The latest location your child chooses to share' },
+  { icon: 'map-pin', label: 'Shared location', detail: 'Locations you choose to share. A timed trip can continue for 30 minutes with a visible Stop sharing notification.', parentDetail: 'The latest shared location, saved check-ins and routes from trips your child starts' },
+  { icon: 'camera', label: 'Photos, screenshots and voice notes', detail: 'You can preview a check-in, share it with your parent or decline a request. Only the latest shared item of each kind is kept.', parentDetail: 'The latest photo, screenshot and voice note your child chose to share. Requests appear on their phone for review.' },
   { icon: 'grid', label: 'Shared usage', detail: 'Launchable apps and foreground time when you share a usage report', parentDetail: 'Apps and foreground time in the latest report your child shared' },
   { icon: 'send', label: 'Requests', detail: 'When you ask for more time or to unlock an app', parentDetail: 'When your child asks for more time or to unlock an app' },
   { icon: 'check-circle', label: 'Check-ins', detail: 'The time you tap “Check in”. Not where you are', parentDetail: 'The time your child taps “Check in”. Not where they are' },
@@ -32,7 +30,7 @@ const LIVE_SHARED = [
 
 const LIVE_NOT_SHARED = [
   { label: 'Other messages, calls and photos', parentLabel: 'Other messages, calls and photos', detail: 'Haven does not read texts, chats, calls or your camera roll', parentDetail: 'Haven does not read texts, chats, calls or the camera roll' },
-  { label: 'Browsing and what you watch', parentLabel: 'Browsing and what they watch', detail: 'Those parent screens are previews with example data only', parentDetail: 'Those screens are previews with example data only' },
+  { label: 'Browsing and what you watch', parentLabel: 'Browsing and what they watch', detail: 'Browser and video history are not collected from your other apps', parentDetail: 'The history viewer displays an export you open for that session' },
   { label: 'Hidden tracking', parentLabel: 'Hidden tracking', detail: 'Nothing runs secretly — this screen shows it all', parentDetail: 'Nothing runs secretly. Your child sees this same list' },
 ] as const;
 
@@ -111,4 +109,3 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md },
   icon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
 });
-

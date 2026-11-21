@@ -44,3 +44,30 @@ test('only the enrolled child can publish a timed trip fix, with an authenticate
   await refused(setDoc(target('kid1'), { ...point, session: '../other' }));
   await allowed(deleteDoc(target('kid1')));
 });
+
+test('requesting media requires the parent role and fulfillment requires a fresh child share', async () => {
+  const path = A('children/c1/checkinRequests/screen');
+  const parent = h.a.founder;
+  const kid = h.a.kid1;
+  const ask = { state: 'pending', id: 'req1', by: parent.uid, at: serverTimestamp() };
+  await refused(setDoc(ref(kid, path), { ...ask, by: kid.uid }));
+  await allowed(setDoc(ref(parent, path), ask));
+  const { updateDoc, writeBatch } = await import('firebase/firestore');
+  await refused(updateDoc(ref(parent, path), { state: 'fulfilled' }));
+  await refused(updateDoc(ref(kid, path), { state: 'fulfilled' }));
+  await refused(updateDoc(ref(h.a.kid2, path), { state: 'declined' }));
+  const batch = writeBatch(kid.db);
+  batch.set(ref(kid, A('children/c1/photos/screen')), { jpeg: '/9j/AAAA', at: serverTimestamp(), by: kid.uid });
+  batch.update(ref(kid, path), { state: 'fulfilled' });
+  await allowed(batch.commit());
+  await allowed(setDoc(ref(parent, path), { ...ask, id: 'req2' }));
+  await allowed(updateDoc(ref(kid, path), { state: 'declined' }));
+});
+
+test('media transfer settings are family scoped', async () => {
+  const setting = A('settings/media');
+  await allowed(setDoc(ref(h.a.founder, setting), { wifiOnly: true }));
+  await allowedRead(getDoc(ref(h.a.kid1, setting)));
+  await refused(setDoc(ref(h.a.kid1, setting), { wifiOnly: false }));
+  await refused(getDoc(ref(h.a.parentB, setting)));
+});

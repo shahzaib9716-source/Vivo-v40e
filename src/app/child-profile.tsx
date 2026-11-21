@@ -114,6 +114,10 @@ export default function ChildProfile() {
     setUnpair('confirm');
   };
 
+  if (live && !activeChild.id) {
+    return <Screen><Header back title="Child profile" /><Text>No child profile selected. Open Family to add a child.</Text></Screen>;
+  }
+
   return (
     // Outermost so it lines up with the keyboard's frame (see RuleForm's FormScreen).
     <KeyboardAvoidingView behavior="padding" style={[styles.flex, { backgroundColor: colors.bg }]}>
@@ -176,7 +180,7 @@ export default function ChildProfile() {
             <Row title="Screen Time" subtitle={`Limit ${fmtDuration(activeChild.limitMin)}/day`} icon="clock" iconColor={categoryColors.screenTime} onPress={() => (router.push as any)('/screen-time')} />
             <Row title="App Limits" subtitle={`${activeChild.apps.length} apps`} icon="grid" iconColor={categoryColors.apps} onPress={() => (router.push as any)('/app-limits')} />
             <Row title="Schedules" subtitle="Bedtime & school" icon="calendar" iconColor={categoryColors.schedules} onPress={() => (router.push as any)('/schedules')} />
-            <Row title="Location" subtitle={live ? 'Example map · check-ins are real' : activeChild.place} icon="map-pin" iconColor={categoryColors.location} onPress={openLocationTab} />
+            <Row title="Location" subtitle={live ? 'Shared location and trip history' : activeChild.place} icon="map-pin" iconColor={categoryColors.location} onPress={openLocationTab} />
           </Card>
 
           <SectionLabel>Device</SectionLabel>

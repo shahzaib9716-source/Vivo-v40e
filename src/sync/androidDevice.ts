@@ -30,7 +30,7 @@ interface DeviceModule {
   addListener?(name: 'onTrip', listener: (event: TripEvent) => void): { remove(): void };
   startTrip?(scope: string, session: string, threshold: number): Promise<void>;
   endTrip?(): Promise<void>;
-  tripScope?(): Promise<string | null>;
+  usingWifi?(): Promise<boolean>;
   chooseCheckinImage?(): Promise<string | null>;
   recordVoiceNote?(): Promise<string | null>;
   playVoiceNote?(audio: string): Promise<void>;
