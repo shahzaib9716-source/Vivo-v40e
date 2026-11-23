@@ -129,7 +129,7 @@ function ManagedSearch() {
   }
   return <Card><Row title="Google Safe Search" subtitle="Applies to Google searches in stable Chrome on enrolled Android phones." icon="search" chevron={false}
     right={<Toggle value={state?.value ?? false} disabled={state?.value == null || busy || role !== 'parent'} onChange={save} />} />
-    <Row title="Adult website blocker" subtitle="Block domains in the bundled adult-site catalog in managed Chrome. Your family’s explicit site exceptions apply." icon="shield" chevron={false}
+    <Row title="Adult website blocker" subtitle="Adds a bundled list to stable Chrome on enrolled Android phones. This is not all adult sites or other browsers. Your family’s exceptions apply. Check the device report for the result." icon="shield" chevron={false}
       right={<Toggle value={catalog?.value ?? false} disabled={catalog?.value == null || busy || role !== 'parent'} onChange={value => save(value, true)} />} />
     {catalog?.error || state?.error || error ? <Text accessibilityLiveRegion="polite">{error || 'Unable to load the family search policy.'}</Text> : null}
   </Card>;

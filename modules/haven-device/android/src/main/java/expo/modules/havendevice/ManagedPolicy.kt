@@ -33,7 +33,15 @@ object ManagedPolicy {
 
   @Synchronized fun update(c: Context, payload: String): String {
     if (!owner(c)) return "Family agreements only. Android device-owner enrollment is required for enforcement."
-    check(prefs(c).edit().putString("policy", payload).commit())
+    val saved = prefs(c)
+    val next = JSONObject(payload)
+    val previous = if (next.has("adultSites")) null else saved.getString("policy", null)?.let {
+      try { JSONObject(it) } catch (_: org.json.JSONException) { null }
+    }
+    // A listener still loading after reconnect is not a parent's opt-out.
+    next.put("adultSites", CatalogPolicy.enabled(next.optString("scope"), next.opt("adultSites") as? Boolean,
+      previous?.optString("scope"), previous?.optBoolean("adultSites") == true))
+    check(saved.edit().putString("policy", next.toString()).commit())
     val job = JobInfo.Builder(JOB, ComponentName(c, PolicyJob::class.java))
       .setPeriodic(15 * 60 * 1000L).setPersisted(true).build()
     val scheduler = requireNotNull(c.getSystemService(JobScheduler::class.java))
@@ -116,8 +124,24 @@ object ManagedPolicy {
           "allowed" -> exceptions.add(host)
         }
       }
-      runCatching { ChromeSitePolicy.apply(c, admin(c), blocked.sorted(), exceptions.sorted(), if (config.has("safeSearch")) config.getBoolean("safeSearch") else null) }
-        .getOrElse { "Chrome site rules could not be applied." }
+      try {
+        val manual = CatalogPolicy.select(blocked, exceptions, emptySequence())
+        val plan = if (config.optBoolean("adultSites")) {
+          try {
+            c.assets.open("haven/adult-sites.txt").bufferedReader().useLines { lines ->
+              CatalogPolicy.plan(blocked, exceptions, lines.map { line ->
+                line.trim().also { require(ChromeSitePolicy.validHost(it)) { "Invalid bundled domain." } }
+              })
+            }
+          } catch (_: java.io.IOException) { CatalogPolicy.Plan(manual, true) }
+        } else CatalogPolicy.Plan(manual, false)
+        val result = ChromeSitePolicy.apply(c, admin(c), plan.blocked, exceptions.sorted(), if (config.has("safeSearch")) config.getBoolean("safeSearch") else null)
+        if (plan.catalogOmitted) "Adult-site catalog omitted (size or asset error). $result" else result
+      } catch (_: IllegalArgumentException) {
+        "Chrome site rules could not be applied. Check the 1,000-entry Chrome list limits."
+      } catch (_: Exception) {
+        "Chrome site rules could not be applied."
+      }
     } else null
     val failed = result.failed
     return buildList {
