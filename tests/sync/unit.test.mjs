@@ -33,6 +33,24 @@ test('GPS status distinguishes fix age, cache, missing measurements and clock sk
   assert.equal(locationStatus(now, true, now, true), 'Location unavailable');
 });
 
+test('trip time scrubber selects only recorded points, by elapsed time', async () => {
+  const { nearestTripIndex, tripFraction } = await import('../../src/sync/tripScrubber.ts');
+  const times = [100, 110, 200];
+  assert.equal(nearestTripIndex([], 0.5), -1);
+  assert.equal(nearestTripIndex([100], 0.5), 0);
+  assert.equal(nearestTripIndex(times, 0.12), 1);
+  assert.equal(nearestTripIndex(times, 0.55), 1); // equidistant: prefer earlier fix
+  assert.equal(nearestTripIndex(times, 0.56), 2);
+  assert.equal(nearestTripIndex(times, -1), 0);
+  assert.equal(nearestTripIndex(times, 2), 2);
+  assert.equal(nearestTripIndex(times, NaN), 0);
+  assert.equal(nearestTripIndex([100, 100, 200], 0), 0);
+  assert.equal(tripFraction(times, 1), 0.1);
+  assert.equal(tripFraction([], 0), 0);
+  assert.equal(tripFraction([100], 0), 0);
+  assert.equal(tripFraction([100, 100], 1), 0);
+});
+
 test('weekly snapshots replace same-day reports and expire by calendar date', async () => {
   const { recordDay, readDays } = await import('../../src/sync/usageWeek.ts');
   const row = (day, ms) => ({ day, ms });

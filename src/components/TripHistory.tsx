@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Linking, View } from 'react-native';
+import { Slider } from '@expo/ui/community/slider';
 import Svg, { Circle, Polyline } from 'react-native-svg';
 import { Button, Card, Text } from '@/components/ui';
 import { listenTripPoints, type TripPoint } from '@/sync/location';
+import { nearestTripIndex, tripFraction } from '@/sync/tripScrubber';
 import { useTheme } from '@/theme';
 
 const timeOf = (p: TripPoint) => p.measuredAt ?? p.receivedAt;
@@ -41,6 +43,7 @@ export function TripHistory({ family, child }: { family: string; child: string }
   const daily = points.filter(p => dateOf(p) === displayed);
   const selected = Math.max(0, chosen != null && chosen < daily.length ? chosen : daily.length - 1);
   const point = daily[selected];
+  const times = daily.map(timeOf);
   const coords = daily.length ? routeCoordinates(daily) : [];
   const tracks = new Map<string, string[]>();
   daily.forEach((p, i) => {
@@ -61,6 +64,12 @@ export function TripHistory({ family, child }: { family: string; child: string }
         <Button label="Earlier day" size="sm" variant="secondary" disabled={dayIndex < 1} onPress={() => changeDay(-1)} />
         <Button label="Later day" size="sm" variant="secondary" disabled={dayIndex >= days.length - 1} onPress={() => changeDay(1)} />
       </View>
+      {times.length > 1 && times[times.length - 1] > times[0] && <Slider
+        accessibilityLabel={'Trip time, ' + new Date(times[selected]).toLocaleTimeString()}
+        minimumValue={0} maximumValue={1} value={tripFraction(times, selected)}
+        onValueChange={value => setChosen(nearestTripIndex(times, value))}
+        minimumTrackTintColor={colors.primary} style={{ width: '100%', height: 44 }}
+      />}
       <Svg width="100%" height={180} viewBox="0 0 320 180" accessibilityLabel="Recorded route, north up">
         {[...tracks].map(([key, line]) => <Polyline key={key} points={line.join(' ')} fill="none" stroke={colors.primary} strokeWidth={3} />)}
         {coords.map((p, i) => <Circle key={i} cx={p.x} cy={p.y} r={i === selected ? 5 : 2} fill={i === selected ? colors.accent : colors.primary} onPress={() => setChosen(i)} />)}
