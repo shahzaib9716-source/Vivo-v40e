@@ -129,6 +129,7 @@ export function DeviceSharing({ family, child, uid }: { family: string; child: s
       await automatic?.setEnabled(false);
       await clearUsage(family, child);
     }, 'Usage report cleared.')} />
+    <Text>On a device-owner phone, family web rules can restrict sites in stable Chrome, including a parent-selected adult-site list. This does not share your browsing history.</Text>
     <Text>{management}</Text>
     <Text accessibilityLiveRegion="polite">{status}</Text>
   </View></Card>;
